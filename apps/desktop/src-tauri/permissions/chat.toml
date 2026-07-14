@@ -1,0 +1,24 @@
+[[permission]]
+identifier = "allow-chat-load-conversations"
+description = "Allows loading cached chat conversations from disk"
+commands.allow = ["chat_load_conversations"]
+
+[[permission]]
+identifier = "allow-chat-save-conversations"
+description = "Allows saving cached chat conversations to disk"
+commands.allow = ["chat_save_conversations"]
+
+[[permission]]
+identifier = "allow-chat-load-messages"
+description = "Allows loading cached chat messages from disk"
+commands.allow = ["chat_load_messages"]
+
+[[permission]]
+identifier = "allow-chat-save-messages"
+description = "Allows saving cached chat messages to disk"
+commands.allow = ["chat_save_messages"]
+
+[[permission]]
+identifier = "allow-chat-clear-cache"
+description = "Allows clearing cached chat data from disk"
+commands.allow = ["chat_clear_cache"]

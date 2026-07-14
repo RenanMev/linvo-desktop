@@ -1,0 +1,44 @@
+name: Desktop CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  desktop-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.12.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared
+        run: pnpm --filter @linvo/shared build
+
+      - name: Test shared
+        run: pnpm --filter @linvo/shared test
+
+      - name: Typecheck desktop
+        run: pnpm --filter @linvo/desktop typecheck
+
+      - name: Test desktop
+        run: pnpm --filter @linvo/desktop test
+
+      - name: Build desktop
+        run: pnpm --filter @linvo/desktop build

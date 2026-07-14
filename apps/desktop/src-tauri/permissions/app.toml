@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-app-quit"
+description = "Allows quitting the application"
+commands.allow = ["app_quit"]

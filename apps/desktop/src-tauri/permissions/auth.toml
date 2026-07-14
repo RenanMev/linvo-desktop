@@ -1,0 +1,14 @@
+[[permission]]
+identifier = "allow-auth-set-tokens"
+description = "Allows storing auth tokens in the OS keychain"
+commands.allow = ["auth_set_tokens"]
+
+[[permission]]
+identifier = "allow-auth-get-tokens"
+description = "Allows reading auth tokens from the OS keychain"
+commands.allow = ["auth_get_tokens"]
+
+[[permission]]
+identifier = "allow-auth-clear-tokens"
+description = "Allows clearing auth tokens from the OS keychain"
+commands.allow = ["auth_clear_tokens"]

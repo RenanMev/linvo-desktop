@@ -1,0 +1,24 @@
+{
+  "name": "linvo-desktop",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Cliente desktop Tauri + React do Linvo",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RenanMev/linvo-desktop.git"
+  },
+  "packageManager": "pnpm@11.12.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:desktop": "bash scripts/dev.sh",
+    "test": "turbo run test",
+    "desktop": "pnpm --filter @linvo/desktop",
+    "tauri": "pnpm --filter @linvo/desktop tauri",
+    "shared": "pnpm --filter @linvo/shared"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0"
+  }
+}

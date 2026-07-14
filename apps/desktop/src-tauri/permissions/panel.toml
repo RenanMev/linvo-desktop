@@ -1,0 +1,14 @@
+[[permission]]
+identifier = "allow-panel-open"
+description = "Allows opening and focusing the panel window"
+commands.allow = ["panel_open"]
+
+[[permission]]
+identifier = "allow-panel-close"
+description = "Allows hiding the panel window"
+commands.allow = ["panel_close"]
+
+[[permission]]
+identifier = "allow-panel-is-open"
+description = "Allows checking panel window visibility"
+commands.allow = ["panel_is_open"]

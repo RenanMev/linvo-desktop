@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-animate-window-bounds"
+description = "Allows animating window position and size"
+commands.allow = ["animate_window_bounds"]
