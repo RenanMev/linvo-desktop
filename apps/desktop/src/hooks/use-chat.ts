@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ToolRequest } from "@linvo/shared";
 
 import { AuthApiError } from "@/lib/auth/auth-api";
 import { PANEL_SESSION_UNAVAILABLE_MESSAGE } from "@/hooks/use-panel-session";
@@ -17,6 +18,7 @@ import {
   createUserMessage,
   finalizeMessage,
 } from "@/lib/chat/chat-state";
+import { readClipboardText } from "@/lib/clipboard";
 import { mapApiMessageToChat, mapApiMessagesToChat } from "@/lib/chat/map-message";
 import type { ChatMessage, ChatReplyRef } from "@/lib/chat/types";
 
@@ -29,6 +31,9 @@ type UseChatOptions = {
 function formatChatError(error: unknown, fallback: string): string {
   if (error instanceof AuthApiError && error.status === 401) {
     return PANEL_SESSION_UNAVAILABLE_MESSAGE;
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
   }
   return fallback;
 }
@@ -43,8 +48,12 @@ export function useChat({
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [replyTarget, setReplyTarget] = useState<ChatReplyRef | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingToolRequest, setPendingToolRequest] = useState<ToolRequest | null>(
+    null,
+  );
   const abortRef = useRef<AbortController | null>(null);
   const activeConversationRef = useRef<string | null>(conversationId);
+  const assistantIdRef = useRef<string | null>(null);
 
   activeConversationRef.current = conversationId;
 
@@ -60,6 +69,8 @@ export function useChat({
     abortRef.current = null;
     setReplyTarget(null);
     setIsResponding(false);
+    setPendingToolRequest(null);
+    assistantIdRef.current = null;
 
     if (!conversationId) {
       setMessages([]);
@@ -130,6 +141,7 @@ export function useChat({
 
   const sendMessage = useCallback(
     async (rawContent: string) => {
+      if (pendingToolRequest) return;
       if (!canSendMessage(rawContent, isResponding)) return;
 
       let activeConversationId = conversationId;
@@ -162,8 +174,11 @@ export function useChat({
       setReplyTarget(null);
       setIsResponding(true);
       setError(null);
+      setPendingToolRequest(null);
 
       let assistantId: string = optimisticAssistantId;
+      assistantIdRef.current = assistantId;
+      let pausedForTool = false;
 
       try {
         for await (const chunk of chatApi.streamChatResponse({
@@ -194,10 +209,13 @@ export function useChat({
           },
           onAssistantDone: (message) => {
             assistantId = message.id;
+            assistantIdRef.current = assistantId;
             const mapped = mapApiMessageToChat(message);
             setMessages((prev) => {
               const next = prev.map((item) =>
-                item.id === optimisticAssistantId ? mapped : item,
+                item.id === optimisticAssistantId || item.id === assistantId
+                  ? mapped
+                  : item,
               );
               if (activeConversationRef.current === activeConversationId) {
                 persistMessages(activeConversationId, next);
@@ -214,6 +232,10 @@ export function useChat({
               return next;
             });
           },
+          onToolRequest: (request) => {
+            pausedForTool = true;
+            setPendingToolRequest(request);
+          },
         })) {
           if (activeConversationRef.current !== activeConversationId) {
             break;
@@ -221,11 +243,13 @@ export function useChat({
           setMessages((prev) => appendToMessage(prev, assistantId, chunk));
         }
 
-        setMessages((prev) => {
-          const next = finalizeMessage(prev, assistantId, "done");
-          persistMessages(activeConversationId, next);
-          return next;
-        });
+        if (!pausedForTool) {
+          setMessages((prev) => {
+            const next = finalizeMessage(prev, assistantId, "done");
+            persistMessages(activeConversationId, next);
+            return next;
+          });
+        }
       } catch (caught) {
         setMessages((prev) => {
           const next = finalizeMessage(prev, assistantId, "error");
@@ -233,7 +257,9 @@ export function useChat({
           return next;
         });
         if (activeConversationRef.current === activeConversationId) {
-          setError(formatChatError(caught, "Não foi possível obter resposta do assistente"));
+          setError(
+            formatChatError(caught, "Não foi possível obter resposta do assistente"),
+          );
         }
       } finally {
         if (activeConversationRef.current === activeConversationId) {
@@ -244,11 +270,113 @@ export function useChat({
     [
       conversationId,
       isResponding,
+      pendingToolRequest,
       replyTarget,
       onConversationCreated,
       onConversationTitleChange,
       persistMessages,
     ],
+  );
+
+  const resolveToolRequest = useCallback(
+    async (approved: boolean) => {
+      if (!conversationId || !pendingToolRequest || isResponding) return;
+
+      const activeConversationId = conversationId;
+      const request = pendingToolRequest;
+      const assistantId = assistantIdRef.current;
+      if (!assistantId) return;
+
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      setIsResponding(true);
+      setError(null);
+      setPendingToolRequest(null);
+
+      let result: string | undefined;
+      if (approved) {
+        result = await readClipboardText();
+      }
+
+      let pausedForTool = false;
+      let currentAssistantId = assistantId;
+
+      try {
+        setMessages((prev) => {
+          const next = finalizeMessage(prev, currentAssistantId, "streaming");
+          persistMessages(activeConversationId, next);
+          return next;
+        });
+
+        for await (const chunk of chatApi.submitToolResult({
+          conversationId: activeConversationId,
+          requestId: request.requestId,
+          approved,
+          result,
+          signal: controller.signal,
+          onAssistantDone: (message) => {
+            currentAssistantId = message.id;
+            assistantIdRef.current = currentAssistantId;
+            const mapped = mapApiMessageToChat(message);
+            setMessages((prev) => {
+              const next = prev.map((item) =>
+                item.id === assistantId || item.id === currentAssistantId
+                  ? mapped
+                  : item,
+              );
+              if (activeConversationRef.current === activeConversationId) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onToolUsed: (tool) => {
+            setMessages((prev) => {
+              const next = appendToolUse(prev, currentAssistantId, tool);
+              if (activeConversationRef.current === activeConversationId) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onToolRequest: (nextRequest) => {
+            pausedForTool = true;
+            setPendingToolRequest(nextRequest);
+          },
+        })) {
+          if (activeConversationRef.current !== activeConversationId) {
+            break;
+          }
+          setMessages((prev) => appendToMessage(prev, currentAssistantId, chunk));
+        }
+
+        if (!pausedForTool) {
+          setMessages((prev) => {
+            const next = finalizeMessage(prev, currentAssistantId, "done");
+            persistMessages(activeConversationId, next);
+            return next;
+          });
+        }
+      } catch (caught) {
+        setMessages((prev) => {
+          const next = finalizeMessage(prev, currentAssistantId, "error");
+          persistMessages(activeConversationId, next);
+          return next;
+        });
+        if (activeConversationRef.current === activeConversationId) {
+          setError(
+            formatChatError(caught, "Não foi possível concluir a ferramenta"),
+          );
+        }
+      } finally {
+        if (activeConversationRef.current === activeConversationId) {
+          setIsResponding(false);
+        }
+      }
+    },
+    [conversationId, pendingToolRequest, isResponding, persistMessages],
   );
 
   return {
@@ -257,8 +385,10 @@ export function useChat({
     isLoadingHistory,
     replyTarget,
     error,
+    pendingToolRequest,
     sendMessage,
     startReply,
     cancelReply,
+    resolveToolRequest,
   };
 }

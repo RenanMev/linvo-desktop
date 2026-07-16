@@ -1,4 +1,4 @@
-import { LogOut, Settings } from "lucide-react";
+import { LogOut, Settings, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -56,6 +56,10 @@ export function AccountMenu({ session }: AccountMenuProps) {
         <DropdownMenuItem onClick={() => navigate("/settings/general")}>
           <Settings />
           Configurações
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate("/settings/account")}>
+          <User />
+          Conta
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

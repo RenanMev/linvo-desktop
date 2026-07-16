@@ -1,4 +1,4 @@
-import { Search, Wrench } from "lucide-react";
+import { Clipboard, Globe, Search, Wrench } from "lucide-react";
 
 import type { ChatMessage } from "@/lib/chat/types";
 import { cn } from "@/lib/utils";
@@ -9,10 +9,16 @@ type ChatToolUsesProps = {
 };
 
 function ToolIcon({ name }: { name: string }) {
-  if (name === "search_knowledge") {
-    return <Search className="size-3 shrink-0" aria-hidden />;
+  switch (name) {
+    case "search_knowledge":
+      return <Search className="size-3 shrink-0" aria-hidden />;
+    case "web_search":
+      return <Globe className="size-3 shrink-0" aria-hidden />;
+    case "read_clipboard":
+      return <Clipboard className="size-3 shrink-0" aria-hidden />;
+    default:
+      return <Wrench className="size-3 shrink-0" aria-hidden />;
   }
-  return <Wrench className="size-3 shrink-0" aria-hidden />;
 }
 
 export function ChatToolUses({ toolUses, isStreaming = false }: ChatToolUsesProps) {

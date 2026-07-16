@@ -10,6 +10,7 @@ export function ChatPage() {
   const navigate = useNavigate();
   const { conversationId: routeConversationId } = useParams();
   const {
+    conversations,
     isLoading: isLoadingConversations,
     error: conversationsError,
     syncActiveId,
@@ -18,6 +19,10 @@ export function ChatPage() {
   } = useConversations();
 
   const conversationId = routeConversationId ?? null;
+  const activeConversation = conversations.find(
+    (conversation) => conversation.id === conversationId,
+  );
+  const conversationTitle = activeConversation?.title ?? "Nova conversa";
 
   useEffect(() => {
     syncActiveId(conversationId);
@@ -29,9 +34,11 @@ export function ChatPage() {
     isLoadingHistory,
     replyTarget,
     error,
+    pendingToolRequest,
     sendMessage,
     startReply,
     cancelReply,
+    resolveToolRequest,
   } = useChat({
     conversationId,
     onConversationCreated: (id) => {
@@ -67,13 +74,17 @@ export function ChatPage() {
       ) : (
         <ChatPanel
           conversationKey={conversationId}
+          conversationTitle={conversationTitle}
           messages={messages}
           isResponding={isResponding}
           replyTarget={replyTarget}
+          pendingToolRequest={pendingToolRequest}
           onSend={(content) => void sendMessage(content)}
           onReply={startReply}
           onCancelReply={cancelReply}
-          disabled={isResponding}
+          onApproveTool={() => void resolveToolRequest(true)}
+          onDenyTool={() => void resolveToolRequest(false)}
+          disabled={isResponding || Boolean(pendingToolRequest)}
         />
       )}
     </div>

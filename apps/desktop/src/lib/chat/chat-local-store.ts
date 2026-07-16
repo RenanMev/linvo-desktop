@@ -37,7 +37,8 @@ function isChatMessage(value: unknown): value is ChatMessage {
     typeof message.createdAt === "number" &&
     (message.status === "streaming" ||
       message.status === "done" ||
-      message.status === "error") &&
+      message.status === "error" ||
+      message.status === "awaiting_tool") &&
     (message.toolUses === undefined ||
       (Array.isArray(message.toolUses) &&
         message.toolUses.every(
@@ -174,7 +175,10 @@ async function migrateLegacyLocalStorageToDisk(): Promise<void> {
 }
 
 export function sanitizeMessagesForCache(messages: ChatMessage[]): ChatMessage[] {
-  return messages.filter((message) => message.status !== "streaming");
+  return messages.filter(
+    (message) =>
+      message.status !== "streaming" && message.status !== "awaiting_tool",
+  );
 }
 
 export async function hydrateChatLocalStore(): Promise<void> {

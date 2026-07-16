@@ -31,7 +31,7 @@ describe("ChatMessageBubble", () => {
     expect(screen.getByText("Pergunta")).toBeInTheDocument();
   });
 
-  it("shows streaming cursor for empty streaming message", () => {
+  it("shows thinking text for empty streaming message", () => {
     const message: ChatMessage = {
       ...baseMessage,
       content: "",
@@ -40,7 +40,7 @@ describe("ChatMessageBubble", () => {
 
     render(<ChatMessageBubble message={message} onReply={vi.fn()} />);
 
-    expect(screen.getByText("▍")).toBeInTheDocument();
+    expect(screen.getByText("Pensando...")).toBeInTheDocument();
   });
 
   it("shows error message when status is error", () => {

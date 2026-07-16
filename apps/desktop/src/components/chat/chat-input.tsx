@@ -71,7 +71,7 @@ export function ChatInput({
           onChange={handleInput}
           onKeyDown={handleKeyDown}
           placeholder={
-            replyTarget ? "Escreva sua resposta..." : "Digite sua mensagem..."
+            replyTarget ? "Escreva sua resposta..." : "Pergunte qualquer coisa..."
           }
           rows={1}
           disabled={disabled || isResponding}

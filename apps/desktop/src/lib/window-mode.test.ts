@@ -8,6 +8,6 @@ describe("window sizes", () => {
   });
 
   it("defines panel dimensions", () => {
-    expect(PANEL_SIZE).toEqual({ width: 900, height: 600 });
+    expect(PANEL_SIZE).toEqual({ width: 1200, height: 800 });
   });
 });

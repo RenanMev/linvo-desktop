@@ -18,7 +18,7 @@ describe("ChatInput", () => {
       />,
     );
 
-    const textarea = screen.getByPlaceholderText("Digite sua mensagem...");
+    const textarea = screen.getByPlaceholderText("Pergunte qualquer coisa...");
     await user.type(textarea, "olá{Enter}");
 
     expect(onSend).toHaveBeenCalledWith("olá");
@@ -49,7 +49,7 @@ describe("ChatInput", () => {
       />,
     );
 
-    const textarea = screen.getByPlaceholderText("Digite sua mensagem...");
+    const textarea = screen.getByPlaceholderText("Pergunte qualquer coisa...");
     await user.type(textarea, "teste");
 
     expect(screen.getByTitle("Enviar")).toBeDisabled();

@@ -1,308 +1,667 @@
+import { useEffect, useMemo, useState } from "react";
 import {
-
-  MessageSquare,
-
+  ArrowLeft,
+  Archive,
+  Bell,
+  Boxes,
+  CreditCard,
+  Keyboard,
+  Layers,
+  LibraryBig,
+  LifeBuoy,
   MessageSquarePlus,
-
+  Palette,
+  PanelLeft,
+  PanelLeftClose,
   Search,
-
   Settings,
-
-  Sparkles,
-
+  ShieldCheck,
   User,
-
+  type LucideIcon,
 } from "lucide-react";
-
-import { NavLink, useLocation } from "react-router-dom";
-
-
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
-
 import { Input } from "@/components/ui/input";
-
 import { useConversations } from "@/context/chat-conversations-context";
-
+import type { PanelSession } from "@/hooks/use-panel-session";
 import { cn } from "@/lib/utils";
 
+const SIDEBAR_COLLAPSED_KEY = "linvo.panel.sidebar-collapsed";
 
+type NavItem = {
+  label: string;
+  icon: LucideIcon;
+  to?: string;
+  soon?: boolean;
+};
 
-const mainNav = [
+type NavGroup = {
+  id: string;
+  label?: string;
+  items: NavItem[];
+};
 
-  { to: "/chat", label: "Chat", icon: MessageSquare },
+const settingsGroups: NavGroup[] = [
+  {
+    id: "geral",
+    items: [{ label: "Geral", icon: Settings, to: "/settings/general" }],
+  },
+  {
+    id: "preferencias",
+    label: "Preferências",
+    items: [
+      { label: "Aparência", icon: Palette, soon: true },
+      { label: "Atalhos", icon: Keyboard, soon: true },
+      { label: "Notificações", icon: Bell, soon: true },
+    ],
+  },
+  {
+    id: "conta",
+    label: "Conta",
+    items: [
+      { label: "Conta", icon: User, to: "/settings/account" },
+      { label: "Plano e uso", icon: CreditCard, soon: true },
+    ],
+  },
+  {
+    id: "avancado",
+    label: "Avançado",
+    items: [
+      { label: "Modelos", icon: Boxes, soon: true },
+      { label: "Ferramentas & MCPs", icon: Layers, soon: true },
+      { label: "Privacidade", icon: ShieldCheck, soon: true },
+    ],
+  },
+];
 
-  { to: "/settings/general", label: "Configurações", icon: Settings },
+const chatExploreItems: NavItem[] = [
+  { label: "Arquivadas", icon: Archive, soon: true },
+  { label: "Biblioteca", icon: LibraryBig, soon: true },
+];
 
-] as const;
-
-
-
-const settingsNav = [
-
-  { to: "/settings/general", label: "Geral", icon: Sparkles },
-
-  { to: "/settings/account", label: "Conta", icon: User },
-
-] as const;
-
-
-
-function navClassName({ isActive }: { isActive: boolean }) {
-
-  return cn(
-
-    "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors",
-
-    isActive
-
-      ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-
-      : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
-
-  );
-
-}
-
-
+const sidebarSectionX = "px-2.5";
+const sidebarHeaderY = "py-2.5";
+const sidebarBlockBottom = "pb-2";
 
 function formatConversationDate(isoDate: string): string {
-
   const date = new Date(isoDate);
-
   return date.toLocaleDateString("pt-BR", {
-
     day: "2-digit",
-
     month: "short",
-
   });
-
 }
 
+function matchesQuery(value: string, query: string): boolean {
+  return value.toLowerCase().includes(query.trim().toLowerCase());
+}
 
+function accountInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) {
+    return "?";
+  }
+  if (parts.length === 1) {
+    return parts[0]!.slice(0, 2).toUpperCase();
+  }
+  return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
+}
 
-export function PanelSidebar() {
+function readCollapsedPreference(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
-  const location = useLocation();
+const navRowBase =
+  "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors";
+const navRowIdle =
+  "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground";
+const navRowActive =
+  "bg-sidebar-accent font-medium text-sidebar-accent-foreground";
 
-  const inSettings = location.pathname.startsWith("/settings");
+const collapsedIconBase =
+  "inline-flex size-8 items-center justify-center rounded-md transition-colors";
 
-  const searchPlaceholder = inSettings
+function SidebarNavRow({
+  item,
+  onNavigate,
+}: {
+  item: NavItem;
+  onNavigate?: () => void;
+}) {
+  const Icon = item.icon;
 
-    ? "Buscar configurações"
-
-    : "Buscar conversas";
-
-  const {
-
-    conversations,
-
-    activeId,
-
-    isLoading,
-
-    createConversation,
-
-    selectConversation,
-
-  } = useConversations();
-
-
+  if (item.soon || !item.to) {
+    return (
+      <div
+        className={cn(
+          navRowBase,
+          "cursor-default justify-between text-sidebar-foreground/45",
+        )}
+        aria-disabled="true"
+      >
+        <span className="flex items-center gap-2">
+          <Icon className="size-3.5 shrink-0" />
+          {item.label}
+        </span>
+        <span className="rounded-full bg-sidebar-accent/70 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
+          Em breve
+        </span>
+      </div>
+    );
+  }
 
   return (
-
-    <aside className="flex h-full min-h-0 w-60 shrink-0 flex-col overflow-hidden border-r border-border/60 bg-sidebar text-sidebar-foreground">
-
-      <div className="flex items-center gap-3 px-4 py-4">
-
-        <span className="grid size-9 place-items-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-
-          <Sparkles className="size-4" />
-
-        </span>
-
-        <div className="min-w-0">
-
-          <p className="truncate text-sm font-semibold leading-tight">Linvo Desktop</p>
-
-          <p className="truncate text-xs text-muted-foreground">
-
-            {inSettings ? "Configurações" : "Chat"}
-
-          </p>
-
-        </div>
-
-      </div>
-
-
-
-      <div className="px-3 pb-3">
-
-        <div className="relative">
-
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-
-          <Input
-
-            placeholder={searchPlaceholder}
-
-            className="h-8 border-transparent bg-sidebar-accent pl-8 text-sm shadow-none"
-
-          />
-
-        </div>
-
-      </div>
-
-
-
-      <nav className="space-y-0.5 px-3" aria-label="Navegação principal">
-
-        {mainNav.map(({ to, label, icon: Icon }) => (
-
-          <NavLink key={to} to={to} className={navClassName}>
-
-            <Icon className="size-4 shrink-0" />
-
-            {label}
-
-          </NavLink>
-
-        ))}
-
-      </nav>
-
-
-
-      {inSettings ? (
-
-        <nav
-
-          className="mt-4 space-y-0.5 border-t border-sidebar-border px-3 pt-4"
-
-          aria-label="Seções de configurações"
-
-        >
-
-          <p className="mb-2 px-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-
-            Seções
-
-          </p>
-
-          {settingsNav.map(({ to, label, icon: Icon }) => (
-
-            <NavLink key={to} to={to} className={navClassName}>
-
-              <Icon className="size-4 shrink-0" />
-
-              {label}
-
-            </NavLink>
-
-          ))}
-
-        </nav>
-
-      ) : (
-
-        <div className="mt-2 flex min-h-0 flex-1 flex-col px-3 py-2">
-
-          <Button
-
-            type="button"
-
-            variant="outline"
-
-            size="sm"
-
-            className="mb-3 w-full justify-start gap-2"
-
-            onClick={() => void createConversation()}
-
-          >
-
-            <MessageSquarePlus className="size-4" />
-
-            Nova conversa
-
-          </Button>
-
-
-
-          <nav
-            className="scrollbar-elegant scrollbar-sidebar min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1"
-            aria-label="Conversas"
-          >
-
-            {isLoading ? (
-
-              <p className="px-2.5 py-2 text-xs text-muted-foreground">
-
-                Carregando conversas...
-
-              </p>
-
-            ) : conversations.length === 0 ? (
-
-              <p className="px-2.5 py-2 text-xs text-muted-foreground">
-
-                Nenhuma conversa ainda
-
-              </p>
-
-            ) : (
-
-              conversations.map((conversation) => (
-
-                <button
-
-                  key={conversation.id}
-
-                  type="button"
-
-                  onClick={() => selectConversation(conversation.id)}
-
-                  className={cn(
-
-                    "flex w-full flex-col rounded-md px-2.5 py-2 text-left text-sm transition-colors",
-
-                    activeId === conversation.id
-
-                      ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-
-                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
-
-                  )}
-
-                >
-
-                  <span className="truncate">{conversation.title}</span>
-
-                  <span className="text-xs text-muted-foreground">
-
-                    {formatConversationDate(conversation.updatedAt)}
-
-                  </span>
-
-                </button>
-
-              ))
-
-            )}
-
-          </nav>
-
-        </div>
-
-      )}
-
-    </aside>
-
+    <NavLink
+      to={item.to}
+      end
+      onClick={onNavigate}
+      className={({ isActive }) =>
+        cn(navRowBase, isActive ? navRowActive : navRowIdle)
+      }
+    >
+      <Icon className="size-3.5 shrink-0" />
+      {item.label}
+    </NavLink>
   );
-
 }
 
+function CollapsedIconButton({
+  title,
+  icon: Icon,
+  onClick,
+  active = false,
+  disabled = false,
+  tabIndex,
+}: {
+  title: string;
+  icon: LucideIcon;
+  onClick?: () => void;
+  active?: boolean;
+  disabled?: boolean;
+  tabIndex: number;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      tabIndex={tabIndex}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        collapsedIconBase,
+        active
+          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+          : "text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+        disabled && "cursor-default opacity-45 hover:bg-transparent",
+      )}
+    >
+      <Icon className="size-3.5" />
+    </button>
+  );
+}
 
+function CollapsedSettingsNavItem({
+  item,
+  tabIndex,
+}: {
+  item: NavItem;
+  tabIndex: number;
+}) {
+  const Icon = item.icon;
+
+  if (item.soon || !item.to) {
+    return (
+      <CollapsedIconButton
+        title={item.label}
+        icon={Icon}
+        tabIndex={tabIndex}
+        disabled
+      />
+    );
+  }
+
+  return (
+    <NavLink
+      to={item.to}
+      end
+      tabIndex={tabIndex}
+      title={item.label}
+      className={({ isActive }) =>
+        cn(
+          collapsedIconBase,
+          isActive
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+        )
+      }
+    >
+      <Icon className="size-3.5" />
+    </NavLink>
+  );
+}
+
+type PanelSidebarProps = {
+  session: PanelSession;
+};
+
+export function PanelSidebar({ session }: PanelSidebarProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const inSettings = location.pathname.startsWith("/settings");
+  const [collapsed, setCollapsed] = useState(readCollapsedPreference);
+  const [searchQuery, setSearchQuery] = useState("");
+  const {
+    conversations,
+    activeId,
+    isLoading,
+    createConversation,
+    selectConversation,
+  } = useConversations();
+
+  const allSettingsItems = useMemo(
+    () => settingsGroups.flatMap((group) => group.items),
+    [],
+  );
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+    } catch {
+      return;
+    }
+  }, [collapsed]);
+
+  useEffect(() => {
+    setSearchQuery("");
+  }, [inSettings]);
+
+  const filteredConversations = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return conversations;
+    }
+    return conversations.filter((conversation) =>
+      matchesQuery(conversation.title, searchQuery),
+    );
+  }, [conversations, searchQuery]);
+
+  const filteredSettingsGroups = useMemo(() => {
+    const query = searchQuery.trim();
+    if (!query) {
+      return settingsGroups;
+    }
+    return settingsGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => matchesQuery(item.label, query)),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [searchQuery]);
+
+  const resetSearch = () => setSearchQuery("");
+  const toggleCollapsed = () => setCollapsed((current) => !current);
+  const collapsedTabIndex = collapsed ? 0 : -1;
+
+  return (
+    <aside
+      className={cn(
+        "relative flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-r border-border/60 bg-sidebar text-sidebar-foreground",
+        "transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width]",
+        collapsed ? "w-14" : "w-60",
+      )}
+    >
+      <div
+        className={cn(
+          "grid transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          collapsed
+            ? "min-h-0 flex-1 grid-rows-[1fr] opacity-100"
+            : "pointer-events-none grid-rows-[0fr] opacity-0",
+        )}
+        aria-hidden={!collapsed}
+      >
+        <div
+          className={cn(
+            "flex min-h-0 flex-col items-center gap-0.5 overflow-hidden",
+            sidebarSectionX,
+            sidebarHeaderY,
+          )}
+        >
+          {inSettings ? (
+            <>
+              <button
+                type="button"
+                title={session.user.name}
+                tabIndex={collapsedTabIndex}
+                onClick={() => navigate("/settings/account")}
+                className="grid size-8 place-items-center rounded-full bg-sidebar-accent text-[10px] font-semibold text-sidebar-accent-foreground transition-opacity hover:opacity-90"
+              >
+                {accountInitials(session.user.name)}
+              </button>
+              <CollapsedIconButton
+                title="Expandir sidebar"
+                icon={PanelLeft}
+                tabIndex={collapsedTabIndex}
+                onClick={toggleCollapsed}
+              />
+              <div className="my-0.5 h-px w-6 bg-sidebar-border" />
+              <CollapsedIconButton
+                title="Voltar ao chat"
+                icon={ArrowLeft}
+                tabIndex={collapsedTabIndex}
+                onClick={() => navigate("/chat")}
+              />
+              <div className="scrollbar-elegant scrollbar-sidebar mt-0.5 flex min-h-0 flex-1 flex-col items-center gap-0.5 overflow-y-auto">
+                {allSettingsItems.map((item) => (
+                  <CollapsedSettingsNavItem
+                    key={item.label}
+                    item={item}
+                    tabIndex={collapsedTabIndex}
+                  />
+                ))}
+              </div>
+              <div className="my-0.5 h-px w-6 bg-sidebar-border" />
+              <CollapsedIconButton
+                title="Central de ajuda"
+                icon={LifeBuoy}
+                tabIndex={collapsedTabIndex}
+                disabled
+              />
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                title="Linvo"
+                tabIndex={collapsedTabIndex}
+                onClick={() => navigate("/chat")}
+                className="grid size-8 place-items-center rounded-full bg-sidebar-primary text-[10px] font-bold text-sidebar-primary-foreground transition-opacity hover:opacity-90"
+              >
+                L
+              </button>
+              <CollapsedIconButton
+                title="Expandir sidebar"
+                icon={PanelLeft}
+                tabIndex={collapsedTabIndex}
+                onClick={toggleCollapsed}
+              />
+              <div className="my-0.5 h-px w-6 bg-sidebar-border" />
+              <CollapsedIconButton
+                title="Nova conversa"
+                icon={MessageSquarePlus}
+                tabIndex={collapsedTabIndex}
+                onClick={() => void createConversation()}
+              />
+              <div className="scrollbar-elegant scrollbar-sidebar mt-0.5 flex min-h-0 flex-1 flex-col items-center gap-0.5 overflow-y-auto">
+                {!isLoading &&
+                  filteredConversations.slice(0, 8).map((conversation) => (
+                    <button
+                      key={conversation.id}
+                      type="button"
+                      title={conversation.title}
+                      tabIndex={collapsedTabIndex}
+                      onClick={() => selectConversation(conversation.id)}
+                      className={cn(
+                        "flex size-8 items-center justify-center rounded-lg text-[10px] font-semibold transition-colors",
+                        activeId === conversation.id
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          : "text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+                      )}
+                    >
+                      {conversation.title.trim().slice(0, 1).toUpperCase() ||
+                        "C"}
+                    </button>
+                  ))}
+              </div>
+              <div className="my-0.5 h-px w-6 bg-sidebar-border" />
+              {chatExploreItems.map((item) => (
+                <CollapsedIconButton
+                  key={item.label}
+                  title={item.label}
+                  icon={item.icon}
+                  tabIndex={collapsedTabIndex}
+                  disabled
+                />
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+
+      <div
+        className={cn(
+          "grid min-h-0 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          collapsed
+            ? "pointer-events-none grid-rows-[0fr] opacity-0"
+            : "flex-1 grid-rows-[1fr] opacity-100",
+        )}
+      >
+        <div className="flex min-h-0 flex-col overflow-hidden">
+          {inSettings ? (
+            <>
+              <div
+                className={cn(
+                  "flex items-center justify-between gap-2",
+                  sidebarSectionX,
+                  sidebarHeaderY,
+                )}
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-sidebar-accent text-[10px] font-semibold text-sidebar-accent-foreground">
+                    {accountInitials(session.user.name)}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold leading-tight">
+                      {session.user.name}
+                    </p>
+                    <p className="truncate text-[11px] text-muted-foreground">
+                      {session.user.email}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  title="Recolher sidebar"
+                  onClick={toggleCollapsed}
+                  className="size-8 shrink-0 text-muted-foreground"
+                >
+                  <PanelLeftClose className="size-3.5" />
+                </Button>
+              </div>
+
+              <div className={cn(sidebarSectionX, sidebarBlockBottom)}>
+                <button
+                  type="button"
+                  onClick={() => navigate("/chat")}
+                  className={cn(navRowBase, navRowIdle)}
+                >
+                  <ArrowLeft className="size-3.5 shrink-0" />
+                  Voltar ao chat
+                </button>
+              </div>
+
+              <div className={cn(sidebarSectionX, sidebarBlockBottom)}>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Buscar configurações"
+                    className="h-7 rounded-lg border-transparent bg-sidebar-accent/80 pl-7 text-xs shadow-none"
+                  />
+                </div>
+              </div>
+
+              <nav
+                className={cn(
+                  "scrollbar-elegant scrollbar-sidebar min-h-0 flex-1 space-y-3 overflow-y-auto pb-2",
+                  sidebarSectionX,
+                )}
+                aria-label="Seções de configurações"
+              >
+                {filteredSettingsGroups.length === 0 ? (
+                  <p className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                    Nenhuma configuração encontrada
+                  </p>
+                ) : (
+                  filteredSettingsGroups.map((group) => (
+                    <div key={group.id} className="space-y-0.5">
+                      {group.label ? (
+                        <p className="mb-0.5 px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          {group.label}
+                        </p>
+                      ) : null}
+                      {group.items.map((item) => (
+                        <SidebarNavRow
+                          key={item.label}
+                          item={item}
+                          onNavigate={resetSearch}
+                        />
+                      ))}
+                    </div>
+                  ))
+                )}
+              </nav>
+
+              <div
+                className={cn(
+                  "border-t border-sidebar-border py-2",
+                  sidebarSectionX,
+                )}
+              >
+                <div
+                  className={cn(
+                    navRowBase,
+                    "cursor-default justify-between text-sidebar-foreground/45",
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <LifeBuoy className="size-3.5 shrink-0" />
+                    Central de ajuda
+                  </span>
+                  <span className="rounded-full bg-sidebar-accent/70 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
+                    Em breve
+                  </span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div
+                className={cn(
+                  "flex items-center justify-between gap-2",
+                  sidebarSectionX,
+                  sidebarHeaderY,
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => navigate("/chat")}
+                  className="flex min-w-0 items-center gap-2 rounded-lg px-1 py-1 transition-colors hover:bg-sidebar-accent/60"
+                >
+                  <span className="grid size-8 place-items-center rounded-full bg-sidebar-primary text-[10px] font-bold text-sidebar-primary-foreground">
+                    L
+                  </span>
+                  <span className="truncate text-sm font-semibold leading-none">
+                    Linvo
+                  </span>
+                </button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  title="Recolher sidebar"
+                  onClick={toggleCollapsed}
+                  className="size-8 shrink-0 text-muted-foreground"
+                >
+                  <PanelLeftClose className="size-3.5" />
+                </Button>
+              </div>
+
+              <div className={cn(sidebarSectionX, sidebarBlockBottom)}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 w-full justify-start gap-2 rounded-lg text-xs"
+                  onClick={() => void createConversation()}
+                >
+                  <MessageSquarePlus className="size-3.5" />
+                  Nova conversa
+                </Button>
+              </div>
+
+              <div className={cn(sidebarSectionX, sidebarBlockBottom)}>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Buscar conversas"
+                    className="h-7 rounded-lg border-transparent bg-sidebar-accent/80 pl-7 text-xs shadow-none"
+                  />
+                </div>
+              </div>
+
+              <div className={cn("flex min-h-0 flex-1 flex-col", sidebarSectionX)}>
+                <p className="mb-0.5 px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Conversas
+                </p>
+                <nav
+                  className="scrollbar-elegant scrollbar-sidebar min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-0.5"
+                  aria-label="Conversas"
+                >
+                  {isLoading ? (
+                    <p className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                      Carregando conversas...
+                    </p>
+                  ) : filteredConversations.length === 0 ? (
+                    <p className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                      {conversations.length === 0
+                        ? "Nenhuma conversa ainda"
+                        : "Nenhuma conversa encontrada"}
+                    </p>
+                  ) : (
+                    filteredConversations.map((conversation) => (
+                      <button
+                        key={conversation.id}
+                        type="button"
+                        onClick={() => selectConversation(conversation.id)}
+                        className={cn(
+                          "flex w-full flex-col rounded-lg px-2 py-1.5 text-left text-xs transition-colors",
+                          activeId === conversation.id
+                            ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                            : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+                        )}
+                      >
+                        <span className="truncate">{conversation.title}</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {formatConversationDate(conversation.updatedAt)}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </nav>
+              </div>
+
+              <div
+                className={cn(
+                  "space-y-0.5 border-t border-sidebar-border py-2",
+                  sidebarSectionX,
+                )}
+              >
+                {chatExploreItems.map((item) => (
+                  <SidebarNavRow key={item.label} item={item} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </aside>
+  );
+}

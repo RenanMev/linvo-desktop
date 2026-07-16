@@ -14,6 +14,10 @@ vi.mock("@tauri-apps/plugin-global-shortcut", () => ({
   unregister: vi.fn(() => Promise.resolve()),
 }));
 
+vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
+  readText: vi.fn(() => Promise.resolve("")),
+}));
+
 if (typeof globalThis.localStorage === "undefined") {
   const store = new Map<string, string>();
   const localStorageMock: Storage = {

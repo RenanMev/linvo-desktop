@@ -44,6 +44,7 @@
     "core:tray:default",
     "core:menu:default",
     "core:app:allow-default-window-icon",
-    "opener:default"
+    "opener:default",
+    "clipboard-manager:allow-read-text"
   ]
 }
