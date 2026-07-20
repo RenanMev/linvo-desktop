@@ -264,6 +264,11 @@ export function saveCachedConversationMessages(
   void persistMessagesToDisk(conversationId, sanitized);
 }
 
+export function clearCachedConversation(conversationId: string): void {
+  memoryMessages.delete(conversationId);
+  void persistMessagesToDisk(conversationId, []);
+}
+
 export function loadCachedConversations(): Conversation[] {
   if (hydrated || memoryConversations.length > 0) {
     return memoryConversations;

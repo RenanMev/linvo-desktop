@@ -24,6 +24,7 @@ import {
 } from "@/lib/panel-session-sync";
 import { closePanel } from "@/lib/panel-window";
 import { clearChatLocalCache } from "@/lib/chat/chat-local-store";
+import { clearStoredWorkspaceId } from "@/lib/workspace/workspace-store";
 
 export const PANEL_SESSION_UNAVAILABLE_MESSAGE =
   "Sessão indisponível no painel. Feche e abra o chat ou faça login novamente.";
@@ -230,6 +231,7 @@ export function usePanelSession() {
     await clearTokens();
     pendingTokensRef.current = null;
     await clearChatLocalCache();
+    clearStoredWorkspaceId();
     await emitAuthSync("logout");
     dispatch({ type: "LOGOUT" });
     await closePanel();

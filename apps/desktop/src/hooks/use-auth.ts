@@ -16,6 +16,7 @@ import {
 } from "@/lib/auth/auth-state";
 import { enterLoggedInDesktop } from "@/lib/auth/enter-logged-in-desktop";
 import { clearChatLocalCache } from "@/lib/chat/chat-local-store";
+import { clearStoredWorkspaceId } from "@/lib/workspace/workspace-store";
 import { setUnauthorizedHandler, refreshStoredTokens } from "@/lib/auth/http";
 import { clearTokens, getTokens, setTokens, applySyncedTokens } from "@/lib/auth/token-store";
 import { applyWindowSurface } from "@/lib/auth/apply-window-surface";
@@ -196,6 +197,7 @@ export function useAuth() {
     }
     await clearTokens();
     await clearChatLocalCache();
+    clearStoredWorkspaceId();
     await emitAuthSync("logout");
     await closePanel();
     dispatch({ type: "LOGOUT" });

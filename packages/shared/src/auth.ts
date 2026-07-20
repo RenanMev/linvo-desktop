@@ -44,6 +44,7 @@ export const userPublicSchema = z.object({
   name: z.string(),
   email: z.string(),
   createdAt: z.string(),
+  activeWorkspaceId: z.string().nullable().optional(),
 });
 
 export const authResultSchema = authTokensSchema.extend({

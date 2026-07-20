@@ -3,7 +3,10 @@ import { Outlet } from "react-router-dom";
 import { PanelSidebar } from "@/components/panel/panel-sidebar";
 import { PanelTitlebar } from "@/components/panel/panel-titlebar";
 import { ChatConversationsProvider } from "@/context/chat-conversations-context";
+import { WorkspaceProvider } from "@/context/workspace-context";
 import type { PanelSession } from "@/hooks/use-panel-session";
+import { useWindowMaximized } from "@/hooks/use-window-maximized";
+import { cn } from "@/lib/utils";
 
 type PanelShellProps = {
   session: PanelSession;
@@ -12,22 +15,35 @@ type PanelShellProps = {
 };
 
 export function PanelShell({ session, sessionReady, sessionError }: PanelShellProps) {
+  const { maximized, toggleMaximize } = useWindowMaximized();
+
   return (
     <ChatConversationsProvider enabled={sessionReady}>
-      <div className="flex h-full w-full flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-2xl">
-        <PanelTitlebar session={session} />
-        {sessionError ? (
-          <div className="border-b border-destructive/20 bg-destructive/10 px-4 py-2 text-sm text-destructive">
-            {sessionError}
-          </div>
-        ) : null}
-        <div className="flex min-h-0 flex-1">
-          <PanelSidebar session={session} />
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
-            <Outlet />
+      <WorkspaceProvider enabled={sessionReady}>
+        <div
+          className={cn(
+            "flex h-full w-full flex-col overflow-hidden border bg-card text-card-foreground shadow-2xl",
+            maximized ? "rounded-none border-transparent" : "rounded-xl",
+          )}
+        >
+          <PanelTitlebar
+            session={session}
+            maximized={maximized}
+            onToggleMaximize={toggleMaximize}
+          />
+          {sessionError ? (
+            <div className="border-b border-destructive/20 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+              {sessionError}
+            </div>
+          ) : null}
+          <div className="flex min-h-0 flex-1">
+            <PanelSidebar session={session} />
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
+              <Outlet />
+            </div>
           </div>
         </div>
-      </div>
+      </WorkspaceProvider>
     </ChatConversationsProvider>
   );
 }
