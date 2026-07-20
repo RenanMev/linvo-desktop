@@ -179,6 +179,9 @@ describe("RuleReviewPage", () => {
     renderPage();
 
     expect(await screen.findByRole("button", { name: "Enviar arquivos" })).toBeInTheDocument();
+    expect(await screen.findByText("Sessões recentes")).toBeInTheDocument();
+    expect(ruleDiscoveryApi.listSessions).toHaveBeenCalledWith("ws-1");
+    expect(await screen.findByText(/Pronta · 1 candidatos/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /candidatos/i }));
 
