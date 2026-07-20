@@ -112,6 +112,35 @@ export async function getConversation(id: string): Promise<Conversation> {
   return data.conversation;
 }
 
+export async function deleteConversation(id: string): Promise<void> {
+  const path = `/api/conversations/${id}`;
+  authDebug("chat.request", { path, method: "DELETE" });
+  let response: Response;
+
+  try {
+    response = await authorizedFetch(
+      `${API_URL}${path}`,
+      { method: "DELETE" },
+      CHAT_AUTH_OPTIONS,
+    );
+  } catch (error) {
+    authDebug("chat.error", {
+      path,
+      reason: error instanceof Error ? error.name : "unknown",
+    });
+    if (error instanceof AuthApiError || error instanceof AuthNetworkError) {
+      throw error;
+    }
+    throw new ChatApiError("Erro inesperado", 500);
+  }
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    authDebug("chat.error", { path, status: response.status, message });
+    throw new ChatApiError(message, response.status);
+  }
+}
+
 export async function listMessages(conversationId: string): Promise<Message[]> {
   const data = await request(
     `/api/conversations/${conversationId}/messages`,

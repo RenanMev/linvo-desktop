@@ -1,3 +1,5 @@
+import { WORKSPACE_ID_HEADER } from "@linvo/shared";
+
 import * as authApi from "@/lib/auth/auth-api";
 import { refresh as refreshTokens } from "@/lib/auth/auth-api";
 import { authDebug } from "@/lib/auth/auth-debug";
@@ -8,6 +10,7 @@ import {
   setTokens,
   type StoredTokens,
 } from "@/lib/auth/token-store";
+import { getStoredWorkspaceId } from "@/lib/workspace/workspace-store";
 
 export type UnauthorizedHandler = () => void | Promise<void>;
 
@@ -104,6 +107,11 @@ async function fetchWithAuth(
 ): Promise<Response> {
   const headers = new Headers(init?.headers);
   headers.set("Authorization", `Bearer ${accessToken}`);
+
+  const workspaceId = getStoredWorkspaceId();
+  if (workspaceId) {
+    headers.set(WORKSPACE_ID_HEADER, workspaceId);
+  }
 
   try {
     return await fetch(input, { ...init, headers });

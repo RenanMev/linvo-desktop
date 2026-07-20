@@ -13,7 +13,9 @@ import type { Conversation } from "@linvo/shared";
 import { AuthApiError } from "@/lib/auth/auth-api";
 import { PANEL_SESSION_UNAVAILABLE_MESSAGE } from "@/hooks/use-panel-session";
 import * as chatApi from "@/lib/chat/chat-api";
+import { ChatApiError } from "@/lib/chat/chat-api";
 import {
+  clearCachedConversation,
   hydrateChatLocalStore,
   loadCachedConversations,
   saveCachedConversations,
@@ -26,12 +28,20 @@ function formatConversationsError(error: unknown): string {
   return "Não foi possível carregar as conversas";
 }
 
+function formatDeleteError(error: unknown): string {
+  if (error instanceof AuthApiError && error.status === 401) {
+    return PANEL_SESSION_UNAVAILABLE_MESSAGE;
+  }
+  return "Não foi possível apagar a conversa";
+}
+
 type ConversationsContextValue = {
   conversations: Conversation[];
   activeId: string | null;
   isLoading: boolean;
   error: string | null;
   createConversation: () => Promise<Conversation>;
+  deleteConversation: (id: string) => Promise<void>;
   selectConversation: (id: string) => void;
   syncActiveId: (id: string | null) => void;
   refreshList: () => Promise<void>;
@@ -156,6 +166,33 @@ export function ChatConversationsProvider({
     });
   }, []);
 
+  const deleteConversation = useCallback(
+    async (id: string) => {
+      setError(null);
+      try {
+        await chatApi.deleteConversation(id);
+      } catch (caught) {
+        if (!(caught instanceof ChatApiError && caught.status === 404)) {
+          setError(formatDeleteError(caught));
+          return;
+        }
+      }
+
+      clearCachedConversation(id);
+      setConversations((prev) => {
+        const next = prev.filter((conversation) => conversation.id !== id);
+        saveCachedConversations(next);
+        return next;
+      });
+
+      if (activeId === id) {
+        setActiveId(null);
+        navigate("/chat");
+      }
+    },
+    [activeId, navigate],
+  );
+
   const value = useMemo(
     () => ({
       conversations,
@@ -163,6 +200,7 @@ export function ChatConversationsProvider({
       isLoading,
       error,
       createConversation,
+      deleteConversation,
       selectConversation,
       syncActiveId,
       refreshList,
@@ -174,6 +212,7 @@ export function ChatConversationsProvider({
       isLoading,
       error,
       createConversation,
+      deleteConversation,
       selectConversation,
       syncActiveId,
       refreshList,
