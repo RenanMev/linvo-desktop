@@ -10,6 +10,10 @@ import {
 import { PanelShell } from "@/components/panel/panel-shell";
 import { AccountSettingsPage } from "@/pages/settings/account-settings-page";
 import { GeneralSettingsPage } from "@/pages/settings/general-settings-page";
+import { WorkspaceCreatePage } from "@/pages/settings/workspace-create-page";
+import { WorkspaceDetailPage } from "@/pages/settings/workspace-detail-page";
+import { RuleReviewPage } from "@/pages/settings/rule-review-page";
+import { WorkspaceSettingsPage } from "@/pages/settings/workspace-settings-page";
 import { ChatPage } from "@/pages/chat-page";
 import { usePanelSession } from "@/hooks/use-panel-session";
 import { listenPanelNavigate } from "@/lib/panel-window";
@@ -55,10 +59,30 @@ function PanelRoutes() {
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:conversationId" element={<ChatPage />} />
         <Route
+          path="/workspaces"
+          element={<Navigate to="/settings/workspace" replace />}
+        />
+        <Route
           path="/settings"
           element={<Navigate to="/settings/general" replace />}
         />
         <Route path="/settings/general" element={<GeneralSettingsPage />} />
+        <Route
+          path="/settings/workspace"
+          element={<WorkspaceSettingsPage />}
+        />
+        <Route
+          path="/settings/workspace/new"
+          element={<WorkspaceCreatePage />}
+        />
+        <Route
+          path="/settings/workspace/:workspaceId"
+          element={<WorkspaceDetailPage />}
+        />
+        <Route
+          path="/settings/workspace/:workspaceId/rule-review"
+          element={<RuleReviewPage />}
+        />
         <Route
           path="/settings/account"
           element={<AccountSettingsPage session={session} />}
