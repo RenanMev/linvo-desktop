@@ -47,12 +47,15 @@ export function useProcedureStatusPoll(
         for (const procedure of procedures) {
           const previous = seenRef.current.get(procedure.id);
           if (
-            previous === "PROCESSING" &&
-            procedure.status === "PENDING_REVIEW"
+            procedure.status === "PENDING_REVIEW" &&
+            (previous === undefined || previous === "PROCESSING")
           ) {
             void notify("Markdown do procedure pronto para revisão.");
           }
-          if (previous === "PROCESSING" && procedure.status === "FAILED") {
+          if (
+            procedure.status === "FAILED" &&
+            (previous === undefined || previous === "PROCESSING")
+          ) {
             void notify("Falha no processamento do procedure.");
           }
           seenRef.current.set(procedure.id, procedure.status);

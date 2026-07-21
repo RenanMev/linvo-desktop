@@ -1,3 +1,5 @@
+import type { Procedure } from "@linvo/shared";
+
 import { ChatInput } from "@/components/chat/chat-input";
 import { ChatMessageList } from "@/components/chat/chat-message-list";
 import { ChatToolbar } from "@/components/chat/chat-toolbar";
@@ -16,6 +18,8 @@ type ChatPanelProps = {
   onApproveTool?: () => void;
   onDenyTool?: () => void;
   disabled?: boolean;
+  workspaceId?: string | null;
+  onOpenProcedureChecklist?: (procedure: Procedure) => void;
 };
 
 export function ChatPanel({
@@ -31,6 +35,8 @@ export function ChatPanel({
   onApproveTool,
   onDenyTool,
   disabled = false,
+  workspaceId = null,
+  onOpenProcedureChecklist,
 }: ChatPanelProps) {
   const inputDisabled = disabled || Boolean(pendingToolRequest);
 
@@ -56,6 +62,8 @@ export function ChatPanel({
         replyTarget={replyTarget}
         onCancelReply={onCancelReply}
         disabled={inputDisabled}
+        workspaceId={workspaceId}
+        onOpenProcedureChecklist={onOpenProcedureChecklist}
       />
     </main>
   );

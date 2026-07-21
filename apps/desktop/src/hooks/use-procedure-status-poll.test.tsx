@@ -132,4 +132,60 @@ describe("useProcedureStatusPoll", () => {
     );
     expect(onUpdate).toHaveBeenCalled();
   });
+
+  it("notifies when first poll sees pending_review or failed without prior processing", async () => {
+    const notify = vi.fn().mockResolvedValue(undefined);
+
+    vi.mocked(procedureApi.listProcedures).mockResolvedValueOnce([
+      {
+        id: "proc-ready",
+        workspaceId: "ws-1",
+        status: "PENDING_REVIEW",
+        title: "Pronto",
+        slug: null,
+        markdown: "## Título / tema\n\nx",
+        steps: null,
+        retainVideo: false,
+        videoPath: null,
+        error: null,
+        attemptCount: 1,
+        createdAt: "2026-07-21T12:00:00.000Z",
+        updatedAt: "2026-07-21T12:01:00.000Z",
+      },
+      {
+        id: "proc-failed",
+        workspaceId: "ws-1",
+        status: "FAILED",
+        title: null,
+        slug: null,
+        markdown: null,
+        steps: null,
+        retainVideo: false,
+        videoPath: null,
+        error: "tentativa 3/3: falha",
+        attemptCount: 3,
+        createdAt: "2026-07-21T12:00:00.000Z",
+        updatedAt: "2026-07-21T12:02:00.000Z",
+      },
+    ]);
+
+    renderHook(() =>
+      useProcedureStatusPoll("ws-1", {
+        intervalMs: 1000,
+        notify,
+      }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(notify).toHaveBeenCalledWith(
+      "Markdown do procedure pronto para revisão.",
+    );
+    expect(notify).toHaveBeenCalledWith(
+      "Falha no processamento do procedure.",
+    );
+    expect(notify).toHaveBeenCalledTimes(2);
+  });
 });
