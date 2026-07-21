@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { Procedure, ProcedureStatus } from "@linvo/shared";
-import { ArrowLeft, FileText, Loader2 } from "lucide-react";
+import { ArrowLeft, FileText, Loader2, Square, Video } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspace } from "@/context/workspace-context";
+import { useProcedureRecorder } from "@/hooks/use-procedure-recorder";
 import { AuthApiError } from "@/lib/auth/auth-api";
 import * as procedureApi from "@/lib/procedure/procedure-api";
 
@@ -47,50 +48,65 @@ export function ProcedurePage() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const { workspaces } = useWorkspace();
   const workspace = workspaces.find((item) => item.id === workspaceId);
+  const recorder = useProcedureRecorder();
 
   const [procedures, setProcedures] = useState<Procedure[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
-  useEffect(() => {
+  const reload = useCallback(async () => {
     if (!workspaceId) {
       return;
     }
-
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const items = await procedureApi.listProcedures(
-          workspaceId!,
-          LIST_STATUSES,
-        );
-        if (!cancelled) {
-          setProcedures(items);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof AuthApiError
-              ? err.message
-              : "Não foi possível carregar os procedures",
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
+    setLoading(true);
+    setError(null);
+    try {
+      const items = await procedureApi.listProcedures(
+        workspaceId,
+        LIST_STATUSES,
+      );
+      setProcedures(items);
+    } catch (err) {
+      setError(
+        err instanceof AuthApiError
+          ? err.message
+          : "Não foi possível carregar os procedures",
+      );
+    } finally {
+      setLoading(false);
     }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
   }, [workspaceId]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  async function handleConfirmUpload() {
+    if (!workspaceId || !recorder.recordedBlob) {
+      return;
+    }
+    setUploading(true);
+    setError(null);
+    try {
+      await procedureApi.createProcedure(
+        workspaceId,
+        recorder.recordedBlob,
+        recorder.retainVideo,
+      );
+      recorder.discard();
+      await reload();
+    } catch (err) {
+      setError(
+        err instanceof AuthApiError
+          ? err.message
+          : "Não foi possível enviar o vídeo",
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
 
   if (!workspaceId || !workspace) {
     return (
@@ -112,6 +128,8 @@ export function ProcedurePage() {
   const failed = procedures.filter((p) => p.status === "FAILED");
   const published = procedures.filter((p) => p.status === "PUBLISHED");
   const selected = procedures.find((p) => p.id === selectedId) ?? null;
+  const isRecording =
+    recorder.phase === "recording" || recorder.phase === "near_limit";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -134,6 +152,98 @@ export function ProcedurePage() {
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-6 p-4">
+          <section className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+            <div className="space-y-0.5">
+              <h2 className="text-sm font-medium">Gravar procedure</h2>
+              <p className="text-[11px] text-muted-foreground">
+                Escolha tela inteira ou janela. Limite de 2:00; aviso em 1:30.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {!isRecording && recorder.phase !== "awaiting_confirm" ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void recorder.start()}
+                >
+                  <Video className="size-3.5" />
+                  Iniciar gravação
+                </Button>
+              ) : null}
+
+              {isRecording ? (
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => recorder.stop()}
+                  >
+                    <Square className="size-3.5" />
+                    Parar
+                  </Button>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {recorder.elapsedLabel}
+                  </span>
+                </>
+              ) : null}
+            </div>
+
+            {recorder.phase === "near_limit" ? (
+              <p className="text-xs text-amber-600" role="status">
+                A gravação está próxima do limite de 2 minutos.
+              </p>
+            ) : null}
+
+            {recorder.phase === "awaiting_confirm" ? (
+              <div className="space-y-3 rounded-lg border border-border/60 bg-background p-3">
+                <p className="text-xs">
+                  Gravação finalizada. Confirme o envio para processar o
+                  procedure.
+                </p>
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={recorder.retainVideo}
+                    onChange={(event) =>
+                      recorder.setRetainVideo(event.target.checked)
+                    }
+                  />
+                  Manter o vídeo após o processamento
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={uploading || !recorder.recordedBlob}
+                    onClick={() => void handleConfirmUpload()}
+                  >
+                    {uploading ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : null}
+                    Confirmar envio
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={uploading}
+                    onClick={() => recorder.discard()}
+                  >
+                    Descartar
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {recorder.error ? (
+              <p className="text-xs text-destructive" role="alert">
+                {recorder.error}
+              </p>
+            ) : null}
+          </section>
+
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />

@@ -20,10 +20,34 @@ vi.mock("@/context/workspace-context", () => ({
 
 vi.mock("@/lib/procedure/procedure-api", () => ({
   listProcedures: vi.fn(),
+  createProcedure: vi.fn(),
+}));
+
+vi.mock("@/hooks/use-procedure-recorder", () => ({
+  useProcedureRecorder: vi.fn(),
 }));
 
 import { useWorkspace } from "@/context/workspace-context";
+import { useProcedureRecorder } from "@/hooks/use-procedure-recorder";
 import * as procedureApi from "@/lib/procedure/procedure-api";
+
+function mockRecorder(
+  overrides: Partial<ReturnType<typeof useProcedureRecorder>> = {},
+) {
+  vi.mocked(useProcedureRecorder).mockReturnValue({
+    phase: "idle",
+    elapsedLabel: "0:00",
+    error: null,
+    retainVideo: false,
+    setRetainVideo: vi.fn(),
+    recordedBlob: null,
+    start: vi.fn(),
+    stop: vi.fn(),
+    discard: vi.fn(),
+    clearError: vi.fn(),
+    ...overrides,
+  });
+}
 
 function renderPage() {
   return render(
@@ -60,6 +84,8 @@ describe("ProcedurePage list", () => {
       uploadImage: vi.fn(),
       removeImage: vi.fn(),
     });
+    mockRecorder();
+    vi.mocked(procedureApi.listProcedures).mockResolvedValue([]);
   });
 
   it("renders pending, failed and published sections", async () => {
@@ -158,5 +184,50 @@ describe("ProcedurePage list", () => {
     expect(
       await screen.findByText(/## Passos numerados/),
     ).toBeInTheDocument();
+  });
+
+  it("confirms upload with retainVideo from recorder", async () => {
+    const user = userEvent.setup();
+    const blob = new Blob(["webm"], { type: "video/webm" });
+    const setRetainVideo = vi.fn();
+    const discard = vi.fn();
+    mockRecorder({
+      phase: "awaiting_confirm",
+      recordedBlob: blob,
+      retainVideo: true,
+      setRetainVideo,
+      discard,
+    });
+    vi.mocked(procedureApi.createProcedure).mockResolvedValue({
+      id: "proc-new",
+      workspaceId: "ws-1",
+      status: "PROCESSING",
+      title: null,
+      slug: null,
+      markdown: null,
+      steps: null,
+      retainVideo: true,
+      videoPath: "procedures/x.webm",
+      error: null,
+      attemptCount: 0,
+      createdAt: "2026-07-21T12:00:00.000Z",
+      updatedAt: "2026-07-21T12:00:00.000Z",
+    });
+
+    renderPage();
+
+    expect(
+      await screen.findByText(/Gravação finalizada/),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirmar envio" }));
+
+    await waitFor(() => {
+      expect(procedureApi.createProcedure).toHaveBeenCalledWith(
+        "ws-1",
+        blob,
+        true,
+      );
+    });
+    expect(discard).toHaveBeenCalled();
   });
 });
