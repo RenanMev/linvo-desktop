@@ -124,6 +124,31 @@ describe("rule-discovery-api", () => {
     expect(session.approvalMode).toBe("ALLOW");
   });
 
+  it("cancelSession posts cancel endpoint", async () => {
+    vi.spyOn(http, "authorizedFetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          session: {
+            ...sessionDetail,
+            status: "CANCELLED",
+            error: "cancelado pelo usuário",
+          },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    const session = await ruleDiscoveryApi.cancelSession("ws-1", "session-1");
+    expect(session.status).toBe("CANCELLED");
+    expect(http.authorizedFetch).toHaveBeenCalledWith(
+      expect.stringContaining("/sessions/session-1/cancel"),
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
   it("acceptCandidate posts body and parses response", async () => {
     vi.spyOn(http, "authorizedFetch").mockResolvedValue(
       new Response(

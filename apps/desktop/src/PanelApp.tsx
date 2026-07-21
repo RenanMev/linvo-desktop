@@ -20,7 +20,14 @@ import { listenPanelNavigate } from "@/lib/panel-window";
 
 function PanelRoutes() {
   const navigate = useNavigate();
-  const { user, isLoading, sessionReady, sessionError, sessionWarning, logout } = usePanelSession();
+  const {
+    user,
+    isLoading,
+    sessionReady,
+    sessionError,
+    sessionWarning,
+    logout,
+  } = usePanelSession();
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -55,7 +62,15 @@ function PanelRoutes() {
 
   return (
     <Routes>
-      <Route element={<PanelShell session={session} sessionReady={sessionReady} sessionError={sessionError} />}>
+      <Route
+        element={
+          <PanelShell
+            session={session}
+            sessionReady={sessionReady}
+            sessionError={sessionError}
+          />
+        }
+      >
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:conversationId" element={<ChatPage />} />
         <Route
@@ -67,10 +82,7 @@ function PanelRoutes() {
           element={<Navigate to="/settings/general" replace />}
         />
         <Route path="/settings/general" element={<GeneralSettingsPage />} />
-        <Route
-          path="/settings/workspace"
-          element={<WorkspaceSettingsPage />}
-        />
+        <Route path="/settings/workspace" element={<WorkspaceSettingsPage />} />
         <Route
           path="/settings/workspace/new"
           element={<WorkspaceCreatePage />}

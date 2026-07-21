@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import type { BusinessRule, WorkspaceRole } from "@linvo/shared";
 import {
   ArrowLeft,
+  ArrowRight,
   Building2,
   Check,
   ClipboardCheck,
@@ -78,8 +79,7 @@ export function WorkspaceDetailPage() {
     removeImage,
   } = useWorkspace();
 
-  const workspace =
-    workspaces.find((item) => item.id === workspaceId) ?? null;
+  const workspace = workspaces.find((item) => item.id === workspaceId) ?? null;
   const isActive = activeWorkspace?.id === workspace?.id;
   const isOwner = workspace?.role === "OWNER";
   const isLastWorkspace = workspaces.length <= 1;
@@ -329,60 +329,59 @@ export function WorkspaceDetailPage() {
             description="Nome e imagem usados na interface."
           />
 
-          <div className="space-y-3 rounded-xl border border-border/60 bg-muted/30 p-4">
-            {isOwner ? (
-              <div className="flex flex-wrap gap-2">
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={(event) =>
-                    void handleUploadImage(event.target.files?.[0] ?? null)
-                  }
-                />
+          <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(event) =>
+                void handleUploadImage(event.target.files?.[0] ?? null)
+              }
+            />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              {isOwner ? (
                 <Button
                   type="button"
                   size="sm"
                   variant="secondary"
                   disabled={busy}
+                  className="shrink-0"
                   onClick={() => imageInputRef.current?.click()}
                 >
                   <ImagePlus className="size-3.5" />
                   {workspace.imageUrl ? "Alterar foto" : "Adicionar foto"}
                 </Button>
-                {workspace.imageUrl ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={busy}
-                    onClick={() => void handleRemoveImage()}
-                  >
-                    Remover foto
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="flex gap-2">
+              ) : null}
               <Input
                 value={renameValue}
                 onChange={(event) => setRenameValue(event.target.value)}
                 placeholder="Nome do workspace"
-                className="h-8 text-xs"
+                className="h-8 min-w-0 flex-1 text-xs"
                 aria-label="Renomear workspace"
               />
               <Button
                 type="button"
                 size="sm"
-                variant="secondary"
                 disabled={busy || !renameDirty}
+                className="shrink-0"
                 onClick={() => void handleRename()}
               >
                 Salvar
               </Button>
             </div>
+            {isOwner && workspace.imageUrl ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                className="mt-2 h-7 px-2 text-[11px] text-muted-foreground"
+                onClick={() => void handleRemoveImage()}
+              >
+                Remover foto
+              </Button>
+            ) : null}
           </div>
         </section>
 
@@ -392,17 +391,27 @@ export function WorkspaceDetailPage() {
               title="Rule Review"
               description="Extraia candidatos de documentos e revise antes de promover."
             />
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() =>
-                navigate(`/settings/workspace/${workspace.id}/rule-review`)
-              }
-            >
-              <ClipboardCheck className="size-3.5" />
-              Abrir Rule Review
-            </Button>
+            <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
+                  Envie documentos para o assistente sugerir novas regras. Cada
+                  candidato passa por revisão antes de entrar em vigor.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="shrink-0"
+                  onClick={() =>
+                    navigate(`/settings/workspace/${workspace.id}/rule-review`)
+                  }
+                >
+                  <ClipboardCheck className="size-3.5" />
+                  Abrir Rule Review
+                  <ArrowRight className="size-3.5" />
+                </Button>
+              </div>
+            </div>
           </section>
         ) : null}
 
@@ -505,7 +514,10 @@ export function WorkspaceDetailPage() {
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground">
-                    Digite <span className="font-medium text-foreground">{workspace.name}</span>{" "}
+                    Digite{" "}
+                    <span className="font-medium text-foreground">
+                      {workspace.name}
+                    </span>{" "}
                     para confirmar.
                   </p>
                   <div className="flex gap-2">

@@ -5,6 +5,7 @@ export const ruleDiscoverySessionStatusSchema = z.enum([
   "PROCESSING",
   "READY",
   "FAILED",
+  "CANCELLED",
 ]);
 
 export const ruleSourceDocumentStatusSchema = z.enum([
@@ -42,6 +43,7 @@ export const ruleDiscoveryEventTypeSchema = z.enum([
   "document_done",
   "session_ready",
   "session_failed",
+  "session_cancelled",
   "candidate_undone",
 ]);
 

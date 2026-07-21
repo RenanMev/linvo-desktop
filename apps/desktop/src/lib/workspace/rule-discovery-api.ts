@@ -146,6 +146,20 @@ export async function updateSession(
   return updateRuleDiscoverySessionResponseSchema.parse(data).session;
 }
 
+export async function cancelSession(
+  workspaceId: string,
+  sessionId: string,
+): Promise<RuleDiscoverySessionDetail> {
+  const data = (await request(
+    `/api/workspaces/${workspaceId}/rule-discovery/sessions/${sessionId}/cancel`,
+    {
+      method: "POST",
+    },
+  )) as { session: unknown };
+
+  return getRuleDiscoverySessionResponseSchema.parse(data).session;
+}
+
 export async function acceptCandidate(
   workspaceId: string,
   sessionId: string,

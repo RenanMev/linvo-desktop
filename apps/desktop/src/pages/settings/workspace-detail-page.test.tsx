@@ -96,7 +96,9 @@ describe("WorkspaceDetailPage rule review navigation", () => {
     });
 
     renderPage();
-    await user.click(await screen.findByRole("button", { name: "Abrir Rule Review" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Abrir Rule Review" }),
+    );
 
     expect(await screen.findByText("Rule Review Route")).toBeInTheDocument();
   });
@@ -119,6 +121,8 @@ describe("WorkspaceDetailPage rule review navigation", () => {
     renderPage();
 
     expect(await screen.findByText("Regras de negócio")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Abrir Rule Review" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Abrir Rule Review" }),
+    ).toBeNull();
   });
 });

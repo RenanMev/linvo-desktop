@@ -104,6 +104,7 @@ vi.mock("@/lib/workspace/rule-discovery-api", () => ({
   createSession: vi.fn(),
   getSession: vi.fn(),
   updateSession: vi.fn(),
+  cancelSession: vi.fn(),
   acceptCandidate: vi.fn(),
   rejectCandidate: vi.fn(),
   undoCandidate: vi.fn(),
@@ -114,7 +115,9 @@ import * as ruleDiscoveryApi from "@/lib/workspace/rule-discovery-api";
 
 function renderPage(workspaceId = "ws-1") {
   return render(
-    <MemoryRouter initialEntries={[`/settings/workspace/${workspaceId}/rule-review`]}>
+    <MemoryRouter
+      initialEntries={[`/settings/workspace/${workspaceId}/rule-review`]}
+    >
       <Routes>
         <Route
           path="/settings/workspace/:workspaceId/rule-review"
@@ -167,7 +170,11 @@ describe("RuleReviewPage", () => {
       approvalMode: "ALLOW",
     });
     vi.mocked(ruleDiscoveryApi.acceptCandidate).mockResolvedValue({
-      candidate: { ...pendingCandidate, status: "ACCEPTED", promotionSource: "MANUAL" },
+      candidate: {
+        ...pendingCandidate,
+        status: "ACCEPTED",
+        promotionSource: "MANUAL",
+      },
       businessRule: {
         id: "rule-1",
         workspaceId: "ws-1",
@@ -215,25 +222,37 @@ describe("RuleReviewPage", () => {
     expect(
       await screen.findByText("Acesso restrito ao proprietário"),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Enviar arquivos" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Arraste arquivos/i }),
+    ).toBeNull();
   });
 
   it("shows upload, controls and checklist for OWNER", async () => {
     const user = userEvent.setup();
     renderPage();
 
-    expect(await screen.findByRole("button", { name: "Enviar arquivos" })).toBeInTheDocument();
-    expect(await screen.findByLabelText("Modo de aprovação")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", {
+        name: /Arraste arquivos ou clique para enviar/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByLabelText("Modo de aprovação"),
+    ).toBeInTheDocument();
     expect(await screen.findByText("Sessões recentes")).toBeInTheDocument();
     expect(ruleDiscoveryApi.listSessions).toHaveBeenCalledWith("ws-1");
-    expect(await screen.findByText(/Pronta · 1 candidatos/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /candidatos/i }));
+    await user.click(screen.getByRole("button", { name: /1 candidato/i }));
 
-    expect(await screen.findByText("Checklist de candidatos")).toBeInTheDocument();
     expect(await screen.findByText("Raciocínio")).toBeInTheDocument();
-    expect(screen.getByText("Análise iniciada")).toBeInTheDocument();
-    expect(screen.getByLabelText("Título do candidato")).toHaveValue("Regra sugerida");
+
+    expect(
+      await screen.findByText("Checklist de candidatos"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("manual.txt").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Título do candidato")).toHaveValue(
+      "Regra sugerida",
+    );
     expect(screen.getByLabelText("Promover para regra")).toBeChecked();
     expect(screen.getByRole("button", { name: "Aceitar" })).toBeInTheDocument();
   });
@@ -242,7 +261,9 @@ describe("RuleReviewPage", () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole("button", { name: /candidatos/i }));
+    await user.click(
+      await screen.findByRole("button", { name: /1 candidato/i }),
+    );
     await user.click(screen.getByRole("button", { name: "Aceitar" }));
 
     await waitFor(() => {
@@ -263,7 +284,9 @@ describe("RuleReviewPage", () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole("button", { name: /candidatos/i }));
+    await user.click(
+      await screen.findByRole("button", { name: /1 candidato/i }),
+    );
     await user.click(await screen.findByRole("button", { name: "Desfazer" }));
 
     await waitFor(() => {
@@ -281,13 +304,49 @@ describe("RuleReviewPage", () => {
 
     const user = userEvent.setup();
     renderPage();
-    await user.click(await screen.findByRole("button", { name: /candidatos/i }));
+    await user.click(
+      await screen.findByRole("button", { name: /1 candidato/i }),
+    );
 
     await waitFor(() => {
-      expect(screen.getByText("Atualizando...")).toBeInTheDocument();
+      expect(screen.getByText("Analisando")).toBeInTheDocument();
     });
 
     expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 2000);
     intervalSpy.mockRestore();
+  });
+
+  it("cancels a processing session", async () => {
+    vi.mocked(ruleDiscoveryApi.listSessions).mockResolvedValue([
+      {
+        id: "session-1",
+        workspaceId: "ws-1",
+        status: "PROCESSING",
+        approvalMode: "QUESTION",
+        confidenceThreshold: 0.75,
+        documentCount: 3,
+        candidateCount: 0,
+        createdAt: "2026-07-20T20:00:00.000Z",
+        updatedAt: "2026-07-20T20:00:00.000Z",
+      },
+    ]);
+    vi.mocked(ruleDiscoveryApi.cancelSession).mockResolvedValue({
+      ...processingSession,
+      status: "CANCELLED",
+      error: "cancelado pelo usuário",
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Encerrar análise" }),
+    );
+
+    await waitFor(() => {
+      expect(ruleDiscoveryApi.cancelSession).toHaveBeenCalledWith(
+        "ws-1",
+        "session-1",
+      );
+    });
   });
 });

@@ -45,74 +45,83 @@ function WorkspaceCard({
   return (
     <div
       className={cn(
-        "group relative flex w-[9.5rem] flex-col overflow-hidden rounded-xl border transition-colors",
+        "group relative flex w-[15rem] flex-col overflow-hidden rounded-xl border p-4 transition-colors",
         active
           ? "border-foreground/25 bg-foreground/[0.05]"
           : "border-border/60 bg-muted/30 hover:border-border hover:bg-muted/45",
       )}
     >
-      <div className="relative aspect-square w-full overflow-hidden">
-        {imageSrc ? (
-          <img
-            src={imageSrc}
-            alt=""
-            className="absolute inset-0 size-full object-cover"
+      <div className="mb-4 flex items-start justify-end">
+        <label
+          className={cn(
+            "inline-flex size-5.5 cursor-pointer items-center justify-center rounded-md border shadow-xs transition-colors",
+            active
+              ? "border-primary/40 bg-primary text-primary-foreground"
+              : "border-border/70 bg-background text-transparent hover:border-border",
+            busy && "pointer-events-none opacity-60",
+          )}
+          title={active ? "Workspace ativo" : "Ativar workspace"}
+        >
+          <input
+            type="checkbox"
+            className="sr-only"
+            checked={active}
+            disabled={busy || active}
+            onChange={() => {
+              if (!active) onActivate();
+            }}
+            aria-label={
+              active ? `${workspace.name} ativo` : `Ativar ${workspace.name}`
+            }
           />
-        ) : (
-          <span className="absolute inset-0 grid place-items-center bg-muted/50 text-3xl font-semibold text-muted-foreground/80">
-            {workspaceInitial(workspace.name)}
-          </span>
-        )}
-
-        <div className="absolute inset-x-0 top-0 flex items-start justify-between p-2">
-          <label
-            className={cn(
-              "inline-flex size-6 cursor-pointer items-center justify-center rounded-md border shadow-xs transition-colors",
-              active
-                ? "border-primary/40 bg-primary text-primary-foreground"
-                : "border-border/70 bg-background/90 text-transparent hover:border-border",
-              busy && "pointer-events-none opacity-60",
-            )}
-            title={active ? "Workspace ativo" : "Ativar workspace"}
-          >
-            <input
-              type="checkbox"
-              className="sr-only"
-              checked={active}
-              disabled={busy || active}
-              onChange={() => {
-                if (!active) onActivate();
-              }}
-              aria-label={
-                active
-                  ? `${workspace.name} ativo`
-                  : `Ativar ${workspace.name}`
-              }
-            />
-            <Check className="size-3.5" strokeWidth={2.5} />
-          </label>
-
-          <Button
-            type="button"
-            size="icon-xs"
-            variant="secondary"
-            disabled={busy}
-            aria-label={`Configurar ${workspace.name}`}
-            title="Configurar"
-            className="border border-border/60 bg-background/90 shadow-xs hover:bg-background"
-            onClick={onOpenSettings}
-          >
-            <Settings className="size-3.5" />
-          </Button>
-        </div>
+          <Check className="size-3" strokeWidth={2.5} />
+        </label>
       </div>
 
-      <div className="space-y-0.5 border-t border-border/50 px-2.5 py-2">
+      <div
+        className={cn(
+          "mb-3.5 grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl border text-base font-semibold",
+          active
+            ? "border-primary/30 bg-primary text-primary-foreground"
+            : "border-border/60 bg-muted/50 text-muted-foreground",
+        )}
+      >
+        {imageSrc ? (
+          <img src={imageSrc} alt="" className="size-full object-cover" />
+        ) : (
+          workspaceInitial(workspace.name)
+        )}
+      </div>
+
+      <div className="min-w-0 space-y-1">
         <p className="truncate text-xs font-medium">{workspace.name}</p>
         <p className="truncate text-[10px] text-muted-foreground">
           {roleLabel(workspace.role)}
-          {active ? " · Ativo" : ""}
+          {active ? (
+            <>
+              {" · "}
+              <span className="inline-flex items-center gap-1 text-foreground">
+                <span className="size-1 rounded-full bg-foreground" />
+                Ativo
+              </span>
+            </>
+          ) : null}
         </p>
+      </div>
+
+      <div className="mt-4 flex justify-end border-t border-border/50 pt-3.5">
+        <Button
+          type="button"
+          size="icon-xs"
+          variant="secondary"
+          disabled={busy}
+          aria-label={`Configurar ${workspace.name}`}
+          title="Configurar"
+          className="border border-border/60 bg-background shadow-xs hover:bg-background"
+          onClick={onOpenSettings}
+        >
+          <Settings className="size-3.5" />
+        </Button>
       </div>
     </div>
   );
@@ -129,6 +138,8 @@ export function WorkspaceSettingsPage() {
   } = useWorkspace();
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  const activeCount = activeWorkspace ? 1 : 0;
 
   async function handleActivate(workspaceId: string) {
     setBusy(true);
@@ -175,8 +186,8 @@ export function WorkspaceSettingsPage() {
                   Marque para ativar · engrenagem para configurar.
                 </p>
               </div>
-              <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
-                {workspaces.length}
+              <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                {activeCount} ativo{activeCount === 1 ? "" : "s"}
               </span>
             </div>
 
@@ -217,15 +228,13 @@ export function WorkspaceSettingsPage() {
                   type="button"
                   disabled={busy}
                   onClick={() => navigate("/settings/workspace/new")}
-                  className="flex w-[9.5rem] flex-col overflow-hidden rounded-xl border border-dashed border-border/70 bg-muted/20 text-muted-foreground transition-colors hover:border-border hover:bg-muted/40 hover:text-foreground"
+                  className="flex min-h-[10.75rem] w-[15rem] flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed border-border/70 bg-muted/20 text-muted-foreground transition-colors hover:border-border hover:bg-muted/40 hover:text-foreground"
                   aria-label="Criar workspace"
                 >
-                  <span className="grid aspect-square w-full place-items-center">
-                    <Plus className="size-7" />
+                  <span className="grid size-8 place-items-center rounded-full border border-border/70">
+                    <Plus className="size-4" />
                   </span>
-                  <span className="border-t border-border/40 px-2.5 py-2 text-left text-xs font-medium">
-                    Novo workspace
-                  </span>
+                  <span className="text-xs font-medium">Novo workspace</span>
                 </button>
               </div>
             )}
