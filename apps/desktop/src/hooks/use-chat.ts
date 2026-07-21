@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ToolRequest } from "@linvo/shared";
+import type { Procedure, ToolRequest } from "@linvo/shared";
 
 import { AuthApiError } from "@/lib/auth/auth-api";
 import { PANEL_SESSION_UNAVAILABLE_MESSAGE } from "@/hooks/use-panel-session";
@@ -10,6 +10,7 @@ import {
   saveCachedConversationMessages,
 } from "@/lib/chat/chat-local-store";
 import {
+  appendReasoning,
   appendToMessage,
   appendToolUse,
   canSendMessage,
@@ -17,15 +18,25 @@ import {
   createReplyRef,
   createUserMessage,
   finalizeMessage,
+  upsertActivity,
 } from "@/lib/chat/chat-state";
+import {
+  decideProcedureOpenRequest,
+  isCreateProcedureToolRequest,
+  isOpenProcedureToolRequest,
+  parseCreateProcedureArgs,
+} from "@/lib/chat/procedure-tool-request";
 import { readClipboardText } from "@/lib/clipboard";
 import { mapApiMessageToChat, mapApiMessagesToChat } from "@/lib/chat/map-message";
 import type { ChatMessage, ChatReplyRef } from "@/lib/chat/types";
+import * as procedureApi from "@/lib/procedure/procedure-api";
 
 type UseChatOptions = {
   conversationId: string | null;
+  workspaceId?: string | null;
   onConversationTitleChange?: (conversationId: string, title: string) => void;
   onConversationCreated?: (id: string) => void;
+  onOpenProcedureChecklist?: (procedure: Procedure) => void;
 };
 
 function formatChatError(error: unknown, fallback: string): string {
@@ -40,8 +51,10 @@ function formatChatError(error: unknown, fallback: string): string {
 
 export function useChat({
   conversationId,
+  workspaceId = null,
   onConversationTitleChange,
   onConversationCreated,
+  onOpenProcedureChecklist,
 }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isResponding, setIsResponding] = useState(false);
@@ -54,8 +67,13 @@ export function useChat({
   const abortRef = useRef<AbortController | null>(null);
   const activeConversationRef = useRef<string | null>(conversationId);
   const assistantIdRef = useRef<string | null>(null);
+  const workspaceIdRef = useRef<string | null>(workspaceId);
+  const onOpenProcedureChecklistRef = useRef(onOpenProcedureChecklist);
+  const chainOpenedSlugsRef = useRef<Set<string>>(new Set());
 
   activeConversationRef.current = conversationId;
+  workspaceIdRef.current = workspaceId;
+  onOpenProcedureChecklistRef.current = onOpenProcedureChecklist;
 
   const persistMessages = useCallback(
     (targetConversationId: string, nextMessages: ChatMessage[]) => {
@@ -71,6 +89,7 @@ export function useChat({
     setIsResponding(false);
     setPendingToolRequest(null);
     assistantIdRef.current = null;
+    chainOpenedSlugsRef.current = new Set();
 
     if (!conversationId) {
       setMessages([]);
@@ -139,6 +158,220 @@ export function useChat({
     setReplyTarget(null);
   }, []);
 
+  const continueToolResultRef = useRef<
+    | ((options: {
+        conversationId: string;
+        request: ToolRequest;
+        approved: boolean;
+        result?: string;
+        assistantId: string;
+      }) => Promise<void>)
+    | null
+  >(null);
+
+  const openProcedureAndContinue = useCallback(
+    async (
+      activeConversationId: string,
+      request: ToolRequest,
+      assistantId: string,
+    ) => {
+      const decision = decideProcedureOpenRequest(
+        request,
+        chainOpenedSlugsRef.current,
+      );
+
+      if (decision.kind === "already_open") {
+        await continueToolResultRef.current?.({
+          conversationId: activeConversationId,
+          request,
+          approved: true,
+          result: `Checklist já aberto: ${decision.slug}`,
+          assistantId,
+        });
+        return;
+      }
+
+      if (decision.kind !== "open") {
+        setPendingToolRequest(request);
+        setIsResponding(false);
+        setError("Não foi possível abrir o procedimento solicitado.");
+        return;
+      }
+
+      const wsId = workspaceIdRef.current;
+      const slug = decision.slug;
+      if (!wsId) {
+        setPendingToolRequest(request);
+        setIsResponding(false);
+        setError("Não foi possível abrir o procedimento solicitado.");
+        return;
+      }
+
+      try {
+        const procedure = await procedureApi.getProcedureBySlug(wsId, slug);
+        chainOpenedSlugsRef.current.add(slug);
+        onOpenProcedureChecklistRef.current?.(procedure);
+        await continueToolResultRef.current?.({
+          conversationId: activeConversationId,
+          request,
+          approved: true,
+          result: `Checklist aberto: ${procedure.title ?? slug}`,
+          assistantId,
+        });
+      } catch (caught) {
+        setPendingToolRequest(null);
+        setIsResponding(false);
+        setError(
+          formatChatError(caught, "Não foi possível abrir o procedimento"),
+        );
+        await continueToolResultRef.current?.({
+          conversationId: activeConversationId,
+          request,
+          approved: false,
+          assistantId,
+        });
+      }
+    },
+    [],
+  );
+
+  const continueToolResult = useCallback(
+    async (options: {
+      conversationId: string;
+      request: ToolRequest;
+      approved: boolean;
+      result?: string;
+      assistantId: string;
+    }) => {
+      const {
+        conversationId: activeConversationId,
+        request,
+        approved,
+        result,
+        assistantId,
+      } = options;
+
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      setIsResponding(true);
+      setError(null);
+      setPendingToolRequest(null);
+
+      let pausedForTool = false;
+      let autoOpenRequest: ToolRequest | null = null;
+      let currentAssistantId = assistantId;
+
+      try {
+        setMessages((prev) => {
+          const next = finalizeMessage(prev, currentAssistantId, "streaming");
+          persistMessages(activeConversationId, next);
+          return next;
+        });
+
+        for await (const chunk of chatApi.submitToolResult({
+          conversationId: activeConversationId,
+          requestId: request.requestId,
+          approved,
+          result,
+          signal: controller.signal,
+          onAssistantDone: (message) => {
+            currentAssistantId = message.id;
+            assistantIdRef.current = currentAssistantId;
+            const mapped = mapApiMessageToChat(message);
+            setMessages((prev) => {
+              const next = prev.map((item) =>
+                item.id === assistantId || item.id === currentAssistantId
+                  ? mapped
+                  : item,
+              );
+              if (activeConversationRef.current === activeConversationId) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onToolUsed: (tool) => {
+            setMessages((prev) => {
+              const next = appendToolUse(prev, currentAssistantId, tool);
+              if (activeConversationRef.current === activeConversationId) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onActivity: (activity) => {
+            setMessages((prev) => {
+              const next = upsertActivity(prev, currentAssistantId, activity);
+              if (activeConversationRef.current === activeConversationId) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onReasoningChunk: (text) => {
+            setMessages((prev) => {
+              const next = appendReasoning(prev, currentAssistantId, text);
+              if (activeConversationRef.current === activeConversationId) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onToolRequest: (nextRequest) => {
+            pausedForTool = true;
+            if (isOpenProcedureToolRequest(nextRequest)) {
+              autoOpenRequest = nextRequest;
+            } else {
+              setPendingToolRequest(nextRequest);
+            }
+          },
+        })) {
+          if (activeConversationRef.current !== activeConversationId) {
+            break;
+          }
+          setMessages((prev) => appendToMessage(prev, currentAssistantId, chunk));
+        }
+
+        if (autoOpenRequest) {
+          await openProcedureAndContinue(
+            activeConversationId,
+            autoOpenRequest,
+            currentAssistantId,
+          );
+          return;
+        }
+
+        if (!pausedForTool) {
+          setMessages((prev) => {
+            const next = finalizeMessage(prev, currentAssistantId, "done");
+            persistMessages(activeConversationId, next);
+            return next;
+          });
+        }
+      } catch (caught) {
+        setMessages((prev) => {
+          const next = finalizeMessage(prev, currentAssistantId, "error");
+          persistMessages(activeConversationId, next);
+          return next;
+        });
+        if (activeConversationRef.current === activeConversationId) {
+          setError(
+            formatChatError(caught, "Não foi possível concluir a ferramenta"),
+          );
+        }
+      } finally {
+        if (activeConversationRef.current === activeConversationId) {
+          setIsResponding(false);
+        }
+      }
+    },
+    [persistMessages, openProcedureAndContinue],
+  );
+
+  continueToolResultRef.current = continueToolResult;
+
   const sendMessage = useCallback(
     async (rawContent: string) => {
       if (pendingToolRequest) return;
@@ -175,10 +408,12 @@ export function useChat({
       setIsResponding(true);
       setError(null);
       setPendingToolRequest(null);
+      chainOpenedSlugsRef.current = new Set();
 
       let assistantId: string = optimisticAssistantId;
       assistantIdRef.current = assistantId;
       let pausedForTool = false;
+      let autoOpenRequest: ToolRequest | null = null;
 
       try {
         for await (const chunk of chatApi.streamChatResponse({
@@ -232,15 +467,46 @@ export function useChat({
               return next;
             });
           },
+          onActivity: (activity) => {
+            setMessages((prev) => {
+              const next = upsertActivity(prev, assistantId, activity);
+              if (activeConversationRef.current === activeConversationId) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onReasoningChunk: (text) => {
+            setMessages((prev) => {
+              const next = appendReasoning(prev, assistantId, text);
+              if (activeConversationRef.current === activeConversationId) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
           onToolRequest: (request) => {
             pausedForTool = true;
-            setPendingToolRequest(request);
+            if (isOpenProcedureToolRequest(request)) {
+              autoOpenRequest = request;
+            } else {
+              setPendingToolRequest(request);
+            }
           },
         })) {
           if (activeConversationRef.current !== activeConversationId) {
             break;
           }
           setMessages((prev) => appendToMessage(prev, assistantId, chunk));
+        }
+
+        if (autoOpenRequest) {
+          await openProcedureAndContinue(
+            activeConversationId,
+            autoOpenRequest,
+            assistantId,
+          );
+          return;
         }
 
         if (!pausedForTool) {
@@ -262,7 +528,10 @@ export function useChat({
           );
         }
       } finally {
-        if (activeConversationRef.current === activeConversationId) {
+        if (
+          activeConversationRef.current === activeConversationId &&
+          !autoOpenRequest
+        ) {
           setIsResponding(false);
         }
       }
@@ -275,6 +544,7 @@ export function useChat({
       onConversationCreated,
       onConversationTitleChange,
       persistMessages,
+      openProcedureAndContinue,
     ],
   );
 
@@ -287,96 +557,58 @@ export function useChat({
       const assistantId = assistantIdRef.current;
       if (!assistantId) return;
 
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      setIsResponding(true);
-      setError(null);
-      setPendingToolRequest(null);
+      if (approved && isOpenProcedureToolRequest(request)) {
+        setPendingToolRequest(null);
+        await openProcedureAndContinue(
+          activeConversationId,
+          request,
+          assistantId,
+        );
+        return;
+      }
 
       let result: string | undefined;
+
       if (approved) {
-        result = await readClipboardText();
-      }
-
-      let pausedForTool = false;
-      let currentAssistantId = assistantId;
-
-      try {
-        setMessages((prev) => {
-          const next = finalizeMessage(prev, currentAssistantId, "streaming");
-          persistMessages(activeConversationId, next);
-          return next;
-        });
-
-        for await (const chunk of chatApi.submitToolResult({
-          conversationId: activeConversationId,
-          requestId: request.requestId,
-          approved,
-          result,
-          signal: controller.signal,
-          onAssistantDone: (message) => {
-            currentAssistantId = message.id;
-            assistantIdRef.current = currentAssistantId;
-            const mapped = mapApiMessageToChat(message);
-            setMessages((prev) => {
-              const next = prev.map((item) =>
-                item.id === assistantId || item.id === currentAssistantId
-                  ? mapped
-                  : item,
-              );
-              if (activeConversationRef.current === activeConversationId) {
-                persistMessages(activeConversationId, next);
-              }
-              return next;
-            });
-          },
-          onToolUsed: (tool) => {
-            setMessages((prev) => {
-              const next = appendToolUse(prev, currentAssistantId, tool);
-              if (activeConversationRef.current === activeConversationId) {
-                persistMessages(activeConversationId, next);
-              }
-              return next;
-            });
-          },
-          onToolRequest: (nextRequest) => {
-            pausedForTool = true;
-            setPendingToolRequest(nextRequest);
-          },
-        })) {
-          if (activeConversationRef.current !== activeConversationId) {
-            break;
+        if (isCreateProcedureToolRequest(request)) {
+          const wsId = workspaceIdRef.current;
+          const args = parseCreateProcedureArgs(request.args);
+          if (!wsId || !args) {
+            setError("Dados inválidos para criar o procedimento.");
+            return;
           }
-          setMessages((prev) => appendToMessage(prev, currentAssistantId, chunk));
-        }
-
-        if (!pausedForTool) {
-          setMessages((prev) => {
-            const next = finalizeMessage(prev, currentAssistantId, "done");
-            persistMessages(activeConversationId, next);
-            return next;
-          });
-        }
-      } catch (caught) {
-        setMessages((prev) => {
-          const next = finalizeMessage(prev, currentAssistantId, "error");
-          persistMessages(activeConversationId, next);
-          return next;
-        });
-        if (activeConversationRef.current === activeConversationId) {
-          setError(
-            formatChatError(caught, "Não foi possível concluir a ferramenta"),
-          );
-        }
-      } finally {
-        if (activeConversationRef.current === activeConversationId) {
-          setIsResponding(false);
+          try {
+            const procedure = await procedureApi.createProcedureFromText(
+              wsId,
+              args,
+            );
+            result = `Procedimento publicado: /${procedure.slug} (${procedure.title})`;
+          } catch (caught) {
+            setError(
+              formatChatError(caught, "Não foi possível criar o procedimento"),
+            );
+            return;
+          }
+        } else {
+          result = await readClipboardText();
         }
       }
+
+      await continueToolResult({
+        conversationId: activeConversationId,
+        request,
+        approved,
+        result,
+        assistantId,
+      });
     },
-    [conversationId, pendingToolRequest, isResponding, persistMessages],
+    [
+      conversationId,
+      pendingToolRequest,
+      isResponding,
+      continueToolResult,
+      openProcedureAndContinue,
+    ],
   );
 
   return {
