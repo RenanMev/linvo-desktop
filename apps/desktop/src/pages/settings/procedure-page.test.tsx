@@ -21,10 +21,18 @@ vi.mock("@/context/workspace-context", () => ({
 vi.mock("@/lib/procedure/procedure-api", () => ({
   listProcedures: vi.fn(),
   createProcedure: vi.fn(),
+  updateProcedure: vi.fn(),
+  publishProcedure: vi.fn(),
+  rejectProcedure: vi.fn(),
+  deleteProcedure: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-procedure-recorder", () => ({
   useProcedureRecorder: vi.fn(),
+}));
+
+vi.mock("@/hooks/use-procedure-status-poll", () => ({
+  useProcedureStatusPoll: vi.fn(),
 }));
 
 import { useWorkspace } from "@/context/workspace-context";
@@ -182,7 +190,7 @@ describe("ProcedurePage list", () => {
     renderPage();
     await user.click(await screen.findByText("Número cancelado"));
     expect(
-      await screen.findByText(/## Passos numerados/),
+      await screen.findByDisplayValue(/## Passos numerados/),
     ).toBeInTheDocument();
   });
 
@@ -229,5 +237,106 @@ describe("ProcedurePage list", () => {
       );
     });
     expect(discard).toHaveBeenCalled();
+  });
+
+  it("edits and publishes a pending procedure", async () => {
+    const user = userEvent.setup();
+    vi.mocked(procedureApi.listProcedures).mockResolvedValue([
+      {
+        id: "p-pending",
+        workspaceId: "ws-1",
+        status: "PENDING_REVIEW",
+        title: "Número cancelado",
+        slug: null,
+        markdown: "## Título / tema\n\nold",
+        steps: null,
+        retainVideo: false,
+        videoPath: null,
+        error: null,
+        attemptCount: 1,
+        createdAt: "2026-07-21T12:00:00.000Z",
+        updatedAt: "2026-07-21T12:00:00.000Z",
+      },
+    ]);
+    vi.mocked(procedureApi.updateProcedure).mockResolvedValue({
+      id: "p-pending",
+      workspaceId: "ws-1",
+      status: "PENDING_REVIEW",
+      title: "Fluxo ajustado",
+      slug: null,
+      markdown: "## Título / tema\n\nnew",
+      steps: null,
+      retainVideo: false,
+      videoPath: null,
+      error: null,
+      attemptCount: 1,
+      createdAt: "2026-07-21T12:00:00.000Z",
+      updatedAt: "2026-07-21T12:00:00.000Z",
+    });
+    vi.mocked(procedureApi.publishProcedure).mockResolvedValue({
+      id: "p-pending",
+      workspaceId: "ws-1",
+      status: "PUBLISHED",
+      title: "Fluxo ajustado",
+      slug: "fluxo_ajustado",
+      markdown: "## Título / tema\n\nnew",
+      steps: ["passo"],
+      retainVideo: false,
+      videoPath: null,
+      error: null,
+      attemptCount: 1,
+      createdAt: "2026-07-21T12:00:00.000Z",
+      updatedAt: "2026-07-21T12:00:00.000Z",
+    });
+
+    renderPage();
+    await user.click(await screen.findByText("Número cancelado"));
+    const titleInput = await screen.findByDisplayValue("Número cancelado");
+    await user.clear(titleInput);
+    await user.type(titleInput, "Fluxo ajustado");
+    await user.click(screen.getByRole("button", { name: "Publicar" }));
+
+    await waitFor(() => {
+      expect(procedureApi.publishProcedure).toHaveBeenCalledWith(
+        "ws-1",
+        "p-pending",
+      );
+    });
+    expect(screen.getAllByText(/\/fluxo_ajustado/).length).toBeGreaterThan(0);
+  });
+
+  it("rejects pending procedure after confirm and removes from list", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(procedureApi.listProcedures).mockResolvedValue([
+      {
+        id: "p-pending",
+        workspaceId: "ws-1",
+        status: "PENDING_REVIEW",
+        title: "Para rejeitar",
+        slug: null,
+        markdown: "## Título / tema\n\nx",
+        steps: null,
+        retainVideo: true,
+        videoPath: "procedures/x.webm",
+        error: null,
+        attemptCount: 1,
+        createdAt: "2026-07-21T12:00:00.000Z",
+        updatedAt: "2026-07-21T12:00:00.000Z",
+      },
+    ]);
+    vi.mocked(procedureApi.rejectProcedure).mockResolvedValue(undefined);
+
+    renderPage();
+    await user.click(await screen.findByText("Para rejeitar"));
+    await user.click(screen.getByRole("button", { name: "Rejeitar" }));
+
+    await waitFor(() => {
+      expect(procedureApi.rejectProcedure).toHaveBeenCalledWith(
+        "ws-1",
+        "p-pending",
+      );
+    });
+    expect(screen.queryByText("Para rejeitar")).toBeNull();
   });
 });

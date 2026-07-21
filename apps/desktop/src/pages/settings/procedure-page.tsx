@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspace } from "@/context/workspace-context";
 import { useProcedureRecorder } from "@/hooks/use-procedure-recorder";
+import { useProcedureStatusPoll } from "@/hooks/use-procedure-status-poll";
 import { AuthApiError } from "@/lib/auth/auth-api";
 import * as procedureApi from "@/lib/procedure/procedure-api";
 
@@ -55,6 +56,17 @@ export function ProcedurePage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftMarkdown, setDraftMarkdown] = useState("");
+
+  const applyList = useCallback((items: Procedure[]) => {
+    setProcedures(
+      items.filter((item) =>
+        LIST_STATUSES.includes(item.status as ProcedureStatus),
+      ),
+    );
+  }, []);
 
   const reload = useCallback(async () => {
     if (!workspaceId) {
@@ -67,7 +79,7 @@ export function ProcedurePage() {
         workspaceId,
         LIST_STATUSES,
       );
-      setProcedures(items);
+      applyList(items);
     } catch (err) {
       setError(
         err instanceof AuthApiError
@@ -77,11 +89,27 @@ export function ProcedurePage() {
     } finally {
       setLoading(false);
     }
-  }, [workspaceId]);
+  }, [applyList, workspaceId]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  useProcedureStatusPoll(workspaceId, {
+    onUpdate: applyList,
+  });
+
+  const selected = procedures.find((p) => p.id === selectedId) ?? null;
+
+  useEffect(() => {
+    if (!selected) {
+      setDraftTitle("");
+      setDraftMarkdown("");
+      return;
+    }
+    setDraftTitle(selected.title ?? "");
+    setDraftMarkdown(selected.markdown ?? "");
+  }, [selected?.id, selected?.title, selected?.markdown]);
 
   async function handleConfirmUpload() {
     if (!workspaceId || !recorder.recordedBlob) {
@@ -108,6 +136,127 @@ export function ProcedurePage() {
     }
   }
 
+  async function handleSave() {
+    if (!workspaceId || !selected || selected.status !== "PENDING_REVIEW") {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await procedureApi.updateProcedure(
+        workspaceId,
+        selected.id,
+        {
+          title: draftTitle.trim() || undefined,
+          markdown: draftMarkdown.trim() || undefined,
+        },
+      );
+      setProcedures((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+    } catch (err) {
+      setError(
+        err instanceof AuthApiError
+          ? err.message
+          : "Não foi possível salvar o procedure",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handlePublish() {
+    if (!workspaceId || !selected || selected.status !== "PENDING_REVIEW") {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      if (
+        draftTitle.trim() !== (selected.title ?? "") ||
+        draftMarkdown.trim() !== (selected.markdown ?? "")
+      ) {
+        await procedureApi.updateProcedure(workspaceId, selected.id, {
+          title: draftTitle.trim() || undefined,
+          markdown: draftMarkdown.trim() || undefined,
+        });
+      }
+      const published = await procedureApi.publishProcedure(
+        workspaceId,
+        selected.id,
+      );
+      setProcedures((current) =>
+        current.map((item) => (item.id === published.id ? published : item)),
+      );
+    } catch (err) {
+      setError(
+        err instanceof AuthApiError
+          ? err.message
+          : "Não foi possível publicar o procedure",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleReject() {
+    if (!workspaceId || !selected || selected.status !== "PENDING_REVIEW") {
+      return;
+    }
+    const confirmed = window.confirm(
+      "Rejeitar descarta o procedure e o vídeo. Continuar?",
+    );
+    if (!confirmed) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await procedureApi.rejectProcedure(workspaceId, selected.id);
+      setProcedures((current) =>
+        current.filter((item) => item.id !== selected.id),
+      );
+      setSelectedId(null);
+    } catch (err) {
+      setError(
+        err instanceof AuthApiError
+          ? err.message
+          : "Não foi possível rejeitar o procedure",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!workspaceId || !selected) {
+      return;
+    }
+    const confirmed = window.confirm(
+      "Apagar remove o procedure e o vídeo retained, se houver. Continuar?",
+    );
+    if (!confirmed) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await procedureApi.deleteProcedure(workspaceId, selected.id);
+      setProcedures((current) =>
+        current.filter((item) => item.id !== selected.id),
+      );
+      setSelectedId(null);
+    } catch (err) {
+      setError(
+        err instanceof AuthApiError
+          ? err.message
+          : "Não foi possível apagar o procedure",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!workspaceId || !workspace) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-sm text-muted-foreground">
@@ -127,7 +276,6 @@ export function ProcedurePage() {
   const pending = procedures.filter((p) => p.status === "PENDING_REVIEW");
   const failed = procedures.filter((p) => p.status === "FAILED");
   const published = procedures.filter((p) => p.status === "PUBLISHED");
-  const selected = procedures.find((p) => p.id === selectedId) ?? null;
   const isRecording =
     recorder.phase === "recording" || recorder.phase === "near_limit";
 
@@ -257,7 +405,7 @@ export function ProcedurePage() {
             </p>
           ) : null}
 
-          {!loading && !error ? (
+          {!loading ? (
             <>
               <ProcedureSection
                 title="Em revisão"
@@ -284,8 +432,10 @@ export function ProcedurePage() {
           ) : null}
 
           {selected ? (
-            <section className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-4">
-              <h2 className="text-sm font-medium">{procedureTitle(selected)}</h2>
+            <section className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+              <h2 className="text-sm font-medium">
+                {procedureTitle(selected)}
+              </h2>
               <p className="text-[11px] text-muted-foreground">
                 Status: {statusLabel(selected.status)}
                 {selected.slug ? ` · /${selected.slug}` : ""}
@@ -293,14 +443,75 @@ export function ProcedurePage() {
               {selected.error ? (
                 <p className="text-xs text-destructive">{selected.error}</p>
               ) : null}
-              {selected.markdown ? (
-                <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-background p-3 text-xs">
-                  {selected.markdown}
-                </pre>
+
+              {selected.status === "PENDING_REVIEW" ? (
+                <div className="space-y-3">
+                  <label className="block space-y-1 text-xs">
+                    <span>Título</span>
+                    <input
+                      className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs"
+                      value={draftTitle}
+                      onChange={(event) => setDraftTitle(event.target.value)}
+                    />
+                  </label>
+                  <label className="block space-y-1 text-xs">
+                    <span>Markdown</span>
+                    <textarea
+                      className="min-h-48 w-full rounded-md border border-border/60 bg-background px-2 py-1.5 font-mono text-xs"
+                      value={draftMarkdown}
+                      onChange={(event) => setDraftMarkdown(event.target.value)}
+                    />
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={busy}
+                      onClick={() => void handleSave()}
+                    >
+                      Salvar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => void handlePublish()}
+                    >
+                      Publicar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      disabled={busy}
+                      onClick={() => void handleReject()}
+                    >
+                      Rejeitar
+                    </Button>
+                  </div>
+                </div>
               ) : (
-                <p className="text-xs text-muted-foreground">
-                  Sem markdown disponível
-                </p>
+                <>
+                  {selected.markdown ? (
+                    <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-background p-3 text-xs">
+                      {selected.markdown}
+                    </pre>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Sem markdown disponível
+                    </p>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    disabled={busy}
+                    onClick={() => void handleDelete()}
+                  >
+                    Apagar
+                  </Button>
+                </>
               )}
             </section>
           ) : null}
