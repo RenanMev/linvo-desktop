@@ -5,10 +5,15 @@ import {
   getRuleDiscoverySessionResponseSchema,
   listRuleDiscoverySessionsResponseSchema,
   rejectRuleCandidateResponseSchema,
+  undoRuleCandidateResponseSchema,
+  updateRuleDiscoverySessionInputSchema,
+  updateRuleDiscoverySessionResponseSchema,
   type AcceptRuleCandidateInput,
   type AcceptRuleCandidateResponse,
+  type RuleDiscoveryApprovalMode,
   type RuleDiscoverySessionDetail,
   type RuleDiscoverySessionSummary,
+  type UpdateRuleDiscoverySessionInput,
 } from "@linvo/shared";
 
 import { AuthApiError, AuthNetworkError } from "@/lib/auth/auth-api";
@@ -69,13 +74,25 @@ async function request(
   return response.json();
 }
 
+export type CreateSessionOptions = {
+  approvalMode?: RuleDiscoveryApprovalMode;
+  confidenceThreshold?: number;
+};
+
 export async function createSession(
   workspaceId: string,
   files: File[],
+  options: CreateSessionOptions = {},
 ): Promise<RuleDiscoverySessionDetail> {
   const form = new FormData();
   for (const file of files) {
     form.append("files", file);
+  }
+  if (options.approvalMode) {
+    form.append("approvalMode", options.approvalMode);
+  }
+  if (options.confidenceThreshold !== undefined) {
+    form.append("confidenceThreshold", String(options.confidenceThreshold));
   }
 
   const data = (await request(
@@ -111,6 +128,24 @@ export async function getSession(
   return getRuleDiscoverySessionResponseSchema.parse(data).session;
 }
 
+export async function updateSession(
+  workspaceId: string,
+  sessionId: string,
+  input: UpdateRuleDiscoverySessionInput,
+): Promise<RuleDiscoverySessionDetail> {
+  updateRuleDiscoverySessionInputSchema.parse(input);
+
+  const data = (await request(
+    `/api/workspaces/${workspaceId}/rule-discovery/sessions/${sessionId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    },
+  )) as { session: unknown };
+
+  return updateRuleDiscoverySessionResponseSchema.parse(data).session;
+}
+
 export async function acceptCandidate(
   workspaceId: string,
   sessionId: string,
@@ -143,4 +178,19 @@ export async function rejectCandidate(
   );
 
   return rejectRuleCandidateResponseSchema.parse(data).candidate;
+}
+
+export async function undoCandidate(
+  workspaceId: string,
+  sessionId: string,
+  candidateId: string,
+): Promise<AcceptRuleCandidateResponse["candidate"]> {
+  const data = await request(
+    `/api/workspaces/${workspaceId}/rule-discovery/sessions/${sessionId}/candidates/${candidateId}/undo`,
+    {
+      method: "POST",
+    },
+  );
+
+  return undoRuleCandidateResponseSchema.parse(data).candidate;
 }

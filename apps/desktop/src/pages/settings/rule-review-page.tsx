@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import type {
   AcceptRuleCandidateInput,
   RuleCandidate,
+  RuleDiscoveryEvent,
   RuleDiscoverySessionDetail,
   RuleDiscoverySessionSummary,
 } from "@linvo/shared";
@@ -79,9 +80,19 @@ function buildDraft(candidate: RuleCandidate): CandidateDraft {
   return {
     title: candidate.title,
     content: candidate.content,
-    promoteToRule: false,
-    promoteToKnowledge: false,
+    promoteToRule: candidate.promoteToRule === true,
+    promoteToKnowledge: candidate.promoteToKnowledge === true,
   };
+}
+
+function eventCardTypes(type: RuleDiscoveryEvent["type"]): boolean {
+  return (
+    type === "candidate_found" ||
+    type === "classified" ||
+    type === "auto_promoted" ||
+    type === "auto_skipped" ||
+    type === "candidate_undone"
+  );
 }
 
 export function RuleReviewPage() {
@@ -99,9 +110,14 @@ export function RuleReviewPage() {
   const [sessionDetail, setSessionDetail] =
     useState<RuleDiscoverySessionDetail | null>(null);
   const [drafts, setDrafts] = useState<Record<string, CandidateDraft>>({});
+  const [approvalMode, setApprovalMode] = useState<"QUESTION" | "ALLOW">(
+    "QUESTION",
+  );
+  const [confidenceThreshold, setConfidenceThreshold] = useState(0.75);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const conversationEndRef = useRef<HTMLDivElement>(null);
 
   const refreshSessions = useCallback(async () => {
     if (!workspace || !isOwner) return;
@@ -116,6 +132,8 @@ export function RuleReviewPage() {
       selectedSessionId,
     );
     setSessionDetail(detail);
+    setApprovalMode(detail.approvalMode);
+    setConfidenceThreshold(detail.confidenceThreshold);
     setDrafts((prev) => {
       const next = { ...prev };
       for (const candidate of detail.candidates) {
@@ -164,6 +182,10 @@ export function RuleReviewPage() {
     return () => clearInterval(interval);
   }, [sessionDetail?.id, sessionDetail?.status, refreshSessionDetail]);
 
+  useEffect(() => {
+    conversationEndRef.current?.scrollIntoView?.({ behavior: "smooth" });
+  }, [sessionDetail?.events.length]);
+
   async function handleUpload(files: FileList | null) {
     if (!workspace || !files?.length) return;
     setBusy(true);
@@ -172,10 +194,12 @@ export function RuleReviewPage() {
       const session = await ruleDiscoveryApi.createSession(
         workspace.id,
         Array.from(files),
+        { approvalMode, confidenceThreshold },
       );
       await refreshSessions();
       setSelectedSessionId(session.id);
       setSessionDetail(session);
+      setDrafts({});
     } catch (err) {
       if (err instanceof AuthApiError) {
         setError(err.message);
@@ -187,6 +211,37 @@ export function RuleReviewPage() {
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+    }
+  }
+
+  async function handleControlsChange(next: {
+    approvalMode?: "QUESTION" | "ALLOW";
+    confidenceThreshold?: number;
+  }) {
+    const mode = next.approvalMode ?? approvalMode;
+    const threshold = next.confidenceThreshold ?? confidenceThreshold;
+    setApprovalMode(mode);
+    setConfidenceThreshold(threshold);
+
+    if (!workspace || !selectedSessionId) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      const session = await ruleDiscoveryApi.updateSession(
+        workspace.id,
+        selectedSessionId,
+        { approvalMode: mode, confidenceThreshold: threshold },
+      );
+      setSessionDetail(session);
+    } catch (err) {
+      if (err instanceof AuthApiError) {
+        setError(err.message);
+      } else {
+        setError("Não foi possível atualizar o modo");
+      }
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -246,6 +301,28 @@ export function RuleReviewPage() {
         setError(err.message);
       } else {
         setError("Não foi possível negar o candidato");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleUndo(candidate: RuleCandidate) {
+    if (!workspace || !selectedSessionId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await ruleDiscoveryApi.undoCandidate(
+        workspace.id,
+        selectedSessionId,
+        candidate.id,
+      );
+      await refreshSessionDetail();
+    } catch (err) {
+      if (err instanceof AuthApiError) {
+        setError(err.message);
+      } else {
+        setError("Não foi possível desfazer");
       }
     } finally {
       setBusy(false);
@@ -338,8 +415,8 @@ export function RuleReviewPage() {
           <div className="space-y-1">
             <h1 className="text-lg font-semibold tracking-tight">Rule Review</h1>
             <p className="text-xs text-muted-foreground">
-              Envie documentos, acompanhe a extração e revise candidatos antes de
-              promover para regras ou knowledge.
+              Envie documentos, acompanhe o raciocínio da IA e revise candidatos
+              antes de promover para regras ou knowledge.
             </p>
           </div>
         </div>
@@ -349,6 +426,48 @@ export function RuleReviewPage() {
             <p className="text-xs text-destructive">{error}</p>
           </div>
         ) : null}
+
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium">Modo da IA</h2>
+          <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border/60 bg-muted/30 p-4">
+            <label className="space-y-1 text-xs">
+              <span className="text-muted-foreground">Aprovação</span>
+              <select
+                className="flex h-8 w-40 rounded-md border border-input bg-background px-2 text-xs"
+                value={approvalMode}
+                aria-label="Modo de aprovação"
+                disabled={busy}
+                onChange={(event) =>
+                  void handleControlsChange({
+                    approvalMode: event.target.value as "QUESTION" | "ALLOW",
+                  })
+                }
+              >
+                <option value="QUESTION">Questionar</option>
+                <option value="ALLOW">Permitir</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-xs">
+              <span className="text-muted-foreground">Limiar</span>
+              <Input
+                type="number"
+                min={0}
+                max={1}
+                step={0.05}
+                value={confidenceThreshold}
+                aria-label="Limiar de confidence"
+                className="h-8 w-24 text-xs"
+                disabled={busy}
+                onChange={(event) =>
+                  setConfidenceThreshold(Number(event.target.value))
+                }
+                onBlur={() =>
+                  void handleControlsChange({ confidenceThreshold })
+                }
+              />
+            </label>
+          </div>
+        </section>
 
         <section className="space-y-3">
           <h2 className="text-sm font-medium">Upload</h2>
@@ -439,6 +558,35 @@ export function RuleReviewPage() {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">Raciocínio</h3>
+              <div className="max-h-72 space-y-2 overflow-y-auto rounded-xl border border-border/60 bg-background p-3">
+                {sessionDetail.events.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Aguardando análise…
+                  </p>
+                ) : (
+                  sessionDetail.events.map((event) => (
+                    <div
+                      key={event.id}
+                      className={cn(
+                        "rounded-lg px-3 py-2 text-xs",
+                        eventCardTypes(event.type)
+                          ? "border border-primary/20 bg-primary/5"
+                          : "bg-muted/40 text-muted-foreground",
+                      )}
+                    >
+                      <p className="font-medium text-foreground">{event.message}</p>
+                      <p className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {event.type}
+                      </p>
+                    </div>
+                  ))
+                )}
+                <div ref={conversationEndRef} />
+              </div>
+            </div>
+
             <div className="space-y-3">
               <h3 className="text-sm font-medium">Checklist de candidatos</h3>
               {sessionDetail.candidates.length === 0 ? (
@@ -449,6 +597,7 @@ export function RuleReviewPage() {
                 sessionDetail.candidates.map((candidate) => {
                   const draft = drafts[candidate.id] ?? buildDraft(candidate);
                   const isPending = candidate.status === "PENDING";
+                  const isAccepted = candidate.status === "ACCEPTED";
 
                   return (
                     <article
@@ -466,6 +615,13 @@ export function RuleReviewPage() {
                         <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                           {candidateStatusLabel(candidate.status)}
                         </span>
+                        {candidate.promotionSource ? (
+                          <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            {candidate.promotionSource === "AUTO"
+                              ? "Auto"
+                              : "Manual"}
+                          </span>
+                        ) : null}
                       </div>
 
                       {isPending ? (
@@ -547,6 +703,17 @@ export function RuleReviewPage() {
                           <p className="text-[11px] text-muted-foreground">
                             {candidate.content}
                           </p>
+                          {isAccepted ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={busy}
+                              onClick={() => void handleUndo(candidate)}
+                            >
+                              Desfazer
+                            </Button>
+                          ) : null}
                         </>
                       )}
                     </article>
