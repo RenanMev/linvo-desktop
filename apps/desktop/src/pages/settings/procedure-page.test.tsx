@@ -1,0 +1,162 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { ProcedurePage } from "@/pages/settings/procedure-page";
+
+const mockWorkspace = {
+  id: "ws-1",
+  name: "Workspace Teste",
+  role: "MEMBER" as const,
+  imageUrl: null,
+  createdAt: "2026-07-21T12:00:00.000Z",
+  updatedAt: "2026-07-21T12:00:00.000Z",
+};
+
+vi.mock("@/context/workspace-context", () => ({
+  useWorkspace: vi.fn(),
+}));
+
+vi.mock("@/lib/procedure/procedure-api", () => ({
+  listProcedures: vi.fn(),
+}));
+
+import { useWorkspace } from "@/context/workspace-context";
+import * as procedureApi from "@/lib/procedure/procedure-api";
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={["/settings/workspace/ws-1/procedures"]}>
+      <Routes>
+        <Route
+          path="/settings/workspace/:workspaceId/procedures"
+          element={<ProcedurePage />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+describe("ProcedurePage list", () => {
+  beforeEach(() => {
+    class ResizeObserverMock {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+
+    vi.mocked(useWorkspace).mockReturnValue({
+      workspaces: [mockWorkspace],
+      activeWorkspace: mockWorkspace,
+      isLoading: false,
+      error: null,
+      refresh: vi.fn(),
+      selectWorkspace: vi.fn(),
+      createWorkspace: vi.fn(),
+      renameWorkspace: vi.fn(),
+      deleteWorkspace: vi.fn(),
+      uploadImage: vi.fn(),
+      removeImage: vi.fn(),
+    });
+  });
+
+  it("renders pending, failed and published sections", async () => {
+    vi.mocked(procedureApi.listProcedures).mockResolvedValue([
+      {
+        id: "p-pending",
+        workspaceId: "ws-1",
+        status: "PENDING_REVIEW",
+        title: "Número cancelado",
+        slug: null,
+        markdown: "## Título / tema\n\nx",
+        steps: null,
+        retainVideo: false,
+        videoPath: null,
+        error: null,
+        attemptCount: 1,
+        createdAt: "2026-07-21T12:00:00.000Z",
+        updatedAt: "2026-07-21T12:00:00.000Z",
+      },
+      {
+        id: "p-failed",
+        workspaceId: "ws-1",
+        status: "FAILED",
+        title: null,
+        slug: null,
+        markdown: null,
+        steps: null,
+        retainVideo: false,
+        videoPath: null,
+        error: "tentativa 3/3: falha",
+        attemptCount: 3,
+        createdAt: "2026-07-21T12:00:00.000Z",
+        updatedAt: "2026-07-21T12:00:00.000Z",
+      },
+      {
+        id: "p-published",
+        workspaceId: "ws-1",
+        status: "PUBLISHED",
+        title: "Fluxo publicado",
+        slug: "fluxo_publicado",
+        markdown: "## Título / tema\n\ny",
+        steps: ["passo 1"],
+        retainVideo: false,
+        videoPath: null,
+        error: null,
+        attemptCount: 1,
+        createdAt: "2026-07-21T12:00:00.000Z",
+        updatedAt: "2026-07-21T12:00:00.000Z",
+      },
+    ]);
+
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", { name: "Em revisão" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Falhou" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Publicados" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Número cancelado")).toBeInTheDocument();
+    expect(screen.getByText("Fluxo publicado")).toBeInTheDocument();
+    expect(screen.getByText(/Procedure p-failed/i)).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(procedureApi.listProcedures).toHaveBeenCalledWith("ws-1", [
+        "PENDING_REVIEW",
+        "FAILED",
+        "PUBLISHED",
+      ]);
+    });
+  });
+
+  it("opens selected procedure markdown from pending list", async () => {
+    const user = userEvent.setup();
+    vi.mocked(procedureApi.listProcedures).mockResolvedValue([
+      {
+        id: "p-pending",
+        workspaceId: "ws-1",
+        status: "PENDING_REVIEW",
+        title: "Número cancelado",
+        slug: null,
+        markdown: "## Passos numerados\n\n1. Abrir",
+        steps: null,
+        retainVideo: false,
+        videoPath: null,
+        error: null,
+        attemptCount: 1,
+        createdAt: "2026-07-21T12:00:00.000Z",
+        updatedAt: "2026-07-21T12:00:00.000Z",
+      },
+    ]);
+
+    renderPage();
+    await user.click(await screen.findByText("Número cancelado"));
+    expect(
+      await screen.findByText(/## Passos numerados/),
+    ).toBeInTheDocument();
+  });
+});

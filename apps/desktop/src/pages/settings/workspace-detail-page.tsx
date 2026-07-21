@@ -11,6 +11,7 @@ import {
   Plus,
   ScrollText,
   Trash2,
+  Video,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -414,6 +415,34 @@ export function WorkspaceDetailPage() {
             </div>
           </section>
         ) : null}
+
+        <section className="space-y-3">
+          <SectionHeading
+            title="Procedures"
+            description="Grave a tela, revise o markdown gerado e publique procedimentos."
+          />
+          <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
+                Capture um fluxo na tela, revise o procedimento e consulte
+                depois via /slug no chat.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="shrink-0"
+                onClick={() =>
+                  navigate(`/settings/workspace/${workspace.id}/procedures`)
+                }
+              >
+                <Video className="size-3.5" />
+                Abrir Procedures
+                <ArrowRight className="size-3.5" />
+              </Button>
+            </div>
+          </div>
+        </section>
 
         <section className="space-y-3">
           <SectionHeading

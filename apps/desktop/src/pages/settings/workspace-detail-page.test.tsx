@@ -42,6 +42,10 @@ function renderPage() {
           path="/settings/workspace/:workspaceId/rule-review"
           element={<div>Rule Review Route</div>}
         />
+        <Route
+          path="/settings/workspace/:workspaceId/procedures"
+          element={<div>Procedures Route</div>}
+        />
       </Routes>
     </MemoryRouter>,
   );
@@ -124,5 +128,29 @@ describe("WorkspaceDetailPage rule review navigation", () => {
     expect(
       screen.queryByRole("button", { name: "Abrir Rule Review" }),
     ).toBeNull();
+  });
+
+  it("shows Procedures link for MEMBER and navigates", async () => {
+    const user = userEvent.setup();
+    vi.mocked(useWorkspace).mockReturnValue({
+      workspaces: [memberWorkspace],
+      activeWorkspace: memberWorkspace,
+      isLoading: false,
+      error: null,
+      refresh: vi.fn(),
+      selectWorkspace: vi.fn(),
+      createWorkspace: vi.fn(),
+      renameWorkspace: vi.fn(),
+      deleteWorkspace: vi.fn(),
+      uploadImage: vi.fn(),
+      removeImage: vi.fn(),
+    });
+
+    renderPage();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Abrir Procedures" }),
+    );
+    expect(await screen.findByText("Procedures Route")).toBeInTheDocument();
   });
 });
