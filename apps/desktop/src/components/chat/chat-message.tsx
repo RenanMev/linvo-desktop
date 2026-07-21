@@ -1,6 +1,8 @@
 import { Bot, User } from "lucide-react";
 
+import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { ChatMessageOptions } from "@/components/chat/chat-message-options";
+import { ChatReasoningPanel } from "@/components/chat/chat-reasoning-panel";
 import { ChatReplyQuote } from "@/components/chat/chat-reply-quote";
 import { ChatToolApproval } from "@/components/chat/chat-tool-approval";
 import { ChatToolUses } from "@/components/chat/chat-tool-uses";
@@ -27,12 +29,22 @@ export function ChatMessageBubble({
 }: ChatMessageBubbleProps) {
   const isUser = message.role === "user";
   const canReply = canReplyToMessage(message);
+  const isStreaming =
+    message.status === "streaming" || message.status === "awaiting_tool";
   const showApproval =
     !isUser &&
     message.status === "awaiting_tool" &&
     pendingToolRequest != null &&
     onApproveTool != null &&
     onDenyTool != null;
+  const hasTools = !isUser && (message.toolUses?.length ?? 0) > 0;
+  const hasReasoningPanel =
+    !isUser &&
+    ((message.activities?.length ?? 0) > 0 ||
+      Boolean(message.reasoning?.trim()) ||
+      Boolean(message.model) ||
+      hasTools ||
+      (isStreaming && !message.content));
 
   return (
     <div
@@ -54,32 +66,46 @@ export function ChatMessageBubble({
 
       <div
         className={cn(
-          "flex max-w-[75%] flex-col gap-1",
+          "flex max-w-[min(75%,42rem)] flex-col gap-1.5",
           isUser ? "items-end" : "items-start",
         )}
       >
-        <div className="flex items-start gap-1">
+        <div className="flex w-full items-start gap-1">
           <div
             className={cn(
-              "rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap",
+              "min-w-0 rounded-2xl px-4 py-3 text-sm leading-relaxed",
               isUser
-                ? "rounded-tr-sm bg-primary text-primary-foreground"
+                ? "rounded-tr-sm bg-primary text-primary-foreground whitespace-pre-wrap"
                 : "rounded-tl-sm bg-muted text-foreground",
             )}
           >
             {message.replyTo && (
               <ChatReplyQuote replyTo={message.replyTo} isUser={isUser} />
             )}
-            {message.content ||
-              (message.status === "streaming" || message.status === "awaiting_tool" ? (
-                <span className="text-muted-foreground">
-                  {message.status === "awaiting_tool"
-                    ? "Aguardando aprovação..."
-                    : "Pensando..."}
-                </span>
+
+            {hasReasoningPanel && (
+              <ChatReasoningPanel
+                activities={message.activities}
+                reasoning={message.reasoning}
+                toolUses={message.toolUses}
+                model={message.model}
+                isStreaming={isStreaming}
+              />
+            )}
+
+            {message.content ? (
+              isUser ? (
+                message.content
               ) : (
-                ""
-              ))}
+                <ChatMarkdown content={message.content} />
+              )
+            ) : isStreaming && !hasReasoningPanel ? (
+              <span className="text-muted-foreground">
+                {message.status === "awaiting_tool"
+                  ? "Aguardando aprovação..."
+                  : "Pensando..."}
+              </span>
+            ) : null}
           </div>
 
           {canReply && (
@@ -91,7 +117,9 @@ export function ChatMessageBubble({
         </div>
 
         {message.status === "error" && (
-          <span className="text-xs text-destructive">Falha ao gerar resposta.</span>
+          <span className="text-xs text-destructive">
+            Falha ao gerar resposta.
+          </span>
         )}
 
         {showApproval && (
@@ -103,12 +131,10 @@ export function ChatMessageBubble({
           />
         )}
 
-        {!isUser && (message.toolUses?.length ?? 0) > 0 && (
+        {!isUser && hasTools && !hasReasoningPanel && (
           <ChatToolUses
             toolUses={message.toolUses!}
-            isStreaming={
-              message.status === "streaming" || message.status === "awaiting_tool"
-            }
+            isStreaming={isStreaming}
           />
         )}
       </div>

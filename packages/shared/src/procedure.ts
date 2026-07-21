@@ -14,6 +14,22 @@ export const createProcedureInputSchema = z.object({
     .default(false),
 });
 
+export const createProcedureFromTextInputSchema = z
+  .object({
+    title: z.string().trim().min(1),
+    markdown: z.string().trim().min(1).optional(),
+    steps: z.array(z.string().trim().min(1)).min(1).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.markdown && (!value.steps || value.steps.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "informe markdown e/ou steps",
+        path: ["markdown"],
+      });
+    }
+  });
+
 export const listProceduresQuerySchema = z.object({
   status: z
     .union([procedureStatusSchema, z.array(procedureStatusSchema)])
@@ -76,6 +92,9 @@ export const publishProcedureResponseSchema = z.object({
 
 export type ProcedureStatus = z.infer<typeof procedureStatusSchema>;
 export type CreateProcedureInput = z.infer<typeof createProcedureInputSchema>;
+export type CreateProcedureFromTextInput = z.infer<
+  typeof createProcedureFromTextInputSchema
+>;
 export type ListProceduresQuery = z.infer<typeof listProceduresQuerySchema>;
 export type UpdateProcedureInput = z.infer<typeof updateProcedureInputSchema>;
 export type Procedure = z.infer<typeof procedureSchema>;

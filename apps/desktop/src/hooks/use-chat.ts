@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Procedure, ToolRequest } from "@linvo/shared";
+import type { DeskState, Procedure, ToolRequest } from "@linvo/shared";
 
 import { AuthApiError } from "@/lib/auth/auth-api";
 import { PANEL_SESSION_UNAVAILABLE_MESSAGE } from "@/hooks/use-panel-session";
@@ -18,6 +18,7 @@ import {
   createReplyRef,
   createUserMessage,
   finalizeMessage,
+  setMessageModel,
   upsertActivity,
 } from "@/lib/chat/chat-state";
 import {
@@ -34,6 +35,8 @@ import * as procedureApi from "@/lib/procedure/procedure-api";
 type UseChatOptions = {
   conversationId: string | null;
   workspaceId?: string | null;
+  deskState?: DeskState;
+  model?: string | null;
   onConversationTitleChange?: (conversationId: string, title: string) => void;
   onConversationCreated?: (id: string) => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
@@ -52,6 +55,8 @@ function formatChatError(error: unknown, fallback: string): string {
 export function useChat({
   conversationId,
   workspaceId = null,
+  deskState,
+  model = null,
   onConversationTitleChange,
   onConversationCreated,
   onOpenProcedureChecklist,
@@ -69,11 +74,15 @@ export function useChat({
   const assistantIdRef = useRef<string | null>(null);
   const workspaceIdRef = useRef<string | null>(workspaceId);
   const onOpenProcedureChecklistRef = useRef(onOpenProcedureChecklist);
+  const deskStateRef = useRef(deskState);
+  const modelRef = useRef(model);
   const chainOpenedSlugsRef = useRef<Set<string>>(new Set());
 
   activeConversationRef.current = conversationId;
   workspaceIdRef.current = workspaceId;
   onOpenProcedureChecklistRef.current = onOpenProcedureChecklist;
+  deskStateRef.current = deskState;
+  modelRef.current = model;
 
   const persistMessages = useCallback(
     (targetConversationId: string, nextMessages: ChatMessage[]) => {
@@ -275,6 +284,8 @@ export function useChat({
           requestId: request.requestId,
           approved,
           result,
+          deskState: deskStateRef.current,
+          model: modelRef.current ?? undefined,
           signal: controller.signal,
           onAssistantDone: (message) => {
             currentAssistantId = message.id;
@@ -313,6 +324,15 @@ export function useChat({
           onReasoningChunk: (text) => {
             setMessages((prev) => {
               const next = appendReasoning(prev, currentAssistantId, text);
+              if (activeConversationRef.current === activeConversationId) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onModel: (model) => {
+            setMessages((prev) => {
+              const next = setMessageModel(prev, currentAssistantId, model);
               if (activeConversationRef.current === activeConversationId) {
                 persistMessages(activeConversationId, next);
               }
@@ -420,6 +440,8 @@ export function useChat({
           conversationId: activeConversationId,
           content: rawContent,
           replyToMessageId: activeReply?.id,
+          deskState: deskStateRef.current,
+          model: modelRef.current ?? undefined,
           signal: controller.signal,
           onUserMessage: (message) => {
             const mapped = mapApiMessageToChat(message);
@@ -479,6 +501,15 @@ export function useChat({
           onReasoningChunk: (text) => {
             setMessages((prev) => {
               const next = appendReasoning(prev, assistantId, text);
+              if (activeConversationRef.current === activeConversationId) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onModel: (model) => {
+            setMessages((prev) => {
+              const next = setMessageModel(prev, assistantId, model);
               if (activeConversationRef.current === activeConversationId) {
                 persistMessages(activeConversationId, next);
               }

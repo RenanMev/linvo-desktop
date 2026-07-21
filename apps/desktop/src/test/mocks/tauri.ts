@@ -52,6 +52,11 @@ function createWindowMock(label: string) {
 
 export const windowMock = createWindowMock("main");
 export const panelWindowMock = createWindowMock("panel");
+export const checklistWindowMock = createWindowMock("checklist");
+
+const emitMock = vi.fn(() => Promise.resolve());
+const emitToMock = vi.fn(() => Promise.resolve());
+const listenMock = vi.fn(() => Promise.resolve(() => {}));
 
 class Window {
   static getByLabel(label: string) {
@@ -61,6 +66,9 @@ class Window {
     if (label === "panel") {
       return Promise.resolve(panelWindowMock);
     }
+    if (label === "checklist") {
+      return Promise.resolve(checklistWindowMock);
+    }
     return Promise.resolve(null);
   }
 }
@@ -68,6 +76,12 @@ class Window {
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
   isTauri: () => false,
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  emit: (...args: unknown[]) => emitMock(...args),
+  emitTo: (...args: unknown[]) => emitToMock(...args),
+  listen: (...args: unknown[]) => listenMock(...args),
 }));
 
 vi.mock("@tauri-apps/api/window", () => ({
@@ -119,6 +133,9 @@ vi.mock("@tauri-apps/api/window", () => ({
 
 export {
   invokeMock,
+  emitMock,
+  emitToMock,
+  listenMock,
   setPositionMock,
   setSizeMock,
   setFocusMock,

@@ -181,6 +181,47 @@ describe("procedure-api", () => {
     );
   });
 
+  it("createProcedureFromText posta título e passos", async () => {
+    const fetchSpy = vi.spyOn(http, "authorizedFetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          procedure: {
+            ...procedureBase,
+            status: "PUBLISHED",
+            title: "Cancelamento de planos",
+            slug: "procedimento_para_cancelamento_de_planos",
+            steps: ["Abrir CRM", "Cancelar"],
+            markdown: "# Cancelamento de planos",
+            retainVideo: false,
+            videoPath: null,
+          },
+        }),
+        {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    const procedure = await procedureApi.createProcedureFromText("ws-1", {
+      title: "Cancelamento de planos",
+      steps: ["Abrir CRM", "Cancelar"],
+    });
+
+    expect(procedure.status).toBe("PUBLISHED");
+    expect(procedure.slug).toBe("procedimento_para_cancelamento_de_planos");
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/workspaces\/ws-1\/procedures\/from-text$/),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          title: "Cancelamento de planos",
+          steps: ["Abrir CRM", "Cancelar"],
+        }),
+      }),
+    );
+  });
+
   it("throws AuthApiError when API returns error", async () => {
     vi.spyOn(http, "authorizedFetch").mockResolvedValue(
       new Response(

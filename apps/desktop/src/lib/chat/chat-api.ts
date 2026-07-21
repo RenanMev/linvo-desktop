@@ -1,11 +1,16 @@
 import {
   conversationListSchema,
   conversationSchema,
+  messageActivitySchema,
   messageListSchema,
   messageToolUseSchema,
+  modelInfoSchema,
+  reasoningChunkSchema,
   toolRequestSchema,
   type Conversation,
+  type DeskState,
   type Message,
+  type MessageActivity,
   type MessageToolUse,
   type ToolRequest,
 } from "@linvo/shared";
@@ -154,6 +159,9 @@ type StreamHandlers = {
   onUserMessage?: (message: Message) => void;
   onToolUsed?: (tool: MessageToolUse) => void;
   onToolRequest?: (request: ToolRequest) => void;
+  onActivity?: (activity: MessageActivity) => void;
+  onReasoningChunk?: (text: string) => void;
+  onModel?: (model: string) => void;
   onAssistantDone?: (message: Message) => void;
 };
 
@@ -204,6 +212,27 @@ async function* consumeSseStream(
           }
           break;
         }
+        case "activity": {
+          const activity = messageActivitySchema.safeParse(parsed.data);
+          if (activity.success) {
+            handlers.onActivity?.(activity.data);
+          }
+          break;
+        }
+        case "reasoning_chunk": {
+          const chunk = reasoningChunkSchema.safeParse(parsed.data);
+          if (chunk.success) {
+            handlers.onReasoningChunk?.(chunk.data.text);
+          }
+          break;
+        }
+        case "model": {
+          const info = modelInfoSchema.safeParse(parsed.data);
+          if (info.success) {
+            handlers.onModel?.(info.data.model);
+          }
+          break;
+        }
         case "done":
           handlers.onAssistantDone?.(parsed.data as Message);
           break;
@@ -222,14 +251,23 @@ export type StreamChatOptions = {
   conversationId: string;
   content: string;
   replyToMessageId?: string;
+  deskState?: DeskState;
+  model?: string;
   signal?: AbortSignal;
 } & StreamHandlers;
 
 export async function* streamChatResponse(
   options: StreamChatOptions,
 ): AsyncGenerator<string> {
-  const { conversationId, content, replyToMessageId, signal, ...handlers } =
-    options;
+  const {
+    conversationId,
+    content,
+    replyToMessageId,
+    deskState,
+    model,
+    signal,
+    ...handlers
+  } = options;
 
   const path = `/api/conversations/${conversationId}/messages`;
   authDebug("chat.request", { path, stream: true });
@@ -247,6 +285,8 @@ export async function* streamChatResponse(
         body: JSON.stringify({
           content,
           replyToMessageId,
+          deskState,
+          model,
         }),
         signal,
       },
@@ -277,14 +317,24 @@ export type SubmitToolResultOptions = {
   requestId: string;
   approved: boolean;
   result?: string;
+  deskState?: DeskState;
+  model?: string;
   signal?: AbortSignal;
 } & StreamHandlers;
 
 export async function* submitToolResult(
   options: SubmitToolResultOptions,
 ): AsyncGenerator<string> {
-  const { conversationId, requestId, approved, result, signal, ...handlers } =
-    options;
+  const {
+    conversationId,
+    requestId,
+    approved,
+    result,
+    deskState,
+    model,
+    signal,
+    ...handlers
+  } = options;
 
   const path = `/api/conversations/${conversationId}/tool-results`;
   authDebug("chat.request", { path, stream: true });
@@ -303,6 +353,8 @@ export async function* submitToolResult(
           requestId,
           approved,
           result,
+          deskState,
+          model,
         }),
         signal,
       },

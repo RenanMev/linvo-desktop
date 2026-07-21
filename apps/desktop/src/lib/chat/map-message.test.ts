@@ -45,4 +45,39 @@ describe("map-message", () => {
     expect(mapped).toHaveLength(1);
     expect(mapped[0]?.role).toBe("user");
   });
+
+  it("maps activities and reasoning roundtrip fields", () => {
+    const mapped = mapApiMessageToChat({
+      id: "msg-2",
+      role: "assistant",
+      content: "Pronto",
+      status: "done",
+      createdAt: "2026-01-01T12:00:00.000Z",
+      toolUses: [{ name: "search_knowledge", label: "Base de conhecimento" }],
+      activities: [
+        {
+          id: "a1",
+          label: "Base de conhecimento",
+          status: "done",
+          kind: "research",
+          detail: "cancelamento",
+        },
+      ],
+      reasoning: "Vou consultar a base.",
+    });
+
+    expect(mapped.activities).toEqual([
+      {
+        id: "a1",
+        label: "Base de conhecimento",
+        status: "done",
+        kind: "research",
+        detail: "cancelamento",
+      },
+    ]);
+    expect(mapped.reasoning).toBe("Vou consultar a base.");
+    expect(mapped.toolUses).toEqual([
+      { name: "search_knowledge", label: "Base de conhecimento" },
+    ]);
+  });
 });

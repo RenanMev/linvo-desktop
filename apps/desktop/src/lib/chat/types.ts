@@ -16,6 +16,14 @@ export type ChatReplyRef = {
   content: string;
 };
 
+export type ChatActivity = {
+  id: string;
+  label: string;
+  status: "running" | "done";
+  detail?: string;
+  kind?: "research" | "tool" | "think";
+};
+
 export type ChatMessage = {
   id: string;
   role: ChatRole;
@@ -24,4 +32,7 @@ export type ChatMessage = {
   status: ChatMessageStatus;
   replyTo?: ChatReplyRef;
   toolUses?: { name: string; label: string }[];
+  activities?: ChatActivity[];
+  reasoning?: string;
+  model?: string;
 };

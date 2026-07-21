@@ -1,0 +1,14 @@
+[[permission]]
+identifier = "allow-checklist-open"
+description = "Allows opening and focusing the checklist window"
+commands.allow = ["checklist_open"]
+
+[[permission]]
+identifier = "allow-checklist-close"
+description = "Allows hiding the checklist window"
+commands.allow = ["checklist_close"]
+
+[[permission]]
+identifier = "allow-checklist-is-open"
+description = "Allows checking checklist window visibility"
+commands.allow = ["checklist_is_open"]

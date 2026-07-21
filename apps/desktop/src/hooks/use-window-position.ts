@@ -14,6 +14,7 @@ import {
 import {
   EDGE_MARGIN,
   loadSavedPosition,
+  POSITION_STORAGE_KEY,
   saveSavedPosition,
 } from "@/lib/window-storage";
 
@@ -22,6 +23,7 @@ const SAVE_DEBOUNCE_MS = 200;
 type UseWindowPositionOptions = {
   shouldPersist: () => boolean;
   enabled?: boolean;
+  storageKey?: string;
 };
 
 async function readMonitor(): Promise<MonitorInfo | null> {
@@ -36,6 +38,7 @@ async function readMonitor(): Promise<MonitorInfo | null> {
 export function useWindowPosition({
   shouldPersist,
   enabled = true,
+  storageKey = POSITION_STORAGE_KEY,
 }: UseWindowPositionOptions) {
   const persistRef = useRef(shouldPersist);
   persistRef.current = shouldPersist;
@@ -54,7 +57,7 @@ export function useWindowPosition({
       const monitor = await readMonitor();
       const outer = await win.outerSize();
       const winSize = { width: outer.width, height: outer.height };
-      const saved = loadSavedPosition();
+      const saved = loadSavedPosition(storageKey);
 
       let target: Position;
       if (saved) {
@@ -79,7 +82,7 @@ export function useWindowPosition({
         if (saveTimer) clearTimeout(saveTimer);
         saveTimer = setTimeout(() => {
           if (persistRef.current()) {
-            saveSavedPosition({ x: payload.x, y: payload.y });
+            saveSavedPosition({ x: payload.x, y: payload.y }, storageKey);
           }
         }, SAVE_DEBOUNCE_MS);
       });
@@ -92,5 +95,5 @@ export function useWindowPosition({
       if (saveTimer) clearTimeout(saveTimer);
       unlisten?.();
     };
-  }, [enabled]);
+  }, [enabled, storageKey]);
 }

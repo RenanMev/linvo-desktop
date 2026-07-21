@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, Window } from "@tauri-apps/api/window";
 
+import { closeChecklist } from "@/lib/checklist-window";
 import { closePanel } from "@/lib/panel-window";
 
 const MAIN_LABEL = "main";
@@ -30,6 +31,7 @@ export async function hideMainBar(): Promise<void> {
 export async function hideAllWindows(): Promise<void> {
   await hideMainBar();
   await closePanel();
+  await closeChecklist();
 }
 
 export async function isPanelVisible(): Promise<boolean> {
@@ -40,11 +42,20 @@ export async function isPanelVisible(): Promise<boolean> {
   }
 }
 
+export async function isChecklistVisible(): Promise<boolean> {
+  try {
+    return await invoke<boolean>("checklist_is_open");
+  } catch {
+    return false;
+  }
+}
+
 export async function isAnyWindowVisible(): Promise<boolean> {
   const main = await getMainWindow();
   const mainVisible = main ? await main.isVisible() : false;
   const panelVisible = await isPanelVisible();
-  return mainVisible || panelVisible;
+  const checklistVisible = await isChecklistVisible();
+  return mainVisible || panelVisible || checklistVisible;
 }
 
 export async function toggleAppVisibility(): Promise<void> {

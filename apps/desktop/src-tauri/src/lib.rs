@@ -1,6 +1,7 @@
 mod app;
 mod auth;
 mod chat_store;
+mod checklist;
 mod panel;
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -148,6 +149,9 @@ pub fn run() {
             panel::panel_open,
             panel::panel_close,
             panel::panel_is_open,
+            checklist::checklist_open,
+            checklist::checklist_close,
+            checklist::checklist_is_open,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

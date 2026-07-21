@@ -9,6 +9,7 @@ import {
 
 import { hideAllWindows } from "@/lib/app-windows";
 import type { AuthPhase } from "@/lib/auth/auth-state";
+import { closeChecklist } from "@/lib/checklist-window";
 import { closePanel } from "@/lib/panel-window";
 import {
   registerTrayHandlers,
@@ -50,12 +51,21 @@ export function WindowChromeProvider({
       authPhase: authPhaseRef.current,
     });
 
-    if (action === "close-panel") {
-      await closePanel();
-      return;
+    switch (action) {
+      case "close-panel":
+        await closePanel();
+        return;
+      case "close-checklist":
+        await closeChecklist({ emitClosed: true });
+        return;
+      case "hide":
+        await hideAllWindows();
+        return;
+      default: {
+        const _exhaustive: never = action;
+        return _exhaustive;
+      }
     }
-
-    await hideAllWindows();
   }, [windowLabel]);
 
   useSystemTray({

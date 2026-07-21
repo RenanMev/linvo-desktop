@@ -1,16 +1,23 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
   type ChangeEvent,
   type KeyboardEvent,
 } from "react";
-import type { Procedure } from "@linvo/shared";
+import type { LlmModelOption, Procedure } from "@linvo/shared";
 import { ArrowUp } from "lucide-react";
 
+import { ChatModelPicker } from "@/components/chat/chat-model-picker";
 import { ChatReplyPreview } from "@/components/chat/chat-reply-preview";
 import { Button } from "@/components/ui/button";
 import { canSendMessage } from "@/lib/chat/chat-state";
+import {
+  fetchLlmModels,
+  loadSelectedModel,
+  saveSelectedModel,
+} from "@/lib/chat/llm-models";
 import type { ChatReplyRef } from "@/lib/chat/types";
 import * as procedureApi from "@/lib/procedure/procedure-api";
 import {
@@ -27,6 +34,8 @@ type ChatInputProps = {
   onCancelReply: () => void;
   disabled?: boolean;
   workspaceId?: string | null;
+  selectedModel?: string | null;
+  onModelChange?: (modelId: string) => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
 };
 
@@ -37,6 +46,8 @@ export function ChatInput({
   onCancelReply,
   disabled = false,
   workspaceId = null,
+  selectedModel = null,
+  onModelChange,
   onOpenProcedureChecklist,
 }: ChatInputProps) {
   const [value, setValue] = useState("");
@@ -44,6 +55,8 @@ export function ChatInput({
   const [slashError, setSlashError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [resolving, setResolving] = useState(false);
+  const [models, setModels] = useState<LlmModelOption[]>([]);
+  const [modelId, setModelId] = useState(selectedModel ?? "");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const canSend = canSendMessage(value, isResponding) && !disabled;
@@ -57,6 +70,50 @@ export function ChatInput({
   const filteredSlugs = slashOpen
     ? filterPublishedSlugs(publishedSlugs, slashQuery ?? "")
     : [];
+
+  const onModelChangeRef = useRef(onModelChange);
+  onModelChangeRef.current = onModelChange;
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchLlmModels()
+      .then((catalog) => {
+        if (cancelled) {
+          return;
+        }
+        setModels(catalog.models);
+        const preferred = loadSelectedModel(catalog.defaultModel);
+        const allowed = catalog.models.some((model) => model.id === preferred)
+          ? preferred
+          : catalog.defaultModel;
+        setModelId(allowed);
+        onModelChangeRef.current?.(allowed);
+        saveSelectedModel(allowed);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setModels([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (selectedModel && selectedModel !== modelId) {
+      setModelId(selectedModel);
+    }
+  }, [modelId, selectedModel]);
+
+  const handleModelChange = useCallback(
+    (nextModelId: string) => {
+      setModelId(nextModelId);
+      saveSelectedModel(nextModelId);
+      onModelChange?.(nextModelId);
+    },
+    [onModelChange],
+  );
 
   useEffect(() => {
     if (!slashOpen || !workspaceId) {
@@ -78,9 +135,10 @@ export function ChatInput({
         );
       })
       .catch(() => {
-        if (!cancelled) {
-          setPublishedSlugs([]);
+        if (cancelled) {
+          return;
         }
+        setPublishedSlugs([]);
       });
 
     return () => {
@@ -216,7 +274,7 @@ export function ChatInput({
 
         <div
           className={cn(
-            "flex items-end gap-2 rounded-2xl border bg-muted/40 p-2",
+            "flex flex-col gap-1 rounded-2xl border bg-muted/40 p-2",
             disabled && "opacity-60",
           )}
         >
@@ -230,17 +288,25 @@ export function ChatInput({
             }
             rows={1}
             disabled={disabled || isResponding || resolving}
-            className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-2 text-sm leading-relaxed outline-none placeholder:text-muted-foreground"
+            className="max-h-40 min-h-9 w-full resize-none bg-transparent px-2 py-2 text-sm leading-relaxed outline-none placeholder:text-muted-foreground"
           />
-          <Button
-            size="icon-sm"
-            onClick={handleSend}
-            disabled={!canSend || resolving}
-            title="Enviar"
-            className="shrink-0 rounded-xl"
-          >
-            <ArrowUp />
-          </Button>
+          <div className="flex items-center justify-between gap-2 px-1">
+            <ChatModelPicker
+              models={models}
+              value={modelId}
+              onChange={handleModelChange}
+              disabled={disabled || isResponding || resolving}
+            />
+            <Button
+              size="icon-sm"
+              onClick={handleSend}
+              disabled={!canSend || resolving}
+              title="Enviar"
+              className="shrink-0 rounded-xl"
+            >
+              <ArrowUp />
+            </Button>
+          </div>
         </div>
       </div>
 

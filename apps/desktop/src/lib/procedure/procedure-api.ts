@@ -1,10 +1,12 @@
 import {
+  createProcedureFromTextInputSchema,
   createProcedureResponseSchema,
   getProcedureResponseSchema,
   listProceduresResponseSchema,
   publishProcedureResponseSchema,
   updateProcedureInputSchema,
   updateProcedureResponseSchema,
+  type CreateProcedureFromTextInput,
   type Procedure,
   type ProcedureStatus,
   type UpdateProcedureInput,
@@ -85,6 +87,22 @@ export async function createProcedure(
       body: form,
     },
     { json: false },
+  )) as { procedure: unknown };
+
+  return createProcedureResponseSchema.parse(data).procedure;
+}
+
+export async function createProcedureFromText(
+  workspaceId: string,
+  input: CreateProcedureFromTextInput,
+): Promise<Procedure> {
+  const parsed = createProcedureFromTextInputSchema.parse(input);
+  const data = (await request(
+    `/api/workspaces/${workspaceId}/procedures/from-text`,
+    {
+      method: "POST",
+      body: JSON.stringify(parsed),
+    },
   )) as { procedure: unknown };
 
   return createProcedureResponseSchema.parse(data).procedure;

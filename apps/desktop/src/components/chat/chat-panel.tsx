@@ -19,6 +19,8 @@ type ChatPanelProps = {
   onDenyTool?: () => void;
   disabled?: boolean;
   workspaceId?: string | null;
+  selectedModel?: string | null;
+  onModelChange?: (modelId: string) => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
 };
 
@@ -36,13 +38,24 @@ export function ChatPanel({
   onDenyTool,
   disabled = false,
   workspaceId = null,
+  selectedModel = null,
+  onModelChange,
   onOpenProcedureChecklist,
 }: ChatPanelProps) {
   const inputDisabled = disabled || Boolean(pendingToolRequest);
+  const activeModel =
+    [...messages]
+      .reverse()
+      .find((message) => message.role === "assistant" && message.model)?.model ??
+    selectedModel;
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <ChatToolbar title={conversationTitle} />
+      <ChatToolbar
+        title={conversationTitle}
+        model={activeModel}
+        isResponding={isResponding}
+      />
       <div className="min-h-0 flex-1">
         <ChatMessageList
           key={conversationKey ?? "draft"}
@@ -63,6 +76,8 @@ export function ChatPanel({
         onCancelReply={onCancelReply}
         disabled={inputDisabled}
         workspaceId={workspaceId}
+        selectedModel={selectedModel}
+        onModelChange={onModelChange}
         onOpenProcedureChecklist={onOpenProcedureChecklist}
       />
     </main>

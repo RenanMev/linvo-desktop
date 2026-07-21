@@ -31,7 +31,7 @@ describe("ChatMessageBubble", () => {
     expect(screen.getByText("Pergunta")).toBeInTheDocument();
   });
 
-  it("shows thinking text for empty streaming message", () => {
+  it("shows reasoning panel for empty streaming message", () => {
     const message: ChatMessage = {
       ...baseMessage,
       content: "",
@@ -40,7 +40,33 @@ describe("ChatMessageBubble", () => {
 
     render(<ChatMessageBubble message={message} onReply={vi.fn()} />);
 
-    expect(screen.getByText("Pensando...")).toBeInTheDocument();
+    expect(screen.getByText("Consultando skills…")).toBeInTheDocument();
+  });
+
+  it("renders markdown for assistant content", () => {
+    const message: ChatMessage = {
+      ...baseMessage,
+      content: "**negrito** e `codigo`",
+    };
+
+    render(<ChatMessageBubble message={message} onReply={vi.fn()} />);
+
+    expect(screen.getByText("negrito")).toBeInTheDocument();
+    expect(screen.getByText("codigo")).toBeInTheDocument();
+  });
+
+  it("shows skills inside reasoning panel when toolUses exist", async () => {
+    const message: ChatMessage = {
+      ...baseMessage,
+      content: "Resposta com base",
+      toolUses: [{ name: "search_knowledge", label: "Base de conhecimento" }],
+    };
+
+    render(<ChatMessageBubble message={message} onReply={vi.fn()} />);
+
+    expect(screen.getByText("1 skill")).toBeInTheDocument();
+    screen.getByRole("button", { name: /1 skill/i }).click();
+    expect(await screen.findByText("Base de conhecimento")).toBeInTheDocument();
   });
 
   it("shows error message when status is error", () => {

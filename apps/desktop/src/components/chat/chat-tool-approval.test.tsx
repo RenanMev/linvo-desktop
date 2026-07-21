@@ -30,4 +30,27 @@ describe("ChatToolApproval", () => {
     expect(onApprove).toHaveBeenCalledTimes(1);
     expect(onDeny).toHaveBeenCalledTimes(1);
   });
+
+  it("mostra preview ao criar procedimento", () => {
+    render(
+      <ChatToolApproval
+        request={{
+          requestId: "r2",
+          name: "create_procedure",
+          label: "Criar procedimento",
+          args: {
+            title: "Cancelamento de planos",
+            steps: ["Abrir CRM", "Validar status", "Cancelar"],
+          },
+          requiresApproval: true,
+        }}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Criar procedimento publicado:")).toBeInTheDocument();
+    expect(screen.getByText("Cancelamento de planos")).toBeInTheDocument();
+    expect(screen.getByText("Abrir CRM")).toBeInTheDocument();
+  });
 });

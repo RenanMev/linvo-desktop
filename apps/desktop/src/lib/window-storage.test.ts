@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  CHECKLIST_POSITION_STORAGE_KEY,
   loadSavedPosition,
   POSITION_STORAGE_KEY,
   saveSavedPosition,
@@ -23,5 +24,14 @@ describe("window-storage", () => {
   it("returns null when the stored value is corrupt", () => {
     localStorage.setItem(POSITION_STORAGE_KEY, "{ broken");
     expect(loadSavedPosition()).toBeNull();
+  });
+
+  it("stores checklist position under a separate key", () => {
+    saveSavedPosition({ x: 10, y: 20 }, CHECKLIST_POSITION_STORAGE_KEY);
+    expect(loadSavedPosition()).toBeNull();
+    expect(loadSavedPosition(CHECKLIST_POSITION_STORAGE_KEY)).toEqual({
+      x: 10,
+      y: 20,
+    });
   });
 });

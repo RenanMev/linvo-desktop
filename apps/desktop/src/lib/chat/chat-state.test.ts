@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  appendReasoning,
   appendToMessage,
+  appendToolUse,
   canReplyToMessage,
   canSendMessage,
   createAssistantPlaceholder,
@@ -10,6 +12,7 @@ import {
   finalizeMessage,
   replyAuthorLabel,
   truncateReplyContent,
+  upsertActivity,
 } from "@/lib/chat/chat-state";
 
 describe("createUserMessage", () => {
@@ -109,6 +112,47 @@ describe("finalizeMessage", () => {
     const result = finalizeMessage(messages, "a1");
 
     expect(result[0]?.status).toBe("done");
+  });
+});
+
+describe("appendToolUse", () => {
+  it("appends tool use to matching message", () => {
+    const messages = [createAssistantPlaceholder("a1", 1)];
+    const result = appendToolUse(messages, "a1", {
+      name: "search_knowledge",
+      label: "Base de conhecimento",
+    });
+    expect(result[0]?.toolUses).toEqual([
+      { name: "search_knowledge", label: "Base de conhecimento" },
+    ]);
+  });
+});
+
+describe("upsertActivity", () => {
+  it("inserts and updates activities by id", () => {
+    const messages = [createAssistantPlaceholder("a1", 1)];
+    const withRunning = upsertActivity(messages, "a1", {
+      id: "start",
+      label: "Analisando…",
+      status: "running",
+    });
+    const withDone = upsertActivity(withRunning, "a1", {
+      id: "start",
+      label: "Analisando…",
+      status: "done",
+    });
+    expect(withDone[0]?.activities).toEqual([
+      { id: "start", label: "Analisando…", status: "done" },
+    ]);
+  });
+});
+
+describe("appendReasoning", () => {
+  it("appends reasoning chunks to matching message", () => {
+    const messages = [createAssistantPlaceholder("a1", 1)];
+    const first = appendReasoning(messages, "a1", "parte 1 ");
+    const second = appendReasoning(first, "a1", "parte 2");
+    expect(second[0]?.reasoning).toBe("parte 1 parte 2");
   });
 });
 
