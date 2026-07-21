@@ -26,6 +26,35 @@ export const ruleCandidateStatusSchema = z.enum([
   "REJECTED",
 ]);
 
+export const ruleDiscoveryApprovalModeSchema = z.enum(["QUESTION", "ALLOW"]);
+
+export const ruleCandidatePromotionSourceSchema = z.enum(["MANUAL", "AUTO"]);
+
+export const ruleDiscoveryEventTypeSchema = z.enum([
+  "session_started",
+  "document_reading",
+  "document_extracted",
+  "thinking",
+  "candidate_found",
+  "classified",
+  "auto_promoted",
+  "auto_skipped",
+  "document_done",
+  "session_ready",
+  "session_failed",
+  "candidate_undone",
+]);
+
+export const ruleDiscoveryEventSchema = z.object({
+  id: z.string(),
+  sessionId: z.string(),
+  seq: z.number().int(),
+  type: ruleDiscoveryEventTypeSchema,
+  message: z.string(),
+  payload: z.record(z.unknown()).nullable(),
+  createdAt: z.string(),
+});
+
 export const ruleSourceDocumentSchema = z.object({
   id: z.string(),
   originalName: z.string(),
@@ -48,6 +77,7 @@ export const ruleCandidateSchema = z.object({
   status: ruleCandidateStatusSchema,
   promoteToRule: z.boolean().nullable(),
   promoteToKnowledge: z.boolean().nullable(),
+  promotionSource: ruleCandidatePromotionSourceSchema.nullable(),
   businessRuleId: z.string().nullable(),
   knowledgeDocumentId: z.string().nullable(),
   createdAt: z.string(),
@@ -58,6 +88,8 @@ export const ruleDiscoverySessionSummarySchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
   status: ruleDiscoverySessionStatusSchema,
+  approvalMode: ruleDiscoveryApprovalModeSchema,
+  confidenceThreshold: z.number(),
   documentCount: z.number().int(),
   candidateCount: z.number().int(),
   createdAt: z.string(),
@@ -68,9 +100,12 @@ export const ruleDiscoverySessionDetailSchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
   status: ruleDiscoverySessionStatusSchema,
+  approvalMode: ruleDiscoveryApprovalModeSchema,
+  confidenceThreshold: z.number(),
   error: z.string().nullable(),
   documents: z.array(ruleSourceDocumentSchema),
   candidates: z.array(ruleCandidateSchema),
+  events: z.array(ruleDiscoveryEventSchema),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -84,6 +119,21 @@ export const listRuleDiscoverySessionsResponseSchema = z.object({
 });
 
 export const getRuleDiscoverySessionResponseSchema = z.object({
+  session: ruleDiscoverySessionDetailSchema,
+});
+
+export const updateRuleDiscoverySessionInputSchema = z
+  .object({
+    approvalMode: ruleDiscoveryApprovalModeSchema.optional(),
+    confidenceThreshold: z.number().min(0).max(1).optional(),
+  })
+  .refine(
+    (value) =>
+      value.approvalMode !== undefined || value.confidenceThreshold !== undefined,
+    { message: "informe approvalMode e/ou confidenceThreshold" },
+  );
+
+export const updateRuleDiscoverySessionResponseSchema = z.object({
   session: ruleDiscoverySessionDetailSchema,
 });
 
@@ -132,6 +182,10 @@ export const rejectRuleCandidateResponseSchema = z.object({
   candidate: ruleCandidateSchema,
 });
 
+export const undoRuleCandidateResponseSchema = z.object({
+  candidate: ruleCandidateSchema,
+});
+
 export type RuleDiscoverySessionStatus = z.infer<
   typeof ruleDiscoverySessionStatusSchema
 >;
@@ -140,6 +194,16 @@ export type RuleSourceDocumentStatus = z.infer<
 >;
 export type RuleCandidateCategory = z.infer<typeof ruleCandidateCategorySchema>;
 export type RuleCandidateStatus = z.infer<typeof ruleCandidateStatusSchema>;
+export type RuleDiscoveryApprovalMode = z.infer<
+  typeof ruleDiscoveryApprovalModeSchema
+>;
+export type RuleCandidatePromotionSource = z.infer<
+  typeof ruleCandidatePromotionSourceSchema
+>;
+export type RuleDiscoveryEventType = z.infer<
+  typeof ruleDiscoveryEventTypeSchema
+>;
+export type RuleDiscoveryEvent = z.infer<typeof ruleDiscoveryEventSchema>;
 export type RuleSourceDocument = z.infer<typeof ruleSourceDocumentSchema>;
 export type RuleCandidate = z.infer<typeof ruleCandidateSchema>;
 export type RuleDiscoverySessionSummary = z.infer<
@@ -157,6 +221,12 @@ export type ListRuleDiscoverySessionsResponse = z.infer<
 export type GetRuleDiscoverySessionResponse = z.infer<
   typeof getRuleDiscoverySessionResponseSchema
 >;
+export type UpdateRuleDiscoverySessionInput = z.infer<
+  typeof updateRuleDiscoverySessionInputSchema
+>;
+export type UpdateRuleDiscoverySessionResponse = z.infer<
+  typeof updateRuleDiscoverySessionResponseSchema
+>;
 export type AcceptRuleCandidateInput = z.infer<
   typeof acceptRuleCandidateInputSchema
 >;
@@ -165,4 +235,7 @@ export type AcceptRuleCandidateResponse = z.infer<
 >;
 export type RejectRuleCandidateResponse = z.infer<
   typeof rejectRuleCandidateResponseSchema
+>;
+export type UndoRuleCandidateResponse = z.infer<
+  typeof undoRuleCandidateResponseSchema
 >;
