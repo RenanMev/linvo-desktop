@@ -38,7 +38,7 @@ export function ChatToolUses({ toolUses, isStreaming = false }: ChatToolUsesProp
         <span
           key={`${tool.name}-${index}`}
           className={cn(
-            "inline-flex items-center gap-1 rounded-md border border-border/70 bg-background/80 px-2 py-0.5 text-xs text-foreground/80",
+            "inline-flex items-center gap-1 rounded-md border border-hairline bg-neutral-raised px-2 py-0.5 text-xs text-foreground/80",
             isStreaming && index === toolUses.length - 1 && "animate-pulse",
           )}
         >

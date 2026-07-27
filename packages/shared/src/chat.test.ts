@@ -1,15 +1,38 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  chatErrorCodeSchema,
+  chatErrorEventSchema,
   getToolLabel,
   messageActivitySchema,
   messageSchema,
   messageToolUseSchema,
   reasoningChunkSchema,
+  regenerateMessageInputSchema,
   sendMessageInputSchema,
   toolRequestSchema,
   toolResultInputSchema,
 } from "./chat";
+
+describe("chatErrorEventSchema", () => {
+  it("aceita evento sem code (compatibilidade retroativa)", () => {
+    const parsed = chatErrorEventSchema.parse({ message: "falhou" });
+    expect(parsed.code).toBeUndefined();
+  });
+
+  it("aceita todos os codes definidos", () => {
+    for (const code of chatErrorCodeSchema.options) {
+      const parsed = chatErrorEventSchema.parse({ message: "x", code });
+      expect(parsed.code).toBe(code);
+    }
+  });
+
+  it("rejeita code desconhecido", () => {
+    expect(() =>
+      chatErrorEventSchema.parse({ message: "x", code: "nao_existe" }),
+    ).toThrow();
+  });
+});
 
 describe("messageToolUseSchema", () => {
   it("validates name and label", () => {
@@ -115,6 +138,38 @@ describe("sendMessageInputSchema deskState", () => {
     const parsed = sendMessageInputSchema.parse({
       content: "oi",
       model: "gpt-4o",
+    });
+    expect(parsed.model).toBe("gpt-4o");
+  });
+
+  it("accepts forceTool web_search", () => {
+    const parsed = sendMessageInputSchema.parse({
+      content: "sobre cancelamento",
+      forceTool: "web_search",
+    });
+    expect(parsed.forceTool).toBe("web_search");
+  });
+
+  it("rejects unknown forceTool", () => {
+    expect(() =>
+      sendMessageInputSchema.parse({
+        content: "oi",
+        forceTool: "bash",
+      }),
+    ).toThrow();
+  });
+});
+
+describe("regenerateMessageInputSchema", () => {
+  it("accepts empty body", () => {
+    const parsed = regenerateMessageInputSchema.parse({});
+    expect(parsed.model).toBeUndefined();
+  });
+
+  it("accepts model and deskState", () => {
+    const parsed = regenerateMessageInputSchema.parse({
+      model: "gpt-4o",
+      deskState: { screenKey: "chat" },
     });
     expect(parsed.model).toBe("gpt-4o");
   });

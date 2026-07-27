@@ -51,7 +51,7 @@ function sessionStatusLabel(status: RuleDiscoverySessionDetail["status"]): strin
 }
 
 function eventTypeTag(type: RuleDiscoveryEvent["type"]): string {
-  return type.replaceAll("_", " ").toUpperCase();
+  return type.split("_").join(" ").toUpperCase();
 }
 
 function eventIcon(type: RuleDiscoveryEvent["type"]) {
@@ -85,13 +85,13 @@ function eventIcon(type: RuleDiscoveryEvent["type"]) {
 function chipStatusClass(status: DocumentStageStatus): string {
   switch (status) {
     case "active":
-      return "border-foreground/40 bg-muted ring-1 ring-foreground/20";
+      return "border-hairline-strong bg-surface-raise-2 text-foreground";
     case "done":
-      return "border-border/60 bg-muted/50 text-foreground";
+      return "border-hairline bg-muted/50 text-foreground";
     case "failed":
-      return "border-border/60 bg-muted/30 text-muted-foreground";
+      return "border-hairline bg-muted/30 text-muted-foreground";
     case "pending":
-      return "border-border/60 bg-muted/30 text-muted-foreground";
+      return "border-hairline bg-muted/30 text-muted-foreground";
     default: {
       const _exhaustive: never = status;
       return _exhaustive;
@@ -195,8 +195,8 @@ export function RuleReviewReasoningPanel({
   }, [isProcessing, session.id]);
 
   return (
-    <section className="overflow-hidden rounded-xl border border-border/60 bg-card">
-      <header className="flex items-center justify-between gap-4 border-b border-border/60 px-5 py-4">
+    <section className="surface-premium overflow-hidden rounded-xl">
+      <header className="flex items-center justify-between gap-4 border-b border-hairline px-5 py-4">
         <button
           type="button"
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
@@ -230,7 +230,7 @@ export function RuleReviewReasoningPanel({
         <div className="flex shrink-0 items-center gap-2">
           <span
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-md border border-border/60 px-2.5 py-1 text-[11px] font-medium whitespace-nowrap",
+              "inline-flex items-center gap-1.5 rounded-md border border-hairline px-2.5 py-1 text-[11px] font-medium whitespace-nowrap",
               isProcessing
                 ? "bg-muted/50 text-muted-foreground"
                 : "bg-muted text-foreground",
@@ -239,7 +239,7 @@ export function RuleReviewReasoningPanel({
             <span
               className={cn(
                 "size-1.5 rounded-full bg-foreground",
-                isProcessing && "animate-pulse bg-muted-foreground",
+                isProcessing && "animate-pulse bg-progress",
               )}
             />
             {isProcessing ? "Analisando" : sessionStatusLabel(session.status)}
@@ -268,7 +268,7 @@ export function RuleReviewReasoningPanel({
       >
         <div className="overflow-hidden">
           {session.documents.length > 0 ? (
-            <div className="flex flex-wrap gap-2 border-b border-border/60 px-5 py-3">
+            <div className="flex flex-wrap gap-2 border-b border-hairline px-5 py-3">
               {session.documents.map((document) => {
                 const chipStatus = getDocumentChipStatus(
                   document,
@@ -288,7 +288,7 @@ export function RuleReviewReasoningPanel({
                     <span className="max-w-40 truncate">{document.originalName}</span>
                     <span
                       className={cn(
-                        "font-mono text-[10px] uppercase tracking-wide",
+                        "font-technical text-[10px] uppercase tracking-wide",
                         document.status === "EXTRACTED"
                           ? "text-foreground"
                           : document.status === "FAILED"
@@ -312,13 +312,13 @@ export function RuleReviewReasoningPanel({
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                     <span>Documentos</span>
-                    <span className="font-mono tabular-nums">
+                    <span className="font-technical tabular-nums">
                       {documentsDone}/{documentTotal || "—"}
                     </span>
                   </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-surface-raise-2">
                     <div
-                      className="h-full rounded-full bg-foreground transition-[width] duration-500 ease-out"
+                      className="h-full rounded-full bg-progress transition-[width] duration-500 ease-out"
                       style={{ width: `${progressPct}%` }}
                     />
                   </div>
@@ -331,7 +331,7 @@ export function RuleReviewReasoningPanel({
                   >
                     <span className="relative grid size-8 shrink-0 place-items-center rounded-full border border-border bg-muted text-foreground">
                       <LiveIcon className="size-4" />
-                      <span className="absolute inset-0 animate-ping rounded-full border border-foreground/30" />
+                      <span className="absolute inset-0 animate-ping rounded-full border border-progress/40" />
                     </span>
                     <div className="min-w-0 flex-1 space-y-1">
                       <p className="text-xs font-medium text-foreground">
@@ -342,7 +342,7 @@ export function RuleReviewReasoningPanel({
                           {liveDetail}
                         </p>
                       ) : null}
-                      <span className="inline-block rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <span className="inline-block rounded-md bg-muted px-1.5 py-0.5 font-technical text-[10px] uppercase tracking-wide text-muted-foreground">
                         {eventTypeTag(liveStep.type)}
                       </span>
                     </div>
@@ -355,17 +355,17 @@ export function RuleReviewReasoningPanel({
                 )}
               </div>
 
-              <div className="flex items-center justify-between border-t border-border/60 pt-3">
+              <div className="flex items-center justify-between border-t border-hairline pt-3">
                 <div className="flex items-center gap-4">
                   <div className="text-center">
-                    <p className="font-mono text-lg font-medium tabular-nums transition-all duration-300">
+                    <p className="font-technical text-lg font-medium tabular-nums transition-all duration-300">
                       {candidateCount}
                     </p>
                     <p className="text-[10px] text-muted-foreground">candidatos</p>
                   </div>
                   {autoPromotedCount > 0 ? (
                     <div className="text-center">
-                      <p className="font-mono text-lg font-medium tabular-nums transition-all duration-300">
+                      <p className="font-technical text-lg font-medium tabular-nums transition-all duration-300">
                         {autoPromotedCount}
                       </p>
                       <p className="text-[10px] text-muted-foreground">auto</p>
@@ -387,7 +387,7 @@ export function RuleReviewReasoningPanel({
                   {documentStages.map((stage) => (
                     <li
                       key={stage.documentId}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/30 px-3 py-2"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-hairline bg-muted/30 px-3 py-2"
                     >
                       <div className="flex min-w-0 items-center gap-2">
                         <FileText className="size-3.5 shrink-0 text-muted-foreground" />
@@ -418,7 +418,7 @@ export function RuleReviewReasoningPanel({
               ) : null}
 
               {summaryEvent ? (
-                <p className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                <p className="rounded-lg border border-hairline bg-muted/30 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
                   {summaryEvent.message}
                 </p>
               ) : session.error ? (
@@ -436,7 +436,7 @@ export function RuleReviewReasoningPanel({
               </button>
 
               {showFullLog ? (
-                <div className="max-h-60 overflow-y-auto rounded-lg border border-border/60 bg-muted/20 p-3">
+                <div className="max-h-60 overflow-y-auto rounded-lg border border-hairline bg-muted/20 p-3">
                   <ol className="relative flex flex-col gap-2">
                     <span
                       aria-hidden
@@ -452,12 +452,12 @@ export function RuleReviewReasoningPanel({
                           <span className="relative z-10 grid size-8 shrink-0 place-items-center rounded-full border border-border bg-muted text-muted-foreground">
                             <Icon className="size-4" />
                           </span>
-                          <div className="min-w-0 flex-1 rounded-lg border border-border/60 bg-muted/40 px-3 py-2">
+                          <div className="min-w-0 flex-1 rounded-lg border border-hairline bg-muted/40 px-3 py-2">
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-xs text-foreground">
                                 {event.message}
                               </p>
-                              <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                              <span className="shrink-0 font-technical text-[10px] uppercase tracking-wide text-muted-foreground">
                                 {eventTypeTag(event.type)}
                               </span>
                             </div>

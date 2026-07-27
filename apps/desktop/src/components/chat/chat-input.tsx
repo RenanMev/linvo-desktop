@@ -6,11 +6,17 @@ import {
   type ChangeEvent,
   type KeyboardEvent,
 } from "react";
-import type { LlmModelOption, Procedure } from "@linvo/shared";
-import { ArrowUp } from "lucide-react";
+import {
+  getToolLabel,
+  type ForceTool,
+  type LlmModelOption,
+  type Procedure,
+} from "@linvo/shared";
+import { ArrowUp, Paperclip, X } from "lucide-react";
 
 import { ChatModelPicker } from "@/components/chat/chat-model-picker";
 import { ChatReplyPreview } from "@/components/chat/chat-reply-preview";
+import { ChatToolsMenu } from "@/components/chat/chat-tools-menu";
 import { Button } from "@/components/ui/button";
 import { canSendMessage } from "@/lib/chat/chat-state";
 import {
@@ -27,8 +33,13 @@ import {
 } from "@/lib/procedure/slash-procedure";
 import { cn } from "@/lib/utils";
 
+export type ChatSendOptions = {
+  forceTool?: ForceTool;
+  onAccepted?: () => void;
+};
+
 type ChatInputProps = {
-  onSend: (content: string) => void;
+  onSend: (content: string, options?: ChatSendOptions) => void;
   isResponding: boolean;
   replyTarget: ChatReplyRef | null;
   onCancelReply: () => void;
@@ -51,6 +62,7 @@ export function ChatInput({
   onOpenProcedureChecklist,
 }: ChatInputProps) {
   const [value, setValue] = useState("");
+  const [forceTool, setForceTool] = useState<ForceTool | null>(null);
   const [publishedSlugs, setPublishedSlugs] = useState<string[]>([]);
   const [slashError, setSlashError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -177,12 +189,32 @@ export function ChatInput({
 
   function handleSend() {
     if (!canSend) return;
-    onSend(value);
-    setValue("");
-    setSlashError(null);
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
+    const submittedValue = value;
+    const submittedForceTool = forceTool;
+
+    onSend(
+      submittedValue,
+      {
+        ...(submittedForceTool
+          ? { forceTool: submittedForceTool }
+          : {}),
+        onAccepted: () => {
+          setValue((current) =>
+            current === submittedValue ? "" : current,
+          );
+          setForceTool((current) =>
+            current === submittedForceTool ? null : current,
+          );
+          setSlashError(null);
+          if (
+            textareaRef.current &&
+            textareaRef.current.value === submittedValue
+          ) {
+            textareaRef.current.style.height = "auto";
+          }
+        },
+      },
+    );
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -237,8 +269,10 @@ export function ChatInput({
     textareaRef.current?.focus();
   }, [replyTarget]);
 
+  const controlsDisabled = disabled || isResponding || resolving;
+
   return (
-    <div className="border-t bg-background px-4 py-4">
+    <div className="mx-auto w-full max-w-3xl shrink-0 px-6 pb-5 pt-2">
       {replyTarget && (
         <ChatReplyPreview replyTarget={replyTarget} onCancel={onCancelReply} />
       )}
@@ -248,7 +282,7 @@ export function ChatInput({
           <ul
             role="listbox"
             aria-label="Procedures publicados"
-            className="absolute bottom-full left-0 right-0 z-10 mb-2 max-h-48 overflow-y-auto rounded-xl border bg-popover p-1 shadow-md"
+            className="scrollbar-elegant absolute bottom-full left-0 right-0 z-10 mb-2 max-h-48 overflow-y-auto rounded-premium border border-hairline bg-popover p-1 shadow-xl"
           >
             {filteredSlugs.map((slug, index) => (
               <li key={slug} role="presentation">
@@ -257,10 +291,10 @@ export function ChatInput({
                   role="option"
                   aria-selected={index === activeIndex}
                   className={cn(
-                    "flex w-full rounded-lg px-3 py-2 text-left text-sm",
+                    "flex w-full rounded-lg px-3 py-2 text-left font-technical text-sm",
                     index === activeIndex
-                      ? "bg-accent text-accent-foreground"
-                      : "hover:bg-muted",
+                      ? "nav-pill-active"
+                      : "text-foreground/70 hover:bg-surface-hover hover:text-foreground",
                   )}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => void openProcedureBySlug(slug)}
@@ -274,10 +308,26 @@ export function ChatInput({
 
         <div
           className={cn(
-            "flex flex-col gap-1 rounded-2xl border bg-muted/40 p-2",
-            disabled && "opacity-60",
+            "surface-premium flex flex-col gap-1 rounded-premium p-2 shadow-lg transition-colors focus-within:border-hairline-strong",
+            disabled && "opacity-50",
           )}
         >
+          {forceTool ? (
+            <div className="flex items-center gap-1 px-1 pt-1">
+              <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-surface-raise-2 px-2 py-0.5 text-xs text-foreground/80">
+                {getToolLabel(forceTool)}
+                <button
+                  type="button"
+                  className="rounded-full p-0.5 hover:bg-surface-hover"
+                  title="Remover ferramenta"
+                  disabled={controlsDisabled}
+                  onClick={() => setForceTool(null)}
+                >
+                  <X className="size-3" />
+                </button>
+              </span>
+            </div>
+          ) : null}
           <textarea
             ref={textareaRef}
             value={value}
@@ -287,22 +337,39 @@ export function ChatInput({
               replyTarget ? "Escreva sua resposta..." : "Pergunte qualquer coisa..."
             }
             rows={1}
-            disabled={disabled || isResponding || resolving}
+            disabled={controlsDisabled}
             className="max-h-40 min-h-9 w-full resize-none bg-transparent px-2 py-2 text-sm leading-relaxed outline-none placeholder:text-muted-foreground"
           />
           <div className="flex items-center justify-between gap-2 px-1">
-            <ChatModelPicker
-              models={models}
-              value={modelId}
-              onChange={handleModelChange}
-              disabled={disabled || isResponding || resolving}
-            />
+            <div className="flex min-w-0 items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled
+                title="Em breve"
+                className="text-muted-foreground"
+              >
+                <Paperclip />
+              </Button>
+              <ChatToolsMenu
+                value={forceTool}
+                onChange={setForceTool}
+                disabled={controlsDisabled}
+              />
+              <ChatModelPicker
+                models={models}
+                value={modelId}
+                onChange={handleModelChange}
+                disabled={controlsDisabled}
+              />
+            </div>
             <Button
               size="icon-sm"
               onClick={handleSend}
               disabled={!canSend || resolving}
               title="Enviar"
-              className="shrink-0 rounded-xl"
+              className="shrink-0 rounded-full"
             >
               <ArrowUp />
             </Button>
@@ -315,7 +382,7 @@ export function ChatInput({
           {slashError}
         </p>
       ) : (
-        <p className="mt-2 text-center text-xs text-muted-foreground">
+        <p className="mt-2.5 text-center font-technical text-[10px] tracking-wide text-muted-foreground/70">
           Enter para enviar · Shift+Enter para nova linha
         </p>
       )}

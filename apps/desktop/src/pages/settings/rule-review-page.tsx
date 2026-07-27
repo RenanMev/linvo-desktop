@@ -10,7 +10,6 @@ import {
   ArrowLeft,
   BookOpen,
   Check,
-  ChevronDown,
   ChevronRight,
   ClipboardCheck,
   FileText,
@@ -24,12 +23,6 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RuleReviewReasoningPanel } from "@/pages/settings/rule-review-reasoning-panel";
 import { useWorkspace } from "@/context/workspace-context";
@@ -134,7 +127,9 @@ function SectionHeading({
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="space-y-0.5">
-        <h2 className="text-sm font-medium">{title}</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </h2>
         {description ? (
           <p className="text-[11px] text-muted-foreground">{description}</p>
         ) : null}
@@ -181,8 +176,8 @@ function PromoteCheck({
         className={cn(
           "grid size-4 place-items-center rounded border transition-colors",
           checked
-            ? "border-foreground bg-foreground text-background"
-            : "border-border bg-transparent text-transparent",
+            ? "border-accent-active bg-accent-active text-accent-active-foreground"
+            : "border-hairline-strong bg-transparent text-transparent",
           disabled && "pointer-events-none",
         )}
       >
@@ -479,7 +474,7 @@ export function RuleReviewPage() {
             <ArrowLeft className="size-3.5" />
             Voltar
           </Button>
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-10 text-center">
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-10 text-center">
             <ClipboardCheck className="size-5 text-muted-foreground/70" />
             <p className="text-xs font-medium">Workspace não encontrado</p>
           </div>
@@ -502,7 +497,7 @@ export function RuleReviewPage() {
             <ArrowLeft className="size-3.5" />
             Voltar
           </Button>
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-10 text-center">
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-10 text-center">
             <ClipboardCheck className="size-5 text-muted-foreground/70" />
             <p className="text-xs font-medium">Acesso restrito ao proprietário</p>
             <p className="max-w-xs text-[11px] text-muted-foreground">
@@ -560,54 +555,49 @@ export function RuleReviewPage() {
             title="Modo da IA"
             description="Vale para o próximo upload e para a sessão aberta."
           />
-          <div className="rounded-xl border border-border/60 bg-card p-4">
+          <div className="rounded-xl border border-hairline bg-muted/40 p-4">
             <div className="flex flex-col gap-6 sm:flex-row sm:gap-7">
               <div className="min-w-0 flex-1">
-                <label className="mb-2 block font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                <label className="mb-2 block font-technical text-[10px] uppercase tracking-wide text-muted-foreground">
                   Aprovação
                 </label>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      aria-label="Modo de aprovação"
-                      className={cn(
-                        "inline-flex w-full items-center justify-between gap-1.5 rounded-lg border border-border/60 bg-background px-3 py-2 text-xs font-medium transition-colors",
-                        "hover:bg-muted/60 disabled:opacity-50",
-                      )}
-                    >
-                      {approvalModeLabel(approvalMode)}
-                      <ChevronDown className="size-3 text-muted-foreground" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="min-w-36">
-                    <DropdownMenuItem
-                      className="text-xs"
-                      onClick={() =>
-                        void handleControlsChange({ approvalMode: "QUESTION" })
-                      }
-                    >
-                      Questionar
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-xs"
-                      onClick={() =>
-                        void handleControlsChange({ approvalMode: "ALLOW" })
-                      }
-                    >
-                      Permitir
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <div
+                  role="radiogroup"
+                  aria-label="Modo de aprovação"
+                  className="flex gap-1.5"
+                >
+                  {(["QUESTION", "ALLOW"] as const).map((mode) => {
+                    const active = approvalMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        disabled={busy}
+                        onClick={() =>
+                          void handleControlsChange({ approvalMode: mode })
+                        }
+                        className={cn(
+                          "flex-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-50",
+                          active
+                            ? "nav-pill-active"
+                            : "border border-hairline text-foreground/70 hover:bg-surface-hover",
+                        )}
+                      >
+                        {approvalModeLabel(mode)}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="min-w-0 flex-1">
-                <label className="mb-2 block font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                <label className="mb-2 block font-technical text-[10px] uppercase tracking-wide text-muted-foreground">
                   Limiar de confiança
                 </label>
                 <div className="space-y-2">
-                  <span className="font-mono text-lg tabular-nums">
+                  <span className="font-technical text-lg tabular-nums">
                     {confidenceThreshold.toLocaleString("pt-BR", {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
@@ -621,7 +611,7 @@ export function RuleReviewPage() {
                     value={confidenceThreshold}
                     aria-label="Limiar de confiança"
                     disabled={busy}
-                    className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-muted accent-foreground disabled:opacity-50"
+                    className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-surface-raise-2 accent-accent-active disabled:opacity-50"
                     onChange={(event) =>
                       setConfidenceThreshold(Number(event.target.value))
                     }
@@ -632,7 +622,7 @@ export function RuleReviewPage() {
                       void handleControlsChange({ confidenceThreshold })
                     }
                   />
-                  <div className="flex justify-between font-mono text-[10px] text-muted-foreground">
+                  <div className="flex justify-between font-technical text-[10px] text-muted-foreground">
                     <span>0,0</span>
                     <span>0,5</span>
                     <span>1,0</span>
@@ -645,7 +635,7 @@ export function RuleReviewPage() {
 
         <section className="space-y-3">
           <SectionHeading title="Upload" />
-          <div className="rounded-xl border border-border/60 bg-card p-4">
+          <div className="rounded-xl border border-hairline bg-muted/40 p-4">
             <input
               ref={fileInputRef}
               type="file"
@@ -678,8 +668,8 @@ export function RuleReviewPage() {
               className={cn(
                 "flex flex-col items-center gap-3 rounded-lg border border-dashed px-4 py-8 text-center transition-colors",
                 dragOver
-                  ? "border-foreground/40 bg-muted/50"
-                  : "border-border/70 bg-muted/20 hover:border-border hover:bg-muted/35",
+                  ? "border-hairline-strong bg-surface-raise-2"
+                  : "border-hairline bg-muted/20 hover:border-hairline-strong hover:bg-surface-hover",
                 busy && "pointer-events-none opacity-60",
               )}
             >
@@ -700,7 +690,7 @@ export function RuleReviewPage() {
                 <Upload className="size-3.5" />
                 {busy ? "Enviando…" : "Enviar arquivos"}
               </Button>
-              <p className="font-mono text-[11px] text-muted-foreground">
+              <p className="font-technical text-[11px] text-muted-foreground">
                 TXT, PDF ou XLSX · até 4 arquivos · 5 MB cada
               </p>
             </div>
@@ -710,7 +700,7 @@ export function RuleReviewPage() {
         <section className="space-y-3">
           <SectionHeading title="Sessões recentes" count={sessions.length} />
           {sessions.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-8 text-center">
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-8 text-center">
               <FileText className="size-5 text-muted-foreground/70" />
               <p className="text-xs font-medium">Nenhuma sessão ainda</p>
               <p className="max-w-xs text-[11px] text-muted-foreground">
@@ -733,13 +723,13 @@ export function RuleReviewPage() {
                       type="button"
                       onClick={() => setSelectedSessionId(session.id)}
                       className={cn(
-                        "group flex min-w-0 flex-1 items-center justify-between gap-4 rounded-xl border border-border/60 bg-card px-4 py-3 text-left transition-colors",
+                        "group flex min-w-0 flex-1 items-center justify-between gap-4 rounded-xl border px-4 py-3 text-left transition-colors",
                         selected
-                          ? "border-border bg-muted/40"
-                          : "hover:bg-muted/50",
+                          ? "border-hairline-strong bg-surface-raise-2"
+                          : "border-hairline bg-muted/40 hover:bg-surface-hover",
                       )}
                     >
-                      <span className="font-mono text-xs text-foreground">
+                      <span className="font-technical text-xs text-foreground">
                         {new Date(session.createdAt).toLocaleString("pt-BR")}
                       </span>
                       <span className="flex shrink-0 items-center gap-3">
@@ -811,7 +801,7 @@ export function RuleReviewPage() {
               />
 
               {sessionDetail.candidates.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-8 text-center">
+                <div className="rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-8 text-center">
                   <p className="text-xs font-medium">Nenhum candidato ainda</p>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
                     Eles aparecem aqui conforme a IA classifica o documento.
@@ -834,7 +824,7 @@ export function RuleReviewPage() {
                       <article
                         key={candidate.id}
                         className={cn(
-                          "rounded-xl border border-border/60 bg-card p-4 transition-opacity",
+                          "rounded-xl border border-hairline bg-muted/40 p-4 transition-opacity",
                           !isPending && "opacity-70",
                         )}
                       >
@@ -843,7 +833,7 @@ export function RuleReviewPage() {
                             <CategoryIcon className="size-3.5" />
                             {candidateCategoryLabel(candidate.category)}
                           </span>
-                          <span className="inline-flex items-center gap-1.5 rounded-md bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          <span className="inline-flex items-center gap-1.5 rounded-md bg-muted/50 px-2 py-0.5 font-technical text-[11px] font-medium tabular-nums text-muted-foreground">
                             <Sparkles className="size-3" />
                             {Math.round(candidate.confidence * 100)}%
                           </span>
@@ -852,7 +842,7 @@ export function RuleReviewPage() {
                               "rounded-md px-2 py-0.5 text-[11px] font-medium",
                               isPending && "bg-muted text-foreground",
                               isAccepted &&
-                                "bg-foreground text-background",
+                                "bg-accent-active text-accent-active-foreground",
                               isRejected &&
                                 "bg-muted/50 text-muted-foreground line-through",
                             )}
@@ -883,7 +873,7 @@ export function RuleReviewPage() {
                               title: event.target.value,
                             })
                           }
-                          className="w-full rounded-lg border border-border/60 bg-muted/40 px-3 py-2.5 text-xs font-medium text-foreground outline-none transition-colors focus:border-ring disabled:cursor-not-allowed disabled:opacity-80"
+                          className="w-full rounded-lg border border-hairline bg-neutral-deep px-3 py-2.5 text-xs font-medium text-foreground shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-80"
                           aria-label="Título do candidato"
                         />
                         <textarea
@@ -897,7 +887,7 @@ export function RuleReviewPage() {
                             })
                           }
                           rows={2}
-                          className="mt-2 w-full resize-y rounded-lg border border-border/60 bg-muted/40 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground outline-none transition-colors focus:border-ring disabled:cursor-not-allowed disabled:opacity-80"
+                          className="mt-2 w-full resize-y rounded-lg border border-hairline bg-neutral-deep px-3 py-2.5 text-xs leading-relaxed text-muted-foreground shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-80"
                           aria-label="Conteúdo do candidato"
                         />
 
@@ -945,7 +935,7 @@ export function RuleReviewPage() {
                                 type="button"
                                 disabled={busy}
                                 onClick={() => void handleAccept(candidate)}
-                                className="rounded-lg bg-foreground px-4 py-2 text-xs font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+                                className="rounded-lg bg-accent-active px-4 py-2 text-xs font-semibold text-accent-active-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
                               >
                                 Aceitar
                               </button>
@@ -953,7 +943,7 @@ export function RuleReviewPage() {
                                 type="button"
                                 disabled={busy}
                                 onClick={() => void handleReject(candidate)}
-                                className="rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                                className="rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
                               >
                                 Negar
                               </button>
@@ -963,7 +953,7 @@ export function RuleReviewPage() {
                               type="button"
                               disabled={busy}
                               onClick={() => void handleUndo(candidate)}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
                             >
                               <Undo2 className="size-3.5" />
                               Desfazer
@@ -978,7 +968,7 @@ export function RuleReviewPage() {
             </section>
           </>
         ) : sessions.length > 0 ? (
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-10 text-center">
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-10 text-center">
             <Sparkles className="size-5 text-muted-foreground/70" />
             <p className="text-xs font-medium">Selecione uma sessão</p>
             <p className="max-w-xs text-[11px] text-muted-foreground">

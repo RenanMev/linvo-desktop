@@ -1,12 +1,13 @@
 import { emit, emitTo, listen } from "@tauri-apps/api/event";
-import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, Window } from "@tauri-apps/api/window";
 import type { Procedure } from "@linvo/shared";
 
 import type { ChecklistProgress } from "@/lib/chat/desk-state";
 
+export const MAIN_LABEL = "main";
 export const CHECKLIST_LABEL = "checklist";
 export const CHECKLIST_PAYLOAD_EVENT = "checklist://payload";
+export const CHECKLIST_DISMISS_EVENT = "checklist://dismiss";
 export const CHECKLIST_PROGRESS_EVENT = "checklist://progress";
 export const CHECKLIST_CLOSED_EVENT = "checklist://closed";
 
@@ -33,11 +34,26 @@ export function rememberChecklistConversation(
   activeChecklistConversationId = conversationId;
 }
 
+export function getActiveChecklistConversationId(): string | null {
+  return activeChecklistConversationId;
+}
+
+async function ensureMainVisible(): Promise<void> {
+  const main = await Window.getByLabel(MAIN_LABEL);
+  if (!main) {
+    return;
+  }
+  await main.show();
+  await main.unminimize();
+  await main.setFocus();
+}
+
 export async function openChecklist(
   payload: ChecklistWindowPayload,
 ): Promise<void> {
-  await invoke("checklist_open");
-  await emitTo(CHECKLIST_LABEL, CHECKLIST_PAYLOAD_EVENT, payload);
+  rememberChecklistConversation(payload.conversationId);
+  await ensureMainVisible();
+  await emitTo(MAIN_LABEL, CHECKLIST_PAYLOAD_EVENT, payload);
 }
 
 export async function closeChecklist(options?: {
@@ -45,14 +61,19 @@ export async function closeChecklist(options?: {
 }): Promise<void> {
   const conversationId = activeChecklistConversationId;
   activeChecklistConversationId = null;
-  if (options?.emitClosed && conversationId) {
+  if (!conversationId) {
+    return;
+  }
+  await emitTo(MAIN_LABEL, CHECKLIST_DISMISS_EVENT, {
+    conversationId,
+  } satisfies ChecklistClosedPayload);
+  if (options?.emitClosed) {
     await emit(CHECKLIST_CLOSED_EVENT, { conversationId });
   }
-  await invoke("checklist_close");
 }
 
 export async function isChecklistOpen(): Promise<boolean> {
-  return invoke<boolean>("checklist_is_open");
+  return activeChecklistConversationId !== null;
 }
 
 export async function emitChecklistProgress(
@@ -80,16 +101,24 @@ export async function listenChecklistPayload(
   return unlisten;
 }
 
+export async function listenChecklistDismiss(
+  handler: (payload: ChecklistClosedPayload) => void,
+): Promise<() => void> {
+  const unlisten = await listen<ChecklistClosedPayload>(
+    CHECKLIST_DISMISS_EVENT,
+    (event) => {
+      handler(event.payload);
+    },
+  );
+  return unlisten;
+}
+
 export async function listenChecklistProgress(
   handler: (payload: ChecklistProgressPayload) => void,
 ): Promise<() => void> {
-  const self = getCurrentWindow().label;
   const unlisten = await listen<ChecklistProgressPayload>(
     CHECKLIST_PROGRESS_EVENT,
     (event) => {
-      if (self === CHECKLIST_LABEL) {
-        return;
-      }
       handler(event.payload);
     },
   );
@@ -103,7 +132,7 @@ export async function listenChecklistClosed(
   const unlisten = await listen<ChecklistClosedPayload>(
     CHECKLIST_CLOSED_EVENT,
     (event) => {
-      if (self === CHECKLIST_LABEL) {
+      if (self === MAIN_LABEL) {
         return;
       }
       handler(event.payload);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DeskState, Procedure, ToolRequest } from "@linvo/shared";
+import type { DeskState, ForceTool, Procedure, ToolRequest } from "@linvo/shared";
 
 import { AuthApiError } from "@/lib/auth/auth-api";
 import { PANEL_SESSION_UNAVAILABLE_MESSAGE } from "@/hooks/use-panel-session";
@@ -70,6 +70,7 @@ export function useChat({
     null,
   );
   const abortRef = useRef<AbortController | null>(null);
+  const streamConversationIdRef = useRef<string | null>(null);
   const activeConversationRef = useRef<string | null>(conversationId);
   const assistantIdRef = useRef<string | null>(null);
   const workspaceIdRef = useRef<string | null>(workspaceId);
@@ -91,9 +92,70 @@ export function useChat({
     [],
   );
 
+  const beginRun = useCallback((targetConversationId: string) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    streamConversationIdRef.current = targetConversationId;
+    return controller;
+  }, []);
+
+  const isCurrentRun = useCallback(
+    (targetConversationId: string, controller: AbortController) =>
+      activeConversationRef.current === targetConversationId &&
+      streamConversationIdRef.current === targetConversationId &&
+      abortRef.current === controller &&
+      !controller.signal.aborted,
+    [],
+  );
+
+  const updateMessagesForRun = useCallback(
+    (
+      targetConversationId: string,
+      controller: AbortController,
+      update: (current: ChatMessage[]) => ChatMessage[],
+    ) => {
+      if (!isCurrentRun(targetConversationId, controller)) {
+        return;
+      }
+      setMessages((current) => {
+        const next = update(current);
+        persistMessages(targetConversationId, next);
+        return next;
+      });
+    },
+    [isCurrentRun, persistMessages],
+  );
+
+  const finishRun = useCallback(
+    (targetConversationId: string, controller: AbortController) => {
+      if (abortRef.current !== controller) {
+        return;
+      }
+      abortRef.current = null;
+      streamConversationIdRef.current = null;
+      if (activeConversationRef.current === targetConversationId) {
+        setIsResponding(false);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
+    const runningController = abortRef.current;
+    if (
+      conversationId &&
+      runningController &&
+      !runningController.signal.aborted &&
+      streamConversationIdRef.current === conversationId
+    ) {
+      setIsLoadingHistory(false);
+      return;
+    }
+
     abortRef.current?.abort();
     abortRef.current = null;
+    streamConversationIdRef.current = null;
     setReplyTarget(null);
     setIsResponding(false);
     setPendingToolRequest(null);
@@ -184,6 +246,18 @@ export function useChat({
       request: ToolRequest,
       assistantId: string,
     ) => {
+      if (chainOpenedSlugsRef.current.size > 0) {
+        await continueToolResultRef.current?.({
+          conversationId: activeConversationId,
+          request,
+          approved: true,
+          result:
+            "Já houve tentativa de abrir procedimento nesta resposta. Não chame open_procedure de novo; responda ao usuário com o conhecimento disponível (ou diga que não há procedimento publicado).",
+          assistantId,
+        });
+        return;
+      }
+
       const decision = decideProcedureOpenRequest(
         request,
         chainOpenedSlugsRef.current,
@@ -194,31 +268,41 @@ export function useChat({
           conversationId: activeConversationId,
           request,
           approved: true,
-          result: `Checklist já aberto: ${decision.slug}`,
+          result: `Checklist já aberto: ${decision.slug}. Não tente abrir novamente; responda ao usuário.`,
           assistantId,
         });
         return;
       }
 
       if (decision.kind !== "open") {
-        setPendingToolRequest(request);
-        setIsResponding(false);
-        setError("Não foi possível abrir o procedimento solicitado.");
+        await continueToolResultRef.current?.({
+          conversationId: activeConversationId,
+          request,
+          approved: true,
+          result:
+            "Não foi possível abrir o procedimento solicitado (pedido inválido). Responda ao usuário sem tentar abrir de novo.",
+          assistantId,
+        });
         return;
       }
 
       const wsId = workspaceIdRef.current;
       const slug = decision.slug;
+      chainOpenedSlugsRef.current.add(slug);
+
       if (!wsId) {
-        setPendingToolRequest(request);
-        setIsResponding(false);
-        setError("Não foi possível abrir o procedimento solicitado.");
+        await continueToolResultRef.current?.({
+          conversationId: activeConversationId,
+          request,
+          approved: true,
+          result: `Falha ao abrir o checklist "${slug}": workspace indisponível. Não tente abrir novamente; responda ao usuário explicando a falha.`,
+          assistantId,
+        });
         return;
       }
 
       try {
         const procedure = await procedureApi.getProcedureBySlug(wsId, slug);
-        chainOpenedSlugsRef.current.add(slug);
         onOpenProcedureChecklistRef.current?.(procedure);
         await continueToolResultRef.current?.({
           conversationId: activeConversationId,
@@ -228,15 +312,16 @@ export function useChat({
           assistantId,
         });
       } catch (caught) {
-        setPendingToolRequest(null);
-        setIsResponding(false);
-        setError(
-          formatChatError(caught, "Não foi possível abrir o procedimento"),
+        const detail = formatChatError(
+          caught,
+          "Não foi possível abrir o procedimento",
         );
+        setError(detail);
         await continueToolResultRef.current?.({
           conversationId: activeConversationId,
           request,
-          approved: false,
+          approved: true,
+          result: `Falha ao abrir o checklist "${slug}": ${detail}. Não tente abrir novamente; use search_knowledge ou responda ao usuário explicando a falha.`,
           assistantId,
         });
       }
@@ -260,9 +345,7 @@ export function useChat({
         assistantId,
       } = options;
 
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
+      const controller = beginRun(activeConversationId);
 
       setIsResponding(true);
       setError(null);
@@ -273,11 +356,9 @@ export function useChat({
       let currentAssistantId = assistantId;
 
       try {
-        setMessages((prev) => {
-          const next = finalizeMessage(prev, currentAssistantId, "streaming");
-          persistMessages(activeConversationId, next);
-          return next;
-        });
+        updateMessagesForRun(activeConversationId, controller, (current) =>
+          finalizeMessage(current, currentAssistantId, "streaming"),
+        );
 
         for await (const chunk of chatApi.submitToolResult({
           conversationId: activeConversationId,
@@ -288,6 +369,9 @@ export function useChat({
           model: modelRef.current ?? undefined,
           signal: controller.signal,
           onAssistantDone: (message) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
             currentAssistantId = message.id;
             assistantIdRef.current = currentAssistantId;
             const mapped = mapApiMessageToChat(message);
@@ -297,49 +381,64 @@ export function useChat({
                   ? mapped
                   : item,
               );
-              if (activeConversationRef.current === activeConversationId) {
+              if (isCurrentRun(activeConversationId, controller)) {
                 persistMessages(activeConversationId, next);
               }
               return next;
             });
           },
           onToolUsed: (tool) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
             setMessages((prev) => {
               const next = appendToolUse(prev, currentAssistantId, tool);
-              if (activeConversationRef.current === activeConversationId) {
+              if (isCurrentRun(activeConversationId, controller)) {
                 persistMessages(activeConversationId, next);
               }
               return next;
             });
           },
           onActivity: (activity) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
             setMessages((prev) => {
               const next = upsertActivity(prev, currentAssistantId, activity);
-              if (activeConversationRef.current === activeConversationId) {
+              if (isCurrentRun(activeConversationId, controller)) {
                 persistMessages(activeConversationId, next);
               }
               return next;
             });
           },
           onReasoningChunk: (text) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
             setMessages((prev) => {
               const next = appendReasoning(prev, currentAssistantId, text);
-              if (activeConversationRef.current === activeConversationId) {
+              if (isCurrentRun(activeConversationId, controller)) {
                 persistMessages(activeConversationId, next);
               }
               return next;
             });
           },
           onModel: (model) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
             setMessages((prev) => {
               const next = setMessageModel(prev, currentAssistantId, model);
-              if (activeConversationRef.current === activeConversationId) {
+              if (isCurrentRun(activeConversationId, controller)) {
                 persistMessages(activeConversationId, next);
               }
               return next;
             });
           },
           onToolRequest: (nextRequest) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
             pausedForTool = true;
             if (isOpenProcedureToolRequest(nextRequest)) {
               autoOpenRequest = nextRequest;
@@ -348,10 +447,18 @@ export function useChat({
             }
           },
         })) {
-          if (activeConversationRef.current !== activeConversationId) {
+          if (!isCurrentRun(activeConversationId, controller)) {
             break;
           }
-          setMessages((prev) => appendToMessage(prev, currentAssistantId, chunk));
+          updateMessagesForRun(
+            activeConversationId,
+            controller,
+            (current) => appendToMessage(current, currentAssistantId, chunk),
+          );
+        }
+
+        if (!isCurrentRun(activeConversationId, controller)) {
+          return;
         }
 
         if (autoOpenRequest) {
@@ -364,36 +471,41 @@ export function useChat({
         }
 
         if (!pausedForTool) {
-          setMessages((prev) => {
-            const next = finalizeMessage(prev, currentAssistantId, "done");
-            persistMessages(activeConversationId, next);
-            return next;
-          });
+          updateMessagesForRun(activeConversationId, controller, (current) =>
+            finalizeMessage(current, currentAssistantId, "done"),
+          );
         }
       } catch (caught) {
-        setMessages((prev) => {
-          const next = finalizeMessage(prev, currentAssistantId, "error");
-          persistMessages(activeConversationId, next);
-          return next;
-        });
-        if (activeConversationRef.current === activeConversationId) {
+        if (!isCurrentRun(activeConversationId, controller)) {
+          return;
+        }
+        updateMessagesForRun(activeConversationId, controller, (current) =>
+          finalizeMessage(current, currentAssistantId, "error"),
+        );
           setError(
             formatChatError(caught, "Não foi possível concluir a ferramenta"),
           );
-        }
       } finally {
-        if (activeConversationRef.current === activeConversationId) {
-          setIsResponding(false);
-        }
+        finishRun(activeConversationId, controller);
       }
     },
-    [persistMessages, openProcedureAndContinue],
+    [
+      beginRun,
+      finishRun,
+      isCurrentRun,
+      openProcedureAndContinue,
+      persistMessages,
+      updateMessagesForRun,
+    ],
   );
 
   continueToolResultRef.current = continueToolResult;
 
   const sendMessage = useCallback(
-    async (rawContent: string) => {
+    async (
+      rawContent: string,
+      options?: { forceTool?: ForceTool; onAccepted?: () => void },
+    ) => {
       if (pendingToolRequest) return;
       if (!canSendMessage(rawContent, isResponding)) return;
 
@@ -402,7 +514,11 @@ export function useChat({
       if (!activeConversationId) {
         try {
           const conversation = await chatApi.createConversation();
+          if (activeConversationRef.current !== conversationId) {
+            return;
+          }
           activeConversationId = conversation.id;
+          activeConversationRef.current = conversation.id;
           onConversationCreated?.(conversation.id);
         } catch (caught) {
           setError(formatChatError(caught, "Não foi possível criar a conversa"));
@@ -411,24 +527,28 @@ export function useChat({
       }
 
       const activeReply = replyTarget ?? undefined;
+      const forceTool = options?.forceTool;
       const optimisticUserId = crypto.randomUUID();
       const optimisticAssistantId = crypto.randomUUID();
       const now = Date.now();
 
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
+      const controller = beginRun(activeConversationId);
 
-      setMessages((prev) => [
-        ...prev,
-        createUserMessage(optimisticUserId, rawContent, now, activeReply),
-        createAssistantPlaceholder(optimisticAssistantId, now + 1),
-      ]);
+      updateMessagesForRun(
+        activeConversationId,
+        controller,
+        (current) => [
+          ...current,
+          createUserMessage(optimisticUserId, rawContent, now, activeReply),
+          createAssistantPlaceholder(optimisticAssistantId, now + 1),
+        ],
+      );
       setReplyTarget(null);
       setIsResponding(true);
       setError(null);
       setPendingToolRequest(null);
       chainOpenedSlugsRef.current = new Set();
+      options?.onAccepted?.();
 
       let assistantId: string = optimisticAssistantId;
       assistantIdRef.current = assistantId;
@@ -442,8 +562,12 @@ export function useChat({
           replyToMessageId: activeReply?.id,
           deskState: deskStateRef.current,
           model: modelRef.current ?? undefined,
+          forceTool,
           signal: controller.signal,
           onUserMessage: (message) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
             const mapped = mapApiMessageToChat(message);
             setMessages((prev) => {
               const next = prev.map((item) =>
@@ -451,7 +575,7 @@ export function useChat({
                   ? { ...mapped, replyTo: activeReply }
                   : item,
               );
-              if (activeConversationRef.current === activeConversationId) {
+              if (isCurrentRun(activeConversationId, controller)) {
                 persistMessages(activeConversationId, next);
               }
               return next;
@@ -465,6 +589,9 @@ export function useChat({
             }
           },
           onAssistantDone: (message) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
             assistantId = message.id;
             assistantIdRef.current = assistantId;
             const mapped = mapApiMessageToChat(message);
@@ -474,49 +601,64 @@ export function useChat({
                   ? mapped
                   : item,
               );
-              if (activeConversationRef.current === activeConversationId) {
+              if (isCurrentRun(activeConversationId, controller)) {
                 persistMessages(activeConversationId, next);
               }
               return next;
             });
           },
           onToolUsed: (tool) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
             setMessages((prev) => {
               const next = appendToolUse(prev, assistantId, tool);
-              if (activeConversationRef.current === activeConversationId) {
+              if (isCurrentRun(activeConversationId, controller)) {
                 persistMessages(activeConversationId, next);
               }
               return next;
             });
           },
           onActivity: (activity) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
             setMessages((prev) => {
               const next = upsertActivity(prev, assistantId, activity);
-              if (activeConversationRef.current === activeConversationId) {
+              if (isCurrentRun(activeConversationId, controller)) {
                 persistMessages(activeConversationId, next);
               }
               return next;
             });
           },
           onReasoningChunk: (text) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
             setMessages((prev) => {
               const next = appendReasoning(prev, assistantId, text);
-              if (activeConversationRef.current === activeConversationId) {
+              if (isCurrentRun(activeConversationId, controller)) {
                 persistMessages(activeConversationId, next);
               }
               return next;
             });
           },
           onModel: (model) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
             setMessages((prev) => {
               const next = setMessageModel(prev, assistantId, model);
-              if (activeConversationRef.current === activeConversationId) {
+              if (isCurrentRun(activeConversationId, controller)) {
                 persistMessages(activeConversationId, next);
               }
               return next;
             });
           },
           onToolRequest: (request) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
             pausedForTool = true;
             if (isOpenProcedureToolRequest(request)) {
               autoOpenRequest = request;
@@ -525,10 +667,18 @@ export function useChat({
             }
           },
         })) {
-          if (activeConversationRef.current !== activeConversationId) {
+          if (!isCurrentRun(activeConversationId, controller)) {
             break;
           }
-          setMessages((prev) => appendToMessage(prev, assistantId, chunk));
+          updateMessagesForRun(
+            activeConversationId,
+            controller,
+            (current) => appendToMessage(current, assistantId, chunk),
+          );
+        }
+
+        if (!isCurrentRun(activeConversationId, controller)) {
+          return;
         }
 
         if (autoOpenRequest) {
@@ -541,34 +691,29 @@ export function useChat({
         }
 
         if (!pausedForTool) {
-          setMessages((prev) => {
-            const next = finalizeMessage(prev, assistantId, "done");
-            persistMessages(activeConversationId, next);
-            return next;
-          });
+          updateMessagesForRun(activeConversationId, controller, (current) =>
+            finalizeMessage(current, assistantId, "done"),
+          );
         }
       } catch (caught) {
-        setMessages((prev) => {
-          const next = finalizeMessage(prev, assistantId, "error");
-          persistMessages(activeConversationId, next);
-          return next;
-        });
-        if (activeConversationRef.current === activeConversationId) {
+        if (!isCurrentRun(activeConversationId, controller)) {
+          return;
+        }
+        updateMessagesForRun(activeConversationId, controller, (current) =>
+          finalizeMessage(current, assistantId, "error"),
+        );
           setError(
             formatChatError(caught, "Não foi possível obter resposta do assistente"),
           );
-        }
       } finally {
-        if (
-          activeConversationRef.current === activeConversationId &&
-          !autoOpenRequest
-        ) {
-          setIsResponding(false);
-        }
+        finishRun(activeConversationId, controller);
       }
     },
     [
       conversationId,
+      beginRun,
+      finishRun,
+      isCurrentRun,
       isResponding,
       pendingToolRequest,
       replyTarget,
@@ -576,6 +721,207 @@ export function useChat({
       onConversationTitleChange,
       persistMessages,
       openProcedureAndContinue,
+      updateMessagesForRun,
+    ],
+  );
+
+  const regenerateMessage = useCallback(
+    async (assistantMessageId: string) => {
+      if (!conversationId || pendingToolRequest || isResponding) {
+        return;
+      }
+
+      const target = messages.find((message) => message.id === assistantMessageId);
+      if (
+        !target ||
+        target.role !== "assistant" ||
+        (target.status !== "done" && target.status !== "error")
+      ) {
+        return;
+      }
+
+      const lastRegenerable = [...messages]
+        .reverse()
+        .find(
+          (message) =>
+            message.role === "assistant" &&
+            (message.status === "done" || message.status === "error"),
+        );
+      if (!lastRegenerable || lastRegenerable.id !== assistantMessageId) {
+        return;
+      }
+
+      const activeConversationId = conversationId;
+
+      const controller = beginRun(activeConversationId);
+
+      let assistantId = assistantMessageId;
+      assistantIdRef.current = assistantId;
+      setIsResponding(true);
+      setError(null);
+      setPendingToolRequest(null);
+      chainOpenedSlugsRef.current = new Set();
+
+      setMessages((prev) => {
+        const next = prev.map((message) =>
+          message.id === assistantId
+            ? {
+                ...message,
+                content: "",
+                status: "streaming" as const,
+                toolUses: undefined,
+                activities: undefined,
+                reasoning: undefined,
+                model: undefined,
+              }
+            : message,
+        );
+        persistMessages(activeConversationId, next);
+        return next;
+      });
+
+      let pausedForTool = false;
+      let autoOpenRequest: ToolRequest | null = null;
+
+      try {
+        for await (const chunk of chatApi.regenerateMessage({
+          conversationId: activeConversationId,
+          messageId: assistantId,
+          deskState: deskStateRef.current,
+          model: modelRef.current ?? undefined,
+          signal: controller.signal,
+          onAssistantDone: (message) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
+            assistantId = message.id;
+            assistantIdRef.current = assistantId;
+            const mapped = mapApiMessageToChat(message);
+            setMessages((prev) => {
+              const next = prev.map((item) =>
+                item.id === assistantMessageId || item.id === assistantId
+                  ? mapped
+                  : item,
+              );
+              if (isCurrentRun(activeConversationId, controller)) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onToolUsed: (tool) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
+            setMessages((prev) => {
+              const next = appendToolUse(prev, assistantId, tool);
+              if (isCurrentRun(activeConversationId, controller)) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onActivity: (activity) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
+            setMessages((prev) => {
+              const next = upsertActivity(prev, assistantId, activity);
+              if (isCurrentRun(activeConversationId, controller)) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onReasoningChunk: (text) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
+            setMessages((prev) => {
+              const next = appendReasoning(prev, assistantId, text);
+              if (isCurrentRun(activeConversationId, controller)) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onModel: (model) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
+            setMessages((prev) => {
+              const next = setMessageModel(prev, assistantId, model);
+              if (isCurrentRun(activeConversationId, controller)) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onToolRequest: (request) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
+            pausedForTool = true;
+            if (isOpenProcedureToolRequest(request)) {
+              autoOpenRequest = request;
+            } else {
+              setPendingToolRequest(request);
+            }
+          },
+        })) {
+          if (!isCurrentRun(activeConversationId, controller)) {
+            break;
+          }
+          updateMessagesForRun(
+            activeConversationId,
+            controller,
+            (current) => appendToMessage(current, assistantId, chunk),
+          );
+        }
+
+        if (!isCurrentRun(activeConversationId, controller)) {
+          return;
+        }
+
+        if (autoOpenRequest) {
+          await openProcedureAndContinue(
+            activeConversationId,
+            autoOpenRequest,
+            assistantId,
+          );
+          return;
+        }
+
+        if (!pausedForTool) {
+          updateMessagesForRun(activeConversationId, controller, (current) =>
+            finalizeMessage(current, assistantId, "done"),
+          );
+        }
+      } catch (caught) {
+        if (!isCurrentRun(activeConversationId, controller)) {
+          return;
+        }
+        updateMessagesForRun(activeConversationId, controller, (current) =>
+          finalizeMessage(current, assistantId, "error"),
+        );
+          setError(
+            formatChatError(caught, "Não foi possível regenerar a resposta"),
+          );
+      } finally {
+        finishRun(activeConversationId, controller);
+      }
+    },
+    [
+      conversationId,
+      beginRun,
+      finishRun,
+      isCurrentRun,
+      messages,
+      pendingToolRequest,
+      isResponding,
+      persistMessages,
+      openProcedureAndContinue,
+      updateMessagesForRun,
     ],
   );
 
@@ -650,6 +996,7 @@ export function useChat({
     error,
     pendingToolRequest,
     sendMessage,
+    regenerateMessage,
     startReply,
     cancelReply,
     resolveToolRequest,

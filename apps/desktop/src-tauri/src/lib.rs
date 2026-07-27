@@ -117,12 +117,13 @@ fn run_animation(
 async fn animate_window_bounds(
     window: WebviewWindow,
     to: TargetBounds,
-    duration_ms: u64,
+    duration_ms: Option<u64>,
 ) -> Result<bool, String> {
+    let duration = duration_ms.unwrap_or(200);
     let generation = ANIMATION_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
 
     tauri::async_runtime::spawn_blocking(move || {
-        run_animation(&window, &to, duration_ms, generation)
+        run_animation(&window, &to, duration, generation)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -135,6 +136,13 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .setup(|app| {
+            use tauri::Manager;
+            if let Some(panel) = app.get_webview_window("panel") {
+                panel::init_native_blur(&panel);
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             animate_window_bounds,
             app::app_quit,
@@ -149,6 +157,7 @@ pub fn run() {
             panel::panel_open,
             panel::panel_close,
             panel::panel_is_open,
+            panel::panel_set_blur,
             checklist::checklist_open,
             checklist::checklist_close,
             checklist::checklist_is_open,

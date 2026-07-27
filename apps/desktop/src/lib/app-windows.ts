@@ -42,20 +42,11 @@ export async function isPanelVisible(): Promise<boolean> {
   }
 }
 
-export async function isChecklistVisible(): Promise<boolean> {
-  try {
-    return await invoke<boolean>("checklist_is_open");
-  } catch {
-    return false;
-  }
-}
-
 export async function isAnyWindowVisible(): Promise<boolean> {
   const main = await getMainWindow();
   const mainVisible = main ? await main.isVisible() : false;
   const panelVisible = await isPanelVisible();
-  const checklistVisible = await isChecklistVisible();
-  return mainVisible || panelVisible || checklistVisible;
+  return mainVisible || panelVisible;
 }
 
 export async function toggleAppVisibility(): Promise<void> {

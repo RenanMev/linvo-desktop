@@ -10,6 +10,7 @@ import {
 import { authDebug } from "@/lib/auth/auth-debug";
 import { authReducer, initialAuthState } from "@/lib/auth/auth-state";
 import { refreshStoredTokens } from "@/lib/auth/http";
+import { clearStoredAppearance } from "@/lib/appearance/appearance-store";
 import {
   applySyncedTokens,
   clearTokens,
@@ -127,6 +128,8 @@ export function usePanelSession() {
             return false;
           }
           await clearTokens();
+          clearStoredAppearance();
+          await emitAuthSync("unauthorized");
           pendingTokensRef.current = null;
           dispatch({ type: "BOOT_SESSION_INVALID" });
           if (allowClose) {
@@ -204,6 +207,7 @@ export function usePanelSession() {
     let unlisten: (() => void) | undefined;
 
     void listenAuthSync((payload) => {
+      clearStoredAppearance();
       pendingTokensRef.current = null;
       setSessionReady(false);
       setSessionError(null);
@@ -229,6 +233,7 @@ export function usePanelSession() {
       await logoutRequest(stored.refreshToken);
     }
     await clearTokens();
+    clearStoredAppearance();
     pendingTokensRef.current = null;
     await clearChatLocalCache();
     clearStoredWorkspaceId();

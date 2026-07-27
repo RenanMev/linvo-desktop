@@ -71,7 +71,7 @@ describe("applyWindowBoundsWithFallback", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("animate_window_bounds", {
       to: { x: 24, y: 1016, width: 140, height: 40 },
-      duration_ms: 200,
+      durationMs: 200,
     });
     expect(setSizeMock).not.toHaveBeenCalled();
     expect(setPositionMock).not.toHaveBeenCalled();

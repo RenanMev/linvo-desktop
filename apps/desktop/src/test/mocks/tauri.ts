@@ -56,7 +56,9 @@ export const checklistWindowMock = createWindowMock("checklist");
 
 const emitMock = vi.fn(() => Promise.resolve());
 const emitToMock = vi.fn(() => Promise.resolve());
-const listenMock = vi.fn(() => Promise.resolve(() => {}));
+const listenMock = vi.fn((..._args: unknown[]) =>
+  Promise.resolve(() => {}),
+);
 
 class Window {
   static getByLabel(label: string) {
@@ -79,9 +81,9 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
-  emit: (...args: unknown[]) => emitMock(...args),
-  emitTo: (...args: unknown[]) => emitToMock(...args),
-  listen: (...args: unknown[]) => listenMock(...args),
+  emit: emitMock,
+  emitTo: emitToMock,
+  listen: listenMock,
 }));
 
 vi.mock("@tauri-apps/api/window", () => ({

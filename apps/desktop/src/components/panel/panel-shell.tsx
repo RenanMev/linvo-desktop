@@ -22,8 +22,8 @@ export function PanelShell({ session, sessionReady, sessionError }: PanelShellPr
       <WorkspaceProvider enabled={sessionReady}>
         <div
           className={cn(
-            "flex h-full w-full flex-col overflow-hidden border bg-card text-card-foreground shadow-2xl",
-            maximized ? "rounded-none border-transparent" : "rounded-xl",
+            "window-shell-glass flex h-full w-full flex-col overflow-hidden text-card-foreground",
+            maximized ? "rounded-none border-transparent" : "rounded-premium",
           )}
         >
           <PanelTitlebar
@@ -38,7 +38,7 @@ export function PanelShell({ session, sessionReady, sessionError }: PanelShellPr
           ) : null}
           <div className="flex min-h-0 flex-1">
             <PanelSidebar session={session} />
-            <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
               <Outlet />
             </div>
           </div>

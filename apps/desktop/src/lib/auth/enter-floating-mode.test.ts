@@ -33,7 +33,7 @@ describe("enterFloatingMode", () => {
     expect(invokeMock).toHaveBeenCalledWith(
       "animate_window_bounds",
       expect.objectContaining({
-        to: expect.objectContaining({ width: 140, height: 40 }),
+        to: expect.objectContaining({ width: 168, height: 34 }),
       }),
     );
     expect(setSizeMock).toHaveBeenCalled();

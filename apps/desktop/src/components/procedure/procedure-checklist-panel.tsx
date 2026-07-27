@@ -51,22 +51,28 @@ export function ProcedureChecklistPanel({
     }));
   }
 
+  const completedCount = steps.filter((_, index) => checked[index]).length;
+  const progressPercent =
+    steps.length > 0 ? Math.round((completedCount / steps.length) * 100) : 0;
+
   return (
     <div
-      className="flex h-full min-h-0 w-full flex-col bg-card text-card-foreground"
+      className="flex h-full min-h-0 w-full flex-col text-card-foreground"
       aria-label="Checklist do procedure"
     >
-      <div className="flex shrink-0 items-start gap-2 border-b px-2 py-3">
+      <div className="flex shrink-0 items-start gap-2 border-b border-hairline px-2.5 py-3">
         <span
           data-tauri-drag-region
           title="Mover"
-          className="mt-0.5 flex h-6 shrink-0 cursor-grab items-center rounded-md px-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground active:cursor-grabbing"
+          className="mt-0.5 flex h-6 shrink-0 cursor-grab items-center rounded-full px-0.5 text-foreground/35 transition-colors hover:bg-surface-hover hover:text-foreground active:cursor-grabbing"
         >
           <GripVertical className="pointer-events-none size-3" />
         </span>
         <div className="min-w-0 flex-1" data-tauri-drag-region>
-          <p className="truncate text-sm font-medium">{title}</p>
-          <p className="truncate text-xs text-muted-foreground">/{slug}</p>
+          <p className="truncate text-sm font-medium tracking-tight">{title}</p>
+          <p className="truncate font-technical text-[10px] tracking-wide text-muted-foreground">
+            /{slug}
+          </p>
         </div>
         <Button
           type="button"
@@ -75,9 +81,39 @@ export function ProcedureChecklistPanel({
           onClick={onClose}
           title="Fechar"
           aria-label="Fechar"
+          className="rounded-full text-foreground/50 hover:text-foreground"
         >
           <X />
         </Button>
+      </div>
+
+      <div className="shrink-0 px-3 py-2.5">
+        <div className="mb-1.5 flex items-baseline justify-between font-technical text-[10px] tracking-wide text-muted-foreground">
+          <span>
+            {completedCount}/{steps.length}
+          </span>
+          <span
+            className={progressPercent === 100 ? "text-progress" : undefined}
+          >
+            {progressPercent}%
+          </span>
+        </div>
+        <div
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progressPercent}
+          aria-label="Progresso do checklist"
+          className="h-0.5 w-full overflow-hidden rounded-full bg-surface-raise-2"
+        >
+          <div
+            className="h-full rounded-full bg-progress transition-[width] duration-300 ease-out"
+            style={{
+              width: `${progressPercent}%`,
+              boxShadow: "0 0 6px rgba(16,185,129,0.6)",
+            }}
+          />
+        </div>
       </div>
 
       <div className="scrollbar-elegant min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
@@ -88,8 +124,9 @@ export function ProcedureChecklistPanel({
               <li key={`${index}-${step}`}>
                 <div
                   className={cn(
-                    "flex items-start gap-2 rounded-lg px-2 py-2 text-sm",
-                    "hover:bg-muted/60",
+                    "flex items-start gap-2.5 rounded-lg px-2 py-2 text-[13px] transition-colors",
+                    "hover:bg-surface-hover",
+                    isChecked && "text-foreground/45",
                   )}
                 >
                   <button
@@ -99,15 +136,22 @@ export function ProcedureChecklistPanel({
                     aria-label={step}
                     onClick={() => toggle(index)}
                     className={cn(
-                      "mt-0.5 grid size-4 shrink-0 place-items-center rounded border transition-colors",
+                      "mt-0.5 grid size-4 shrink-0 place-items-center rounded-[5px] border transition-all duration-150",
                       isChecked
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border bg-transparent text-transparent",
+                        ? "border-progress bg-progress text-progress-foreground"
+                        : "border-hairline-strong bg-transparent text-transparent hover:border-hairline-strong",
                     )}
                   >
                     <Check className="size-3" strokeWidth={3} />
                   </button>
-                  <span className="leading-snug">{step}</span>
+                  <span
+                    className={cn(
+                      "leading-snug",
+                      isChecked && "line-through decoration-white/25",
+                    )}
+                  >
+                    {step}
+                  </span>
                 </div>
               </li>
             );

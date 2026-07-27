@@ -159,6 +159,7 @@ export function ChatPage() {
     error,
     pendingToolRequest,
     sendMessage,
+    regenerateMessage,
     startReply,
     cancelReply,
     resolveToolRequest,
@@ -190,7 +191,7 @@ export function ChatPage() {
         </div>
       ) : null}
       {isLoadingConversations && messages.length === 0 ? (
-        <div className="border-b border-border/60 px-4 py-2 text-xs text-muted-foreground">
+        <div className="border-b border-hairline px-4 py-2 text-xs text-muted-foreground">
           Carregando conversas...
         </div>
       ) : null}
@@ -207,8 +208,9 @@ export function ChatPage() {
             isResponding={isResponding}
             replyTarget={replyTarget}
             pendingToolRequest={pendingToolRequest}
-            onSend={(content) => void sendMessage(content)}
+            onSend={(content, options) => void sendMessage(content, options)}
             onReply={startReply}
+            onRegenerate={(message) => void regenerateMessage(message.id)}
             onCancelReply={cancelReply}
             onApproveTool={() => void resolveToolRequest(true)}
             onDenyTool={() => void resolveToolRequest(false)}

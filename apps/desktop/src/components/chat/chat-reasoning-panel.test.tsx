@@ -29,6 +29,7 @@ describe("ChatReasoningPanel", () => {
 
   it("shows Analisando… while streaming without content", () => {
     render(<ChatReasoningPanel isStreaming activities={[]} />);
-    expect(screen.getAllByText("Analisando…").length).toBeGreaterThan(0);
+    expect(screen.getByText("Analisando…")).toBeInTheDocument();
+    expect(screen.getAllByText("Analisando…")).toHaveLength(1);
   });
 });

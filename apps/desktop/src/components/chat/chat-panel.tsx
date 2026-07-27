@@ -1,6 +1,9 @@
 import type { Procedure } from "@linvo/shared";
 
-import { ChatInput } from "@/components/chat/chat-input";
+import {
+  ChatInput,
+  type ChatSendOptions,
+} from "@/components/chat/chat-input";
 import { ChatMessageList } from "@/components/chat/chat-message-list";
 import { ChatToolbar } from "@/components/chat/chat-toolbar";
 import type { ChatMessage, ChatReplyRef, ChatToolRequest } from "@/lib/chat/types";
@@ -12,8 +15,9 @@ type ChatPanelProps = {
   isResponding: boolean;
   replyTarget: ChatReplyRef | null;
   pendingToolRequest?: ChatToolRequest | null;
-  onSend: (content: string) => void;
+  onSend: (content: string, options?: ChatSendOptions) => void;
   onReply: (message: ChatMessage) => void;
+  onRegenerate?: (message: ChatMessage) => void;
   onCancelReply: () => void;
   onApproveTool?: () => void;
   onDenyTool?: () => void;
@@ -33,6 +37,7 @@ export function ChatPanel({
   pendingToolRequest = null,
   onSend,
   onReply,
+  onRegenerate,
   onCancelReply,
   onApproveTool,
   onDenyTool,
@@ -61,7 +66,9 @@ export function ChatPanel({
           key={conversationKey ?? "draft"}
           messages={messages}
           onReply={onReply}
-          onSuggestion={onSend}
+          onRegenerate={onRegenerate}
+          regenerateDisabled={isResponding || Boolean(pendingToolRequest)}
+          onSuggestion={(prompt) => onSend(prompt)}
           suggestionsDisabled={inputDisabled || isResponding}
           pendingToolRequest={pendingToolRequest}
           onApproveTool={onApproveTool}

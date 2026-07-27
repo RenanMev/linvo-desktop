@@ -39,6 +39,7 @@
     "allow-panel-open",
     "allow-panel-close",
     "allow-panel-is-open",
+    "allow-panel-set-blur",
     "allow-checklist-open",
     "allow-checklist-close",
     "allow-checklist-is-open",

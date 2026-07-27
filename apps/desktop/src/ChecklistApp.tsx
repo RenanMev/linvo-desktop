@@ -42,7 +42,7 @@ export function ChecklistApp() {
   }
 
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-xl border bg-card text-card-foreground shadow-2xl">
+    <div className="window-shell relative h-full w-full overflow-hidden rounded-premium text-card-foreground">
       {payload ? (
         <ProcedureChecklistPanel
           key={`${payload.conversationId}-${payload.procedure.id}`}
@@ -65,7 +65,7 @@ export function ChecklistApp() {
           }}
         />
       ) : (
-        <div className="flex h-full items-center justify-center px-4 text-center text-xs text-muted-foreground">
+        <div className="flex h-full items-center justify-center px-4 text-center font-technical text-[11px] tracking-wide text-muted-foreground">
           Aguardando checklist...
         </div>
       )}

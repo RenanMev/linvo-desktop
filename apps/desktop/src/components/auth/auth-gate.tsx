@@ -51,7 +51,7 @@ export function AuthGate() {
 
   if (auth.isChecking) {
     return (
-      <div className="flex h-full w-full items-center justify-center gap-3 bg-background text-sm text-muted-foreground">
+      <div className="flex h-full w-full items-center justify-center gap-3 rounded-premium bg-neutral-deep text-sm text-muted-foreground">
         <span className="size-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
         Validando sessão...
       </div>

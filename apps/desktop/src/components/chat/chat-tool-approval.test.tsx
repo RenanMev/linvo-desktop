@@ -53,4 +53,25 @@ describe("ChatToolApproval", () => {
     expect(screen.getByText("Cancelamento de planos")).toBeInTheDocument();
     expect(screen.getByText("Abrir CRM")).toBeInTheDocument();
   });
+
+  it("mostra fallback genérico para tool desconhecida", () => {
+    render(
+      <ChatToolApproval
+        request={{
+          requestId: "r3",
+          name: "custom_tool",
+          label: "Ferramenta custom",
+          args: { path: "/tmp/file" },
+          requiresApproval: true,
+        }}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText("O assistente pediu aprovação para usar esta ferramenta."),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/path: \/tmp\/file/)).toBeInTheDocument();
+  });
 });

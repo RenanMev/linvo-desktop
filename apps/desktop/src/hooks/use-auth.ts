@@ -15,6 +15,7 @@ import {
   type AuthPhase,
 } from "@/lib/auth/auth-state";
 import { enterLoggedInDesktop } from "@/lib/auth/enter-logged-in-desktop";
+import { clearStoredAppearance } from "@/lib/appearance/appearance-store";
 import { clearChatLocalCache } from "@/lib/chat/chat-local-store";
 import { clearStoredWorkspaceId } from "@/lib/workspace/workspace-store";
 import { setUnauthorizedHandler, refreshStoredTokens } from "@/lib/auth/http";
@@ -52,6 +53,7 @@ export function useAuth() {
   }, []);
 
   const handleUnauthorized = useCallback(() => {
+    clearStoredAppearance();
     void (async () => {
       await notifyDesktopEvent("Sessão expirada. Faça login novamente.");
       await closePanel();
@@ -102,6 +104,8 @@ export function useAuth() {
               return;
             }
             await clearTokens();
+            clearStoredAppearance();
+            await emitAuthSync("unauthorized");
             dispatch({ type: "BOOT_SESSION_INVALID" });
             return;
           }
@@ -113,6 +117,8 @@ export function useAuth() {
           return;
         }
         await clearTokens();
+        clearStoredAppearance();
+        await emitAuthSync("unauthorized");
         dispatch({ type: "BOOT_SESSION_INVALID" });
       }
     })();
@@ -143,6 +149,7 @@ export function useAuth() {
     let unlisten: (() => void) | undefined;
 
     void listenAuthSync((payload) => {
+      clearStoredAppearance();
       void closePanel();
       dispatch({
         type: payload.type === "logout" ? "LOGOUT" : "UNAUTHORIZED",
@@ -196,6 +203,7 @@ export function useAuth() {
       await logoutRequest(stored.refreshToken);
     }
     await clearTokens();
+    clearStoredAppearance();
     await clearChatLocalCache();
     clearStoredWorkspaceId();
     await emitAuthSync("logout");

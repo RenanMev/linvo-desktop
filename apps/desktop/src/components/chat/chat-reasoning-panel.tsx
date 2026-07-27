@@ -39,7 +39,7 @@ function ActivityIcon({
   if (status === "running") {
     return (
       <LoaderCircle
-        className="size-3.5 shrink-0 animate-spin text-foreground"
+        className="size-3.5 shrink-0 animate-spin text-muted-foreground"
         aria-hidden
       />
     );
@@ -131,6 +131,8 @@ export function ChatReasoningPanel({
   const hasContent = hasActivities || hasReasoning || hasTools || Boolean(model);
   const timeline = buildTimeline(activities, toolUses ?? []);
   const reasoningLong = (reasoning?.trim().length ?? 0) > 280;
+  const isIdleStreaming =
+    isStreaming && timeline.length === 0 && !hasReasoning && !hasTools;
 
   const userToggledRef = useRef(false);
   const [collapsed, setCollapsed] = useState(!isStreaming);
@@ -138,7 +140,7 @@ export function ChatReasoningPanel({
   useEffect(() => {
     if (isStreaming) {
       userToggledRef.current = false;
-      setCollapsed(false);
+      setCollapsed(isIdleStreaming);
       return;
     }
     if (userToggledRef.current) {
@@ -149,7 +151,7 @@ export function ChatReasoningPanel({
     } else if (hasContent) {
       setCollapsed(false);
     }
-  }, [isStreaming, hasContent, reasoningLong]);
+  }, [isStreaming, hasContent, reasoningLong, isIdleStreaming]);
 
   if (!hasContent && !isStreaming) {
     return null;
@@ -163,38 +165,53 @@ export function ChatReasoningPanel({
     model,
   });
 
+  if (isIdleStreaming) {
+    return (
+      <div
+        className="mb-1 flex items-center gap-2 text-xs text-muted-foreground"
+        aria-live="polite"
+      >
+        <LoaderCircle className="size-3.5 shrink-0 animate-spin" aria-hidden />
+        <span className="truncate">{summaryLabel}</span>
+      </div>
+    );
+  }
+
+  const showBody =
+    !collapsed && (timeline.length > 0 || hasReasoning);
+
   return (
-    <div className="mb-3 w-full min-w-[12rem] overflow-hidden rounded-xl border border-border/70 bg-background/50 text-xs">
+    <div className="mb-2 w-full min-w-[12rem] text-xs">
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-background/40 hover:text-foreground"
+        className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left text-muted-foreground transition-colors hover:text-foreground"
         onClick={() => {
           userToggledRef.current = true;
           setCollapsed((value) => !value);
         }}
       >
-        <Sparkles className="size-3.5 shrink-0 text-foreground/70" aria-hidden />
-        <span className="flex-1 truncate font-medium text-foreground/80">
+        {isStreaming ? (
+          <LoaderCircle
+            className="size-3.5 shrink-0 animate-spin"
+            aria-hidden
+          />
+        ) : (
+          <Sparkles className="size-3.5 shrink-0 text-foreground/60" aria-hidden />
+        )}
+        <span className="flex-1 truncate font-medium text-foreground/75">
           {summaryLabel}
         </span>
-        {isStreaming && !collapsed ? (
-          <span className="flex gap-1" aria-hidden>
-            <span className="size-1 animate-bounce rounded-full bg-muted-foreground [animation-delay:0ms]" />
-            <span className="size-1 animate-bounce rounded-full bg-muted-foreground [animation-delay:150ms]" />
-            <span className="size-1 animate-bounce rounded-full bg-muted-foreground [animation-delay:300ms]" />
-          </span>
-        ) : null}
         <ChevronDown
           className={cn(
-            "size-3.5 shrink-0 transition-transform",
+            "size-3.5 shrink-0 opacity-60 transition-transform",
             collapsed ? "-rotate-90" : "rotate-0",
           )}
           aria-hidden
         />
       </button>
 
-      {!collapsed && (
-        <div className="space-y-2.5 border-t border-border/50 px-3 py-2.5">
+      {showBody ? (
+        <div className="mt-1.5 space-y-2 border-l border-hairline pl-3 ml-1.5">
           {timeline.length > 0 ? (
             <ul className="space-y-1.5">
               {timeline.map((item) => (
@@ -228,19 +245,15 @@ export function ChatReasoningPanel({
           ) : null}
 
           {hasReasoning ? (
-            <div className="max-h-48 overflow-y-auto rounded-lg bg-background/40 px-2 py-1.5">
+            <div className="max-h-48 overflow-y-auto">
               <ChatMarkdown
                 content={reasoning!.trim()}
                 className="text-xs text-muted-foreground [&_p]:my-1"
               />
             </div>
           ) : null}
-
-          {timeline.length === 0 && !hasReasoning && isStreaming ? (
-            <p className="text-muted-foreground">Analisando…</p>
-          ) : null}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

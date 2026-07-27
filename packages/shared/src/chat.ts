@@ -36,6 +36,20 @@ export const reasoningChunkSchema = z.object({
   text: z.string(),
 });
 
+export const chatErrorCodeSchema = z.enum([
+  "llm_error",
+  "not_configured",
+  "tool_expired",
+  "aborted",
+  "busy",
+  "internal",
+]);
+
+export const chatErrorEventSchema = z.object({
+  message: z.string(),
+  code: chatErrorCodeSchema.optional(),
+});
+
 export const modelInfoSchema = z.object({
   model: z.string().trim().min(1),
 });
@@ -129,11 +143,19 @@ export const messageListSchema = z.object({
   messages: z.array(messageSchema),
 });
 
+export const forceToolSchema = z.enum(["web_search", "search_knowledge"]);
+
 export const sendMessageInputSchema = z.object({
   content: z.string().trim().min(1, "informe uma mensagem"),
   replyToMessageId: z.string().optional(),
   deskState: deskStateSchema.optional(),
   model: z.string().trim().min(1).optional(),
+  forceTool: forceToolSchema.optional(),
+});
+
+export const regenerateMessageInputSchema = z.object({
+  model: z.string().trim().min(1).optional(),
+  deskState: deskStateSchema.optional(),
 });
 
 export type MessageRole = z.infer<typeof messageRoleSchema>;
@@ -144,6 +166,8 @@ export type MessageActivityStatus = z.infer<typeof messageActivityStatusSchema>;
 export type MessageActivityKind = z.infer<typeof messageActivityKindSchema>;
 export type MessageActivity = z.infer<typeof messageActivitySchema>;
 export type ReasoningChunk = z.infer<typeof reasoningChunkSchema>;
+export type ChatErrorCode = z.infer<typeof chatErrorCodeSchema>;
+export type ChatErrorEvent = z.infer<typeof chatErrorEventSchema>;
 export type ModelInfo = z.infer<typeof modelInfoSchema>;
 export type ToolRequest = z.infer<typeof toolRequestSchema>;
 export type DeskOpenProcedure = z.infer<typeof deskOpenProcedureSchema>;
@@ -153,4 +177,8 @@ export type LlmModelOption = z.infer<typeof llmModelOptionSchema>;
 export type LlmModelsResponse = z.infer<typeof llmModelsResponseSchema>;
 export type Conversation = z.infer<typeof conversationSchema>;
 export type Message = z.infer<typeof messageSchema>;
+export type ForceTool = z.infer<typeof forceToolSchema>;
 export type SendMessageInput = z.infer<typeof sendMessageInputSchema>;
+export type RegenerateMessageInput = z.infer<
+  typeof regenerateMessageInputSchema
+>;

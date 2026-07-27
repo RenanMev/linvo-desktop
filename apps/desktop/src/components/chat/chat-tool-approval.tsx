@@ -1,9 +1,8 @@
-import { Clipboard, ListChecks } from "lucide-react";
+import { Clipboard, ListChecks, Wrench } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
   isCreateProcedureToolRequest,
-  isOpenProcedureToolRequest,
   parseCreateProcedureArgs,
   resolveProcedureSlugFromToolRequest,
 } from "@/lib/chat/procedure-tool-request";
@@ -16,6 +15,24 @@ type ChatToolApprovalProps = {
   onDeny: () => void;
 };
 
+function formatArgsPreview(args: Record<string, unknown>): string | null {
+  const entries = Object.entries(args).filter(
+    ([, value]) => value !== undefined && value !== null && value !== "",
+  );
+  if (entries.length === 0) {
+    return null;
+  }
+  return entries
+    .slice(0, 4)
+    .map(([key, value]) => {
+      const text =
+        typeof value === "string" ? value : JSON.stringify(value);
+      const clipped = text.length > 80 ? `${text.slice(0, 80)}…` : text;
+      return `${key}: ${clipped}`;
+    })
+    .join(" · ");
+}
+
 export function ChatToolApproval({
   request,
   disabled = false,
@@ -23,20 +40,28 @@ export function ChatToolApproval({
   onDeny,
 }: ChatToolApprovalProps) {
   const isCreate = isCreateProcedureToolRequest(request);
-  const isOpenProcedure = isOpenProcedureToolRequest(request);
+  const isOpenProcedure = request.name === "open_procedure";
+  const isClipboard = request.name === "read_clipboard";
   const createArgs = isCreate ? parseCreateProcedureArgs(request.args) : null;
   const procedureSlug = isOpenProcedure
     ? resolveProcedureSlugFromToolRequest(request)
     : null;
+  const argsPreview =
+    !isCreate && !isOpenProcedure && !isClipboard
+      ? formatArgsPreview(request.args)
+      : null;
+
+  const Icon =
+    isCreate || isOpenProcedure
+      ? ListChecks
+      : isClipboard
+        ? Clipboard
+        : Wrench;
 
   return (
-    <div className="flex w-full max-w-sm flex-col gap-2 rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
+    <div className="flex w-full max-w-sm flex-col gap-2 rounded-xl border border-border bg-neutral-deep px-3 py-2.5 text-sm">
       <div className="flex items-start gap-2 text-foreground">
-        {isCreate || isOpenProcedure ? (
-          <ListChecks className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-        ) : (
-          <Clipboard className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-        )}
+        <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="font-medium">{request.label}</span>
           {isCreate && createArgs ? (
@@ -64,10 +89,19 @@ export function ChatToolApproval({
                 ? `Abrir checklist /${procedureSlug} no painel.`
                 : "Abrir checklist do procedimento no painel."}
             </span>
-          ) : (
+          ) : isClipboard ? (
             <span className="text-xs text-muted-foreground">
               O assistente pediu acesso à área de transferência.
             </span>
+          ) : (
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <p>O assistente pediu aprovação para usar esta ferramenta.</p>
+              {argsPreview ? (
+                <p className="break-words font-mono text-[0.7rem] text-foreground/80">
+                  {argsPreview}
+                </p>
+              ) : null}
+            </div>
           )}
         </div>
       </div>

@@ -48,7 +48,7 @@ function WorkspaceCard({
         "group relative flex w-[15rem] flex-col overflow-hidden rounded-xl border p-4 transition-colors",
         active
           ? "border-foreground/25 bg-foreground/[0.05]"
-          : "border-border/60 bg-muted/30 hover:border-border hover:bg-muted/45",
+          : "border-hairline bg-muted/30 hover:border-hairline-strong hover:bg-muted/45",
       )}
     >
       <div className="mb-4 flex items-start justify-end">
@@ -57,7 +57,7 @@ function WorkspaceCard({
             "inline-flex size-5.5 cursor-pointer items-center justify-center rounded-md border shadow-xs transition-colors",
             active
               ? "border-primary/40 bg-primary text-primary-foreground"
-              : "border-border/70 bg-background text-transparent hover:border-border",
+              : "border-hairline bg-neutral-deep text-transparent hover:border-hairline-strong",
             busy && "pointer-events-none opacity-60",
           )}
           title={active ? "Workspace ativo" : "Ativar workspace"}
@@ -83,7 +83,7 @@ function WorkspaceCard({
           "mb-3.5 grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl border text-base font-semibold",
           active
             ? "border-primary/30 bg-primary text-primary-foreground"
-            : "border-border/60 bg-muted/50 text-muted-foreground",
+            : "border-hairline bg-muted/50 text-muted-foreground",
         )}
       >
         {imageSrc ? (
@@ -109,7 +109,7 @@ function WorkspaceCard({
         </p>
       </div>
 
-      <div className="mt-4 flex justify-end border-t border-border/50 pt-3.5">
+      <div className="mt-4 flex justify-end border-t border-hairline pt-3.5">
         <Button
           type="button"
           size="icon-xs"
@@ -117,7 +117,7 @@ function WorkspaceCard({
           disabled={busy}
           aria-label={`Configurar ${workspace.name}`}
           title="Configurar"
-          className="border border-border/60 bg-background shadow-xs hover:bg-background"
+          className="border border-hairline bg-neutral-deep shadow-xs hover:bg-neutral-deep"
           onClick={onOpenSettings}
         >
           <Settings className="size-3.5" />
@@ -157,7 +157,7 @@ export function WorkspaceSettingsPage() {
     <ScrollArea className="h-full">
       <div className="mx-auto max-w-2xl space-y-6 px-6 py-6">
         <div className="flex items-start gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-border/60 bg-muted/40">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-hairline bg-muted/40">
             <Building2 className="size-4 text-muted-foreground" />
           </span>
           <div className="min-w-0 flex-1 space-y-1">
@@ -192,7 +192,7 @@ export function WorkspaceSettingsPage() {
             </div>
 
             {workspaces.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-10 text-center">
+              <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-10 text-center">
                 <Building2 className="size-5 text-muted-foreground/70" />
                 <div className="space-y-1">
                   <p className="text-xs font-medium">Nenhum workspace ainda</p>
@@ -228,10 +228,10 @@ export function WorkspaceSettingsPage() {
                   type="button"
                   disabled={busy}
                   onClick={() => navigate("/settings/workspace/new")}
-                  className="flex min-h-[10.75rem] w-[15rem] flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed border-border/70 bg-muted/20 text-muted-foreground transition-colors hover:border-border hover:bg-muted/40 hover:text-foreground"
+                  className="flex min-h-[10.75rem] w-[15rem] flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed border-hairline bg-muted/20 text-muted-foreground transition-colors hover:border-hairline-strong hover:bg-muted/40 hover:text-foreground"
                   aria-label="Criar workspace"
                 >
-                  <span className="grid size-8 place-items-center rounded-full border border-border/70">
+                  <span className="grid size-8 place-items-center rounded-full border border-hairline">
                     <Plus className="size-4" />
                   </span>
                   <span className="text-xs font-medium">Novo workspace</span>

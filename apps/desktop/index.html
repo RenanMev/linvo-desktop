@@ -1,10 +1,65 @@
 <!doctype html>
-<html lang="pt-BR" class="dark">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/png" href="/linvo-logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Linvo Desktop</title>
+    <script>
+      /*
+       * Aplica tema/blur/reduce-motion ANTES do primeiro paint, para não
+       * piscar a paleta errada. O React monta depois disso — tarde demais
+       * para evitar o flash. Esta é a MESMA regra de decisão de
+       * src/lib/appearance/appearance-tokens.ts + appearance-boot.ts,
+       * duplicada aqui em JS puro porque um <script> síncrono não pode
+       * importar um módulo ES antes do bundle carregar. Qualquer mudança
+       * na regra de decisão (appearance-boot.ts) precisa ser replicada aqui.
+       */
+      (function () {
+        var STORAGE_KEY = "linvo:appearance";
+        var STORAGE_VERSION = 1;
+        var DEFAULT_BLUR = "medium";
+        var DEFAULT_ACCENT = "purple";
+
+        var prefs = null;
+        try {
+          var raw = window.localStorage.getItem(STORAGE_KEY);
+          var parsed = raw ? JSON.parse(raw) : null;
+          if (parsed && parsed.version === STORAGE_VERSION && parsed.prefs) {
+            prefs = parsed.prefs;
+          }
+        } catch (e) {
+          prefs = null;
+        }
+
+        var themeMode = (prefs && prefs.themeMode) || "system";
+        var blurLevel = (prefs && prefs.blurLevel) || DEFAULT_BLUR;
+        var accentColor = (prefs && prefs.accentColor) || DEFAULT_ACCENT;
+        var reduceMotionPref = prefs ? prefs.reduceMotion : null;
+
+        var prefersDark =
+          window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches;
+        var prefersReducedMotion =
+          window.matchMedia &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        var dark =
+          themeMode === "dark" || (themeMode === "system" && prefersDark);
+        var reduceMotion =
+          reduceMotionPref === true || reduceMotionPref === false
+            ? reduceMotionPref
+            : Boolean(prefersReducedMotion);
+
+        var root = document.documentElement;
+        if (dark) {
+          root.classList.add("dark");
+        }
+        root.setAttribute("data-blur", blurLevel);
+        root.setAttribute("data-accent", accentColor);
+        root.setAttribute("data-reduce-motion", String(reduceMotion));
+      })();
+    </script>
   </head>
 
   <body>

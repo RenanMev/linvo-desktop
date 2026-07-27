@@ -55,7 +55,7 @@ export async function animateWindowBounds(
       width: to.size.width,
       height: to.size.height,
     },
-    duration_ms: options?.durationMs ?? DEFAULT_ANIMATION_DURATION_MS,
+    durationMs: options?.durationMs ?? DEFAULT_ANIMATION_DURATION_MS,
   });
 }
 

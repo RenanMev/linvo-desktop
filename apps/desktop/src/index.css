@@ -1,141 +1,240 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..600&family=JetBrains+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Neural Premium Graphite
+ * `:root` carrega a paleta CLARA (fallback seguro antes do boot script
+ * decidir o tema real — ver appearance-boot.ts). `:root.dark` sobrescreve
+ * com a paleta grafite, que é a baseline visual original do app.
+ * NÃO usar `color-scheme` aqui: o WebView2 passa a pintar um canvas
+ * opaco atrás da página e a transparência da janela Tauri quebra
+ * (aparece um retângulo cinza em volta da pílula flutuante).
+ */
 :root {
   --radius: 0.5rem;
 
-  --background: oklch(0.9911 0.0000 0.0000);
-  --foreground: oklch(0.0000 0.0000 0.0000);
-  --card: oklch(1.0000 0.0000 0.0000);
-  --card-foreground: oklch(0.0000 0.0000 0.0000);
-  --popover: oklch(0.9911 0.0000 0.0000);
-  --popover-foreground: oklch(0.0000 0.0000 0.0000);
-  --primary: oklch(0.0000 0.0000 0.0000);
-  --primary-foreground: oklch(1.0000 0.0000 0.0000);
-  --secondary: oklch(0.9551 0.0000 0.0000);
-  --secondary-foreground: oklch(0.0000 0.0000 0.0000);
-  --muted: oklch(0.9702 0.0000 0.0000);
-  --muted-foreground: oklch(0.5452 0.0000 0.0000);
-  --accent: oklch(0.9551 0.0000 0.0000);
-  --accent-foreground: oklch(0.0000 0.0000 0.0000);
-  --destructive: oklch(0.5771 0.2152 27.3250);
-  --destructive-foreground: oklch(1.0000 0.0000 0.0000);
-  --border: oklch(0.9219 0.0000 0.0000);
-  --input: oklch(0.9551 0.0000 0.0000);
-  --ring: oklch(0.0000 0.0000 0.0000);
+  /* Base — off-white quente */
+  --background: #fafaf8;
+  --foreground: #1a1a18;
 
-  --chart-1: oklch(0.7137 0.1434 254.6240);
-  --chart-2: oklch(0.6231 0.1880 259.8145);
-  --chart-3: oklch(0.7668 0.0000 0.0000);
-  --chart-4: oklch(0.9219 0.0000 0.0000);
-  --chart-5: oklch(0.6500 0.0000 0.0000);
+  /* Hairline única — toda borda passiva da UI usa este valor */
+  --hairline: rgba(0, 0, 0, 0.1);
+  /* Borda de ênfase interativa (hover/focus/checked) — mais forte que a hairline */
+  --hairline-strong: rgba(0, 0, 0, 0.16);
+  /* Reforço específico do contorno da pílula flutuante (compensa falta de sombra externa) */
+  --pill-hairline: rgba(0, 0, 0, 0.14);
 
-  --sidebar: oklch(0.9911 0.0000 0.0000);
-  --sidebar-foreground: oklch(0.0000 0.0000 0.0000);
-  --sidebar-primary: oklch(0.0000 0.0000 0.0000);
-  --sidebar-primary-foreground: oklch(1.0000 0.0000 0.0000);
-  --sidebar-accent: oklch(0.9551 0.0000 0.0000);
-  --sidebar-accent-foreground: oklch(0.0000 0.0000 0.0000);
-  --sidebar-border: oklch(0.9551 0.0000 0.0000);
-  --sidebar-ring: oklch(0.0000 0.0000 0.0000);
+  /* Translucidez do painel (só ele; barra e checklist são opacos) */
+  --panel-tint: rgba(250, 249, 248, 0.72);
 
-  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
-  --font-mono: JetBrains Mono, ui-monospace, SFMono-Regular, monospace;
-  --font-serif: Georgia, Cambria, "Times New Roman", serif;
+  /* Superfícies (opacas — sem translucidez) */
+  --card: #f0efeb;
+  --card-foreground: #1a1a18;
+  --popover: #f5f4f0;
+  --popover-foreground: #1a1a18;
+  --surface: #f0efeb;
+  --surface-foreground: #1a1a18;
 
-  --shadow-2xs: 0px 1px 2px 0px oklch(0.0000 0.0000 0.0000 / 0.09);
-  --shadow-xs: 0px 1px 2px 0px oklch(0.0000 0.0000 0.0000 / 0.09);
-  --shadow-sm: 0px 1px 2px 0px oklch(0.0000 0.0000 0.0000 / 0.18), 0px 1px 2px -1px oklch(0.0000 0.0000 0.0000 / 0.18);
-  --shadow: 0px 1px 2px 0px oklch(0.0000 0.0000 0.0000 / 0.18), 0px 1px 2px -1px oklch(0.0000 0.0000 0.0000 / 0.18);
-  --shadow-md: 0px 1px 2px 0px oklch(0.0000 0.0000 0.0000 / 0.18), 0px 2px 4px -1px oklch(0.0000 0.0000 0.0000 / 0.18);
-  --shadow-lg: 0px 1px 2px 0px oklch(0.0000 0.0000 0.0000 / 0.18), 0px 4px 6px -1px oklch(0.0000 0.0000 0.0000 / 0.18);
-  --shadow-xl: 0px 1px 2px 0px oklch(0.0000 0.0000 0.0000 / 0.18), 0px 8px 10px -1px oklch(0.0000 0.0000 0.0000 / 0.18);
-  --shadow-2xl: 0px 1px 2px 0px oklch(0.0000 0.0000 0.0000 / 0.45);
-  --surface: oklch(1.0000 0.0000 0.0000);
-  --surface-foreground: oklch(0.0000 0.0000 0.0000);
-  --code: oklch(1.0000 0.0000 0.0000);
-  --code-foreground: oklch(0.0000 0.0000 0.0000);
-  --code-highlight: oklch(1.0000 0.0000 0.0000);
-  --code-number: oklch(0.6314 0.0061 3.4467);
-  --selection: oklch(0.0000 0.0000 0.0000);
-  --selection-foreground: oklch(0.9911 0.0000 0.0000);
+  /* Destaque ativo: pílula preta sólida (invertido em relação ao escuro) */
+  --primary: #141414;
+  --primary-foreground: #ffffff;
+
+  --secondary: rgba(0, 0, 0, 0.045);
+  --secondary-foreground: #1a1a18;
+  --muted: rgba(0, 0, 0, 0.035);
+  --muted-foreground: #6b6b63;
+  --accent: rgba(0, 0, 0, 0.05);
+  --accent-foreground: #141414;
+
+  --destructive: oklch(0.5 0.19 25);
+  --destructive-foreground: #ffffff;
+
+  --border: var(--hairline);
+  --input: rgba(0, 0, 0, 0.04);
+  --ring: rgba(124, 58, 237, 0.4);
+
+  --chart-1: #10b981;
+  --chart-2: #141414;
+  --chart-3: #6b6b63;
+  --chart-4: rgba(0, 0, 0, 0.18);
+  --chart-5: rgba(0, 0, 0, 0.08);
+
+  /* Sidebar */
+  --sidebar: #f4f3ef;
+  --sidebar-foreground: #1a1a18;
+  --sidebar-primary: #141414;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(0, 0, 0, 0.05);
+  --sidebar-accent-foreground: #141414;
+  --sidebar-border: var(--hairline);
+  --sidebar-ring: rgba(124, 58, 237, 0.4);
+
+  /* Tipografia */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-serif: Newsreader, "Source Serif 4", Georgia, Cambria, serif;
+
+  /* Código */
+  --code: rgba(0, 0, 0, 0.035);
+  --code-foreground: #1a1a18;
+  --code-highlight: rgba(0, 0, 0, 0.07);
+  --code-number: #8a8a82;
+
+  --selection: #7c3aed;
+  --selection-foreground: #ffffff;
+
+  /* Tokens Neural Premium Graphite reativos ao tema */
+  --neutral-deep: #fafaf8;
+  --neutral-raised: #f0efeb;
+  --surface-premium: #f0efeb;
+  /* Destaque roxo (violet-600): estados ativos/marcados em todo o app */
+  --accent-active: #7c3aed;
+  --accent-active-foreground: #ffffff;
+  --progress: #10b981;
+  /* Fixo nos dois temas: o verde do progress tem luminosidade média,
+     ícone escuro sempre lê bem em cima dele. */
+  --progress-foreground: #000000;
+
+  /* Superfícies elevadas / hover — consolidação semântica (ver APPR-04) */
+  --surface-raise-1: rgba(0, 0, 0, 0.03);
+  --surface-raise-2: rgba(0, 0, 0, 0.05);
+  --surface-hover: rgba(0, 0, 0, 0.06);
+
+  /* Inner-glow: groove sutil em vez de luz — a superfície é clara */
+  --shadow-inner-light: inset 0 1px 1px rgba(0, 0, 0, 0.04);
+
+  /* Sombras leves — bem mais discretas que no grafite */
+  --shadow-2xs: 0 1px 1px rgba(0, 0, 0, 0.04);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 1px rgba(0, 0, 0, 0.04);
+  --shadow: 0 2px 6px rgba(0, 0, 0, 0.07), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.09), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.06);
+  --shadow-2xl: 0 24px 64px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.07);
+
   --letter-spacing: 0em;
   --shadow-x: 0px;
   --shadow-y: 1px;
   --shadow-blur: 2px;
   --shadow-spread: 0px;
-  --shadow-opacity: 0.18;
-  --shadow-color: oklch(0.0000 0.0000 0.0000);
+  --shadow-opacity: 0.08;
+  --shadow-color: #000000;
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 }
 
+/*
+ * Paleta grafite — baseline visual original do app, preservada valor a
+ * valor. É a referência de regressão: nada aqui deve mudar visualmente
+ * em relação ao Neural Premium Graphite anterior à introdução do claro.
+ */
 .dark {
-  --background: oklch(0.0000 0.0000 0.0000);
-  --foreground: oklch(1.0000 0.0000 0.0000);
-  --card: oklch(0.1448 0.0000 0.0000);
-  --card-foreground: oklch(1.0000 0.0000 0.0000);
-  --popover: oklch(0.2178 0.0000 0.0000);
-  --popover-foreground: oklch(1.0000 0.0000 0.0000);
-  --primary: oklch(1.0000 0.0000 0.0000);
-  --primary-foreground: oklch(0.0000 0.0000 0.0000);
-  --secondary: oklch(0.2686 0.0000 0.0000);
-  --secondary-foreground: oklch(1.0000 0.0000 0.0000);
-  --muted: oklch(0.2393 0.0000 0.0000);
-  --muted-foreground: oklch(0.7668 0.0000 0.0000);
-  --accent: oklch(0.3211 0.0000 0.0000);
-  --accent-foreground: oklch(1.0000 0.0000 0.0000);
+  --background: #0a0a0a;
+  --foreground: #f2f2f2;
+
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-strong: rgba(255, 255, 255, 0.2);
+  --pill-hairline: rgba(255, 255, 255, 0.12);
+
+  --panel-tint: rgba(10, 10, 10, 0.72);
+
+  --card: #141414;
+  --card-foreground: #f2f2f2;
+  --popover: #1a1a1a;
+  --popover-foreground: #f2f2f2;
+  --surface: #141414;
+  --surface-foreground: #f2f2f2;
+
+  --primary: #ffffff;
+  --primary-foreground: #000000;
+
+  --secondary: rgba(255, 255, 255, 0.06);
+  --secondary-foreground: #f2f2f2;
+  --muted: rgba(255, 255, 255, 0.04);
+  --muted-foreground: #8f8f8f;
+  --accent: rgba(255, 255, 255, 0.07);
+  --accent-foreground: #ffffff;
+
   --destructive: oklch(0.6368 0.2078 25.3313);
-  --destructive-foreground: oklch(0.0000 0.0000 0.0000);
-  --border: oklch(0.3715 0.0000 0.0000);
-  --input: oklch(0.3211 0.0000 0.0000);
-  --ring: oklch(0.7668 0.0000 0.0000);
+  --destructive-foreground: #0a0a0a;
 
-  --chart-1: oklch(0.7137 0.1434 254.6240);
-  --chart-2: oklch(0.5544 0.0407 257.4166);
-  --chart-3: oklch(0.6500 0.0000 0.0000);
-  --chart-4: oklch(0.5452 0.0000 0.0000);
-  --chart-5: oklch(0.9219 0.0000 0.0000);
+  --border: var(--hairline);
+  --input: rgba(255, 255, 255, 0.05);
+  --ring: rgba(167, 139, 250, 0.45);
 
-  --sidebar: oklch(0.2178 0.0000 0.0000);
-  --sidebar-foreground: oklch(1.0000 0.0000 0.0000);
-  --sidebar-primary: oklch(1.0000 0.0000 0.0000);
-  --sidebar-primary-foreground: oklch(0.0000 0.0000 0.0000);
-  --sidebar-accent: oklch(0.3211 0.0000 0.0000);
-  --sidebar-accent-foreground: oklch(1.0000 0.0000 0.0000);
-  --sidebar-border: oklch(0.3211 0.0000 0.0000);
-  --sidebar-ring: oklch(0.7668 0.0000 0.0000);
-  --surface: oklch(0.0000 0.0000 0.0000);
-  --surface-foreground: oklch(1.0000 0.0000 0.0000);
-  --code: oklch(0.0000 0.0000 0.0000);
-  --code-foreground: oklch(1.0000 0.0000 0.0000);
-  --code-highlight: oklch(0.0000 0.0000 0.0000);
-  --code-number: oklch(0.6343 0.0012 17.1891);
-  --selection: oklch(0.8514 0.0000 0.0000);
-  --selection-foreground: oklch(0.0000 0.0000 0.0000);
-  --radius: 0.5rem;
+  --chart-1: #10b981;
+  --chart-2: #ffffff;
+  --chart-3: #8f8f8f;
+  --chart-4: rgba(255, 255, 255, 0.24);
+  --chart-5: rgba(255, 255, 255, 0.12);
+
+  --sidebar: #111111;
+  --sidebar-foreground: #f2f2f2;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: rgba(255, 255, 255, 0.07);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: var(--hairline);
+  --sidebar-ring: rgba(167, 139, 250, 0.45);
+
+  --code: rgba(255, 255, 255, 0.04);
+  --code-foreground: #f2f2f2;
+  --code-highlight: rgba(255, 255, 255, 0.08);
+  --code-number: #6f6f6f;
+
+  --selection: #8b5cf6;
+  --selection-foreground: #ffffff;
+
+  --neutral-deep: #0a0a0a;
+  --neutral-raised: #141414;
+  --surface-premium: #141414;
+  /* Destaque roxo (violet-500): fundo sempre escuro o bastante para texto branco */
+  --accent-active: #8b5cf6;
+  --accent-active-foreground: #ffffff;
+  --progress: #10b981;
+
+  /* Consolidação intencional: os 3 níveis de hover (0.06/0.07/0.09) do
+     design original viram um só — único desvio visual aceito no escuro. */
+  --surface-raise-1: rgba(255, 255, 255, 0.03);
+  --surface-raise-2: rgba(255, 255, 255, 0.05);
+  --surface-hover: rgba(255, 255, 255, 0.07);
+
+  --shadow-inner-light: inset 0 1px 1px rgba(255, 255, 255, 0.03);
+
+  --shadow-2xs: 0 1px 1px rgba(0, 0, 0, 0.3);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
+  --shadow: 0 2px 6px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.55), 0 2px 4px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.6), 0 4px 8px rgba(0, 0, 0, 0.45);
+  --shadow-2xl: 0 24px 64px rgba(0, 0, 0, 0.7), 0 8px 16px rgba(0, 0, 0, 0.5);
+
   --letter-spacing: 0em;
-  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
-  --font-mono: JetBrains Mono, ui-monospace, SFMono-Regular, monospace;
-  --font-serif: Georgia, Cambria, "Times New Roman", serif;
   --shadow-x: 0px;
   --shadow-y: 1px;
   --shadow-blur: 2px;
   --shadow-spread: 0px;
-  --shadow-opacity: 0.18;
-  --shadow-color: oklch(0.0000 0.0000 0.0000);
+  --shadow-opacity: 0.4;
+  --shadow-color: #000000;
   --tracking-normal: 0em;
   --spacing: 0.25rem;
-  --shadow-2xs: 0px 1px 2px 0px oklch(0.0000 0.0000 0.0000 / 0.09);
-  --shadow-xs: 0px 1px 2px 0px oklch(0.0000 0.0000 0.0000 / 0.09);
-  --shadow-sm: 0px 1px 2px 0px oklch(0.0000 0.0000 0.0000 / 0.18), 0px 1px 2px -1px oklch(0.0000 0.0000 0.0000 / 0.18);
-  --shadow: 0px 1px 2px 0px oklch(0.0000 0.0000 0.0000 / 0.18), 0px 1px 2px -1px oklch(0.0000 0.0000 0.0000 / 0.18);
-  --shadow-md: 0px 1px 2px 0px oklch(0.0000 0.0000 0.0000 / 0.18), 0px 2px 4px -1px oklch(0.0000 0.0000 0.0000 / 0.18);
-  --shadow-lg: 0px 1px 2px 0px oklch(0.0000 0.0000 0.0000 / 0.18), 0px 4px 6px -1px oklch(0.0000 0.0000 0.0000 / 0.18);
-  --shadow-xl: 0px 1px 2px 0px oklch(0.0000 0.0000 0.0000 / 0.18), 0px 8px 10px -1px oklch(0.0000 0.0000 0.0000 / 0.18);
-  --shadow-2xl: 0px 1px 2px 0px oklch(0.0000 0.0000 0.0000 / 0.45);
+  --radius: 0.5rem;
+}
+
+@theme {
+  /* Tokens estáticos — não variam por tema */
+  --font-editorial: Newsreader, "Source Serif 4", Georgia, serif;
+  --font-interface: Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-technical: "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-premium: 12px;
+
+  --shadow-pill: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.35);
 }
 
 @theme inline {
@@ -211,11 +310,184 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Neural Premium Graphite — reativos ao tema (definidos em :root/:root.dark) */
+  --color-neutral-deep: var(--neutral-deep);
+  --color-neutral-raised: var(--neutral-raised);
+  --color-surface-premium: var(--surface-premium);
+  --color-accent-active: var(--accent-active);
+  --color-accent-active-foreground: var(--accent-active-foreground);
+  --color-progress: var(--progress);
+  --color-progress-foreground: var(--progress-foreground);
+
+  /* Semânticos de superfície/borda (substituem literais bg-white/[0.0x], border-white/[0.0x]) */
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-pill-hairline: var(--pill-hairline);
+  --color-surface-raise-1: var(--surface-raise-1);
+  --color-surface-raise-2: var(--surface-raise-2);
+  --color-surface-hover: var(--surface-hover);
+
+  --shadow-inner-light: var(--shadow-inner-light);
+}
+
+/*
+ * Cor de destaque (data-accent) — APPR Fase 2.
+ * "purple" é o baseline definido em :root/.dark; os demais valores
+ * sobrescrevem o quarteto accent/selection/ring. Foreground é sempre
+ * branco (pedido do usuário), exceto "graphite", que preserva a pílula
+ * invertida original do Neural Premium Graphite.
+ */
+:root[data-accent="graphite"] {
+  --accent-active: #141414;
+  --accent-active-foreground: #ffffff;
+  --selection: #141414;
+  --selection-foreground: #fafaf8;
+  --ring: rgba(0, 0, 0, 0.22);
+  --sidebar-ring: rgba(0, 0, 0, 0.22);
+}
+
+.dark[data-accent="graphite"] {
+  --accent-active: #ffffff;
+  --accent-active-foreground: #000000;
+  --selection: #ffffff;
+  --selection-foreground: #000000;
+  --ring: rgba(255, 255, 255, 0.28);
+  --sidebar-ring: rgba(255, 255, 255, 0.28);
+}
+
+:root[data-accent="blue"] {
+  --accent-active: #2563eb;
+  --accent-active-foreground: #ffffff;
+  --selection: #2563eb;
+  --selection-foreground: #ffffff;
+  --ring: rgba(37, 99, 235, 0.45);
+  --sidebar-ring: rgba(37, 99, 235, 0.45);
+}
+
+.dark[data-accent="blue"] {
+  --accent-active: #3b82f6;
+  --selection: #3b82f6;
+  --ring: rgba(59, 130, 246, 0.45);
+  --sidebar-ring: rgba(59, 130, 246, 0.45);
+}
+
+:root[data-accent="green"] {
+  --accent-active: #059669;
+  --accent-active-foreground: #ffffff;
+  --selection: #059669;
+  --selection-foreground: #ffffff;
+  --ring: rgba(5, 150, 105, 0.45);
+  --sidebar-ring: rgba(5, 150, 105, 0.45);
+}
+
+:root[data-accent="amber"] {
+  --accent-active: #b45309;
+  --accent-active-foreground: #ffffff;
+  --selection: #b45309;
+  --selection-foreground: #ffffff;
+  --ring: rgba(180, 83, 9, 0.45);
+  --sidebar-ring: rgba(180, 83, 9, 0.45);
+}
+
+:root[data-accent="rose"] {
+  --accent-active: #e11d48;
+  --accent-active-foreground: #ffffff;
+  --selection: #e11d48;
+  --selection-foreground: #ffffff;
+  --ring: rgba(225, 29, 72, 0.45);
+  --sidebar-ring: rgba(225, 29, 72, 0.45);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+
+  ::selection {
+    background-color: var(--selection);
+    color: var(--selection-foreground);
+  }
+}
+
+@layer components {
+  /* Superfície premium: opaca + inner glow/groove no topo */
+  .surface-premium {
+    background-color: var(--color-surface-premium);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--shadow-inner-light);
+  }
+
+  /*
+   * Superfícies de nível-janela: SEM drop-shadow externo.
+   * A janela Tauri tem exatamente o tamanho do elemento, então qualquer
+   * sombra projetada pra fora é recortada pelo retângulo da janela e
+   * aparece como um halo quadrado. Elevação vem da hairline + inner glow.
+   */
+  .window-shell {
+    background-color: var(--color-neutral-deep);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--shadow-inner-light);
+  }
+
+  /*
+   * Painel: única superfície translúcida do app.
+   * Ajuste a opacidade em `--panel-tint` (alpha maior = mais opaco).
+   * Sidebar e conteúdo ficam transparentes por dentro para que exista
+   * uma só camada de vidro — empilhar camadas escurece/clareia o resultado.
+   */
+  .window-shell-glass {
+    background-color: var(--panel-tint);
+    backdrop-filter: blur(28px) saturate(150%);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--shadow-inner-light);
+  }
+
+  /* Barra flutuante: pílula fina de superfície sólida */
+  .floating-pill {
+    background-color: var(--color-neutral-raised);
+    border: 1px solid var(--pill-hairline);
+    box-shadow: var(--shadow-inner-light);
+  }
+
+  /* Estado ativo de navegação: pílula de contraste máximo (inverte por tema) */
+  .nav-pill-active {
+    background-color: var(--color-accent-active);
+    color: var(--color-accent-active-foreground);
+    box-shadow: var(--shadow-pill);
+  }
+
+  /* Corpo editorial das respostas da IA */
+  .editorial-body {
+    font-family: var(--font-editorial);
+    font-size: 17px;
+    line-height: 1.7;
+    letter-spacing: -0.003em;
+  }
+
+  .editorial-body em,
+  .editorial-body i {
+    font-style: italic;
+  }
+
+  /* Status dot pulsante da barra flutuante */
+  .status-dot-live {
+    background-color: #10b981;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55);
+    animation: status-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
+@keyframes status-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
   }
 }
 
@@ -223,13 +495,11 @@
   .scrollbar-elegant {
     scrollbar-gutter: stable;
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 26%, transparent)
-      transparent;
+    scrollbar-color: var(--hairline-strong) transparent;
   }
 
   .scrollbar-elegant:hover {
-    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 42%, transparent)
-      transparent;
+    scrollbar-color: var(--muted-foreground) transparent;
   }
 
   .scrollbar-elegant::-webkit-scrollbar {
@@ -244,39 +514,37 @@
   .scrollbar-elegant::-webkit-scrollbar-thumb {
     border: 2px solid transparent;
     border-radius: 9999px;
-    background-color: color-mix(in oklch, var(--muted-foreground) 22%, transparent);
+    background-color: var(--surface-hover);
     background-clip: padding-box;
     transition: background-color 150ms ease;
   }
 
   .scrollbar-elegant:hover::-webkit-scrollbar-thumb {
-    background-color: color-mix(in oklch, var(--muted-foreground) 38%, transparent);
+    background-color: var(--hairline-strong);
   }
 
   .scrollbar-elegant::-webkit-scrollbar-thumb:active {
-    background-color: color-mix(in oklch, var(--muted-foreground) 52%, transparent);
+    background-color: var(--muted-foreground);
   }
 
   .scrollbar-sidebar {
-    scrollbar-color: color-mix(in oklch, var(--sidebar-foreground) 20%, transparent)
-      transparent;
+    scrollbar-color: var(--surface-hover) transparent;
   }
 
   .scrollbar-sidebar:hover {
-    scrollbar-color: color-mix(in oklch, var(--sidebar-foreground) 34%, transparent)
-      transparent;
+    scrollbar-color: var(--hairline-strong) transparent;
   }
 
   .scrollbar-sidebar::-webkit-scrollbar-thumb {
-    background-color: color-mix(in oklch, var(--sidebar-foreground) 18%, transparent);
+    background-color: var(--surface-raise-2);
   }
 
   .scrollbar-sidebar:hover::-webkit-scrollbar-thumb {
-    background-color: color-mix(in oklch, var(--sidebar-foreground) 32%, transparent);
+    background-color: var(--surface-hover);
   }
 
   .scrollbar-sidebar::-webkit-scrollbar-thumb:active {
-    background-color: color-mix(in oklch, var(--sidebar-foreground) 46%, transparent);
+    background-color: var(--hairline-strong);
   }
 }
 
@@ -286,12 +554,54 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
-  border-radius: var(--radius-xl);
+  /*
+   * Sem border-radius aqui: cada janela define o próprio raio
+   * (pílula full na barra, radius-premium no panel/checklist).
+   * Um raio fixo no root recortaria as pontas da pílula.
+   */
+  background: transparent;
 }
 
 body {
   background: transparent;
   overflow: hidden;
-  font-family: var(--font-sans);
+  font-family: var(--font-interface);
+  font-feature-settings: "cv01", "cv03", "ss01";
   color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/*
+ * Reduzir animações (APPR-10): kill switch respeitando prefers-reduced-motion
+ * quando o usuário nunca escolheu explicitamente. Ver appearance-tokens.ts.
+ */
+:root[data-reduce-motion="true"] *,
+:root[data-reduce-motion="true"] *::before,
+:root[data-reduce-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Blur do painel (APPR-06): "off" remove backdrop-filter, não zera o raio. */
+:root[data-blur="off"] .window-shell-glass {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-blur="light"] .window-shell-glass {
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+}
+
+:root[data-blur="medium"] .window-shell-glass {
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+}
+
+:root[data-blur="strong"] .window-shell-glass {
+  backdrop-filter: blur(48px) saturate(160%);
+  -webkit-backdrop-filter: blur(48px) saturate(160%);
 }

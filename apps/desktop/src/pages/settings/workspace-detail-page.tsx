@@ -245,7 +245,7 @@ export function WorkspaceDetailPage() {
             <ArrowLeft className="size-3.5" />
             Voltar
           </Button>
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-10 text-center">
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-10 text-center">
             <Building2 className="size-5 text-muted-foreground/70" />
             <p className="text-xs font-medium">Workspace não encontrado</p>
             <p className="max-w-xs text-[11px] text-muted-foreground">
@@ -278,7 +278,7 @@ export function WorkspaceDetailPage() {
                 "grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl border text-sm font-bold",
                 isActive
                   ? "border-primary/30 bg-primary text-primary-foreground"
-                  : "border-border/60 bg-muted/40 text-foreground",
+                  : "border-hairline bg-muted/40 text-foreground",
               )}
             >
               {imageSrc ? (
@@ -330,7 +330,7 @@ export function WorkspaceDetailPage() {
             description="Nome e imagem usados na interface."
           />
 
-          <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
+          <div className="rounded-xl border border-hairline bg-muted/30 p-4">
             <input
               ref={imageInputRef}
               type="file"
@@ -392,7 +392,7 @@ export function WorkspaceDetailPage() {
               title="Rule Review"
               description="Extraia candidatos de documentos e revise antes de promover."
             />
-            <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
+            <div className="rounded-xl border border-hairline bg-muted/30 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
                   Envie documentos para o assistente sugerir novas regras. Cada
@@ -421,7 +421,7 @@ export function WorkspaceDetailPage() {
             title="Procedures"
             description="Grave a tela, revise o markdown gerado e publique procedimentos."
           />
-          <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
+          <div className="rounded-xl border border-hairline bg-muted/30 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
                 Capture um fluxo na tela, revise o procedimento e consulte
@@ -452,7 +452,7 @@ export function WorkspaceDetailPage() {
           />
 
           {rules.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-7 text-center">
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-7 text-center">
               <ScrollText className="size-5 text-muted-foreground/70" />
               <p className="text-xs font-medium">Nenhuma regra cadastrada</p>
               <p className="max-w-xs text-[11px] text-muted-foreground">
@@ -464,10 +464,10 @@ export function WorkspaceDetailPage() {
               {rules.map((rule, index) => (
                 <div
                   key={rule.id}
-                  className="rounded-xl border border-border/60 bg-muted/40 p-3"
+                  className="rounded-xl border border-hairline bg-muted/40 p-3"
                 >
                   <div className="flex items-start gap-3">
-                    <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-md bg-background text-[10px] font-medium tabular-nums text-muted-foreground ring-1 ring-border/60">
+                    <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-md bg-neutral-deep text-[10px] font-medium tabular-nums text-muted-foreground ring-1 ring-border/60">
                       {index + 1}
                     </span>
                     <div className="min-w-0 flex-1 space-y-1">
@@ -493,7 +493,7 @@ export function WorkspaceDetailPage() {
             </div>
           )}
 
-          <div className="space-y-2.5 rounded-xl border border-border/60 bg-muted/20 p-3">
+          <div className="space-y-2.5 rounded-xl border border-hairline bg-muted/20 p-3">
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Nova regra
             </p>
@@ -509,7 +509,7 @@ export function WorkspaceDetailPage() {
               placeholder="Descreva a regra de negócio..."
               rows={4}
               className={cn(
-                "min-h-24 w-full resize-y rounded-lg border border-border/60 bg-background px-3 py-2 text-xs leading-relaxed shadow-xs outline-none",
+                "min-h-24 w-full resize-y rounded-lg border border-hairline bg-neutral-deep px-3 py-2 text-xs leading-relaxed shadow-xs outline-none",
                 "placeholder:text-muted-foreground",
                 "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
               )}

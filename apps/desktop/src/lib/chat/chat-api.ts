@@ -9,6 +9,7 @@ import {
   toolRequestSchema,
   type Conversation,
   type DeskState,
+  type ForceTool,
   type Message,
   type MessageActivity,
   type MessageToolUse,
@@ -253,6 +254,7 @@ export type StreamChatOptions = {
   replyToMessageId?: string;
   deskState?: DeskState;
   model?: string;
+  forceTool?: ForceTool;
   signal?: AbortSignal;
 } & StreamHandlers;
 
@@ -265,6 +267,7 @@ export async function* streamChatResponse(
     replyToMessageId,
     deskState,
     model,
+    forceTool,
     signal,
     ...handlers
   } = options;
@@ -285,6 +288,62 @@ export async function* streamChatResponse(
         body: JSON.stringify({
           content,
           replyToMessageId,
+          deskState,
+          model,
+          ...(forceTool ? { forceTool } : {}),
+        }),
+        signal,
+      },
+      CHAT_AUTH_OPTIONS,
+    );
+  } catch (error) {
+    authDebug("chat.error", {
+      path,
+      reason: error instanceof Error ? error.name : "unknown",
+    });
+    if (error instanceof AuthApiError || error instanceof AuthNetworkError) {
+      throw error;
+    }
+    throw new ChatApiError("Erro inesperado", 500);
+  }
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    authDebug("chat.error", { path, status: response.status, message });
+    throw new ChatApiError(message, response.status);
+  }
+
+  yield* consumeSseStream(response, handlers);
+}
+
+export type RegenerateMessageOptions = {
+  conversationId: string;
+  messageId: string;
+  deskState?: DeskState;
+  model?: string;
+  signal?: AbortSignal;
+} & StreamHandlers;
+
+export async function* regenerateMessage(
+  options: RegenerateMessageOptions,
+): AsyncGenerator<string> {
+  const { conversationId, messageId, deskState, model, signal, ...handlers } =
+    options;
+
+  const path = `/api/conversations/${conversationId}/messages/${messageId}/regenerate`;
+  authDebug("chat.request", { path, stream: true });
+  let response: Response;
+
+  try {
+    response = await authorizedFetch(
+      `${API_URL}${path}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify({
           deskState,
           model,
         }),

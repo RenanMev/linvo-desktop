@@ -6,6 +6,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ChecklistApp } from "@/ChecklistApp";
 import { PanelApp } from "@/PanelApp";
 import { AuthGate } from "@/components/auth/auth-gate";
+import { AppearanceProvider } from "@/context/appearance-context";
 import { WindowChromeProvider } from "@/context/window-chrome-context";
 import type { WindowLabel } from "@/lib/window-close";
 import "./index.css";
@@ -29,24 +30,30 @@ function Bootstrap() {
 
   if (!windowLabel) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-background text-sm text-muted-foreground">
+      <div className="flex h-full w-full items-center justify-center rounded-premium bg-neutral-deep text-sm text-muted-foreground">
         <span className="size-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
       </div>
     );
   }
 
+  const isPanel = windowLabel === "panel";
+
   if (windowLabel === "checklist") {
     return (
-      <WindowChromeProvider windowLabel={windowLabel}>
-        <ChecklistApp />
-      </WindowChromeProvider>
+      <AppearanceProvider windowLabel={windowLabel} readOnly>
+        <WindowChromeProvider windowLabel={windowLabel}>
+          <ChecklistApp />
+        </WindowChromeProvider>
+      </AppearanceProvider>
     );
   }
 
   return (
-    <WindowChromeProvider windowLabel={windowLabel}>
-      {windowLabel === "panel" ? <PanelApp /> : <AuthGate />}
-    </WindowChromeProvider>
+    <AppearanceProvider windowLabel={windowLabel} readOnly={!isPanel}>
+      <WindowChromeProvider windowLabel={windowLabel}>
+        {isPanel ? <PanelApp /> : <AuthGate />}
+      </WindowChromeProvider>
+    </AppearanceProvider>
   );
 }
 

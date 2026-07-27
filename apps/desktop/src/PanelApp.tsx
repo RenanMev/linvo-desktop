@@ -9,6 +9,7 @@ import {
 
 import { PanelShell } from "@/components/panel/panel-shell";
 import { AccountSettingsPage } from "@/pages/settings/account-settings-page";
+import { AppearancePage } from "@/pages/settings/appearance-page";
 import { GeneralSettingsPage } from "@/pages/settings/general-settings-page";
 import { WorkspaceCreatePage } from "@/pages/settings/workspace-create-page";
 import { WorkspaceDetailPage } from "@/pages/settings/workspace-detail-page";
@@ -46,7 +47,7 @@ function PanelRoutes() {
 
   if (isLoading || !user) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-background px-6 text-center text-sm text-muted-foreground">
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-premium bg-neutral-deep px-6 text-center text-sm text-muted-foreground">
         {isLoading ? (
           <>
             <span className="size-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
@@ -83,6 +84,7 @@ function PanelRoutes() {
           element={<Navigate to="/settings/general" replace />}
         />
         <Route path="/settings/general" element={<GeneralSettingsPage />} />
+        <Route path="/settings/appearance" element={<AppearancePage />} />
         <Route path="/settings/workspace" element={<WorkspaceSettingsPage />} />
         <Route
           path="/settings/workspace/new"

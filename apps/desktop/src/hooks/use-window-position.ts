@@ -42,6 +42,7 @@ export function useWindowPosition({
 }: UseWindowPositionOptions) {
   const persistRef = useRef(shouldPersist);
   persistRef.current = shouldPersist;
+  const hasRestoredRef = useRef(false);
 
   useEffect(() => {
     if (!enabled) {
@@ -54,6 +55,11 @@ export function useWindowPosition({
     let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
     async function restore() {
+      if (hasRestoredRef.current) {
+        return;
+      }
+      hasRestoredRef.current = true;
+
       const monitor = await readMonitor();
       const outer = await win.outerSize();
       const winSize = { width: outer.width, height: outer.height };

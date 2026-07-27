@@ -281,7 +281,7 @@ export function ProcedurePage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
+      <header className="flex items-center gap-3 border-b border-hairline px-4 py-3">
         <Button
           type="button"
           variant="ghost"
@@ -300,7 +300,7 @@ export function ProcedurePage() {
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-6 p-4">
-          <section className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+          <section className="space-y-3 rounded-xl border border-hairline bg-muted/20 p-4">
             <div className="space-y-0.5">
               <h2 className="text-sm font-medium">Gravar procedure</h2>
               <p className="text-[11px] text-muted-foreground">
@@ -345,7 +345,7 @@ export function ProcedurePage() {
             ) : null}
 
             {recorder.phase === "awaiting_confirm" ? (
-              <div className="space-y-3 rounded-lg border border-border/60 bg-background p-3">
+              <div className="space-y-3 rounded-lg border border-hairline bg-neutral-deep p-3">
                 <p className="text-xs">
                   Gravação finalizada. Confirme o envio para processar o
                   procedure.
@@ -432,7 +432,7 @@ export function ProcedurePage() {
           ) : null}
 
           {selected ? (
-            <section className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+            <section className="space-y-3 rounded-xl border border-hairline bg-muted/20 p-4">
               <h2 className="text-sm font-medium">
                 {procedureTitle(selected)}
               </h2>
@@ -449,7 +449,7 @@ export function ProcedurePage() {
                   <label className="block space-y-1 text-xs">
                     <span>Título</span>
                     <input
-                      className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs"
+                      className="w-full rounded-md border border-hairline bg-neutral-deep px-2 py-1.5 text-xs"
                       value={draftTitle}
                       onChange={(event) => setDraftTitle(event.target.value)}
                     />
@@ -457,7 +457,7 @@ export function ProcedurePage() {
                   <label className="block space-y-1 text-xs">
                     <span>Markdown</span>
                     <textarea
-                      className="min-h-48 w-full rounded-md border border-border/60 bg-background px-2 py-1.5 font-mono text-xs"
+                      className="min-h-48 w-full rounded-md border border-hairline bg-neutral-deep px-2 py-1.5 font-mono text-xs"
                       value={draftMarkdown}
                       onChange={(event) => setDraftMarkdown(event.target.value)}
                     />
@@ -494,7 +494,7 @@ export function ProcedurePage() {
               ) : (
                 <>
                   {selected.markdown ? (
-                    <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-background p-3 text-xs">
+                    <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-neutral-deep p-3 text-xs">
                       {selected.markdown}
                     </pre>
                   ) : (
@@ -543,7 +543,7 @@ function ProcedureSection({
         </span>
       </div>
       {items.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-6 text-center">
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-6 text-center">
           <FileText className="size-5 text-muted-foreground/70" />
           <p className="text-xs text-muted-foreground">{empty}</p>
         </div>
@@ -556,7 +556,7 @@ function ProcedureSection({
                 className={`flex w-full items-start justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
                   selectedId === item.id
                     ? "border-foreground/30 bg-muted/40"
-                    : "border-border/60 bg-muted/20 hover:bg-muted/30"
+                    : "border-hairline bg-muted/20 hover:bg-muted/30"
                 }`}
                 onClick={() => onSelect(item.id)}
               >

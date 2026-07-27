@@ -62,7 +62,7 @@ export function getLiveStep(
     }
   }
 
-  return events.at(-1) ?? null;
+  return events[events.length - 1] ?? null;
 }
 
 export function getLiveStepDetail(event: RuleDiscoveryEvent | null): string | null {
