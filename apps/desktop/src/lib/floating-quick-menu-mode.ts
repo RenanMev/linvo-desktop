@@ -4,9 +4,13 @@ import {
   readWindowBounds,
 } from "@/lib/window-animation";
 import type { EdgeAnchor } from "@/lib/window-anchor";
-import { CHECKLIST_SIZE, COMPACT_SIZE } from "@/lib/window-mode";
+import { COMPACT_SIZE, QUICK_MENU_SIZE } from "@/lib/window-mode";
 import type { MonitorInfo, Position, Size } from "@/lib/window-position";
-import { loadSavedAnchor } from "@/lib/window-storage";
+import {
+  EDGE_MARGIN,
+  loadSavedAnchor,
+  saveSavedPosition,
+} from "@/lib/window-storage";
 import {
   enqueueWindowAnimation,
   getCurrentWindow,
@@ -15,10 +19,32 @@ import {
 } from "@/lib/window-transition";
 import { readWorkArea } from "@/lib/window-work-area";
 
-export const CHECKLIST_EXPAND_DURATION_MS = 320;
-export const CHECKLIST_COLLAPSE_DURATION_MS = 260;
+export const QUICK_MENU_EXPAND_DURATION_MS = 220;
+export const QUICK_MENU_COLLAPSE_DURATION_MS = 200;
 
-export function resolveChecklistExpandPosition(input: {
+export function resolveQuickMenuSize(input: {
+  targetSize: Size;
+  monitor: MonitorInfo | null;
+  margin: number;
+}): Size {
+  const { targetSize, monitor, margin } = input;
+  if (!monitor) {
+    return targetSize;
+  }
+
+  return {
+    width: Math.min(
+      targetSize.width,
+      Math.max(1, monitor.size.width - margin * 2),
+    ),
+    height: Math.min(
+      targetSize.height,
+      Math.max(1, monitor.size.height - margin * 2),
+    ),
+  };
+}
+
+export function resolveQuickMenuExpandPosition(input: {
   currentPosition: Position;
   currentSize: Size;
   targetSize: Size;
@@ -28,7 +54,7 @@ export function resolveChecklistExpandPosition(input: {
   return resolveExpandPlan(input);
 }
 
-export function resolveChecklistCollapsePosition(input: {
+export function resolveQuickMenuCollapsePosition(input: {
   currentPosition: Position;
   targetSize: Size;
   monitor: MonitorInfo | null;
@@ -37,7 +63,7 @@ export function resolveChecklistCollapsePosition(input: {
   return resolveCollapsePosition(input);
 }
 
-export async function expandFloatingToChecklist(): Promise<void> {
+export async function expandFloatingToQuickMenu(): Promise<void> {
   return enqueueWindowAnimation(async () => {
     const win = getCurrentWindow();
     await win.show();
@@ -45,12 +71,17 @@ export async function expandFloatingToChecklist(): Promise<void> {
     await win.setFocus();
 
     const scale = await win.scaleFactor();
-    const targetSize = logicalToPhysical(CHECKLIST_SIZE, scale);
+    const requestedSize = logicalToPhysical(QUICK_MENU_SIZE, scale);
     const current = await readWindowBounds(win);
     const monitorInfo = await readWorkArea();
     const anchor = loadSavedAnchor() ?? undefined;
+    const targetSize = resolveQuickMenuSize({
+      targetSize: requestedSize,
+      monitor: monitorInfo,
+      margin: Math.round(EDGE_MARGIN * scale),
+    });
 
-    const plan = resolveChecklistExpandPosition({
+    const plan = resolveQuickMenuExpandPosition({
       currentPosition: current.position,
       currentSize: current.size,
       targetSize,
@@ -84,12 +115,12 @@ export async function expandFloatingToChecklist(): Promise<void> {
     await applyWindowBoundsWithFallback(
       win,
       { position: plan.finalPosition, size: targetSize },
-      { durationMs: CHECKLIST_EXPAND_DURATION_MS },
+      { durationMs: QUICK_MENU_EXPAND_DURATION_MS },
     );
   });
 }
 
-export async function collapseChecklistToFloating(): Promise<void> {
+export async function collapseQuickMenuToFloating(): Promise<void> {
   return enqueueWindowAnimation(async () => {
     const win = getCurrentWindow();
     const scale = await win.scaleFactor();
@@ -98,7 +129,7 @@ export async function collapseChecklistToFloating(): Promise<void> {
     const monitorInfo = await readWorkArea();
     const anchor = loadSavedAnchor() ?? undefined;
 
-    const position = resolveChecklistCollapsePosition({
+    const position = resolveQuickMenuCollapsePosition({
       currentPosition: current.position,
       targetSize,
       monitor: monitorInfo,
@@ -108,7 +139,9 @@ export async function collapseChecklistToFloating(): Promise<void> {
     await applyWindowBoundsWithFallback(
       win,
       { position, size: targetSize },
-      { durationMs: CHECKLIST_COLLAPSE_DURATION_MS },
+      { durationMs: QUICK_MENU_COLLAPSE_DURATION_MS },
     );
+
+    saveSavedPosition(position);
   });
 }

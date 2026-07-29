@@ -7,7 +7,7 @@ mod panel;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::WebviewWindow;
 
 #[cfg(not(windows))]
@@ -15,10 +15,21 @@ use tauri::{PhysicalPosition, PhysicalSize};
 
 static ANIMATION_GENERATION: AtomicU64 = AtomicU64::new(0);
 
-const FRAME_INTERVAL: Duration = Duration::from_micros(6944);
+// 60fps. A cada frame o WebView2 refaz o layout do DOM inteiro da janela
+// (SetWindowPos dispara resize do webview); a ~144fps isso não sustenta e
+// a animação trepida.
+const FRAME_INTERVAL: Duration = Duration::from_micros(16667);
 
 #[derive(Deserialize)]
 pub struct TargetBounds {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+}
+
+#[derive(Serialize)]
+pub struct WorkArea {
     x: i32,
     y: i32,
     width: u32,
@@ -114,6 +125,21 @@ fn run_animation(
 }
 
 #[tauri::command]
+fn monitor_work_area(window: WebviewWindow) -> Result<WorkArea, String> {
+    let monitor = window
+        .current_monitor()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "no monitor found".to_string())?;
+    let work_area = monitor.work_area();
+    Ok(WorkArea {
+        x: work_area.position.x,
+        y: work_area.position.y,
+        width: work_area.size.width,
+        height: work_area.size.height,
+    })
+}
+
+#[tauri::command]
 async fn animate_window_bounds(
     window: WebviewWindow,
     to: TargetBounds,
@@ -122,11 +148,9 @@ async fn animate_window_bounds(
     let duration = duration_ms.unwrap_or(200);
     let generation = ANIMATION_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
 
-    tauri::async_runtime::spawn_blocking(move || {
-        run_animation(&window, &to, duration, generation)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || run_animation(&window, &to, duration, generation))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -145,6 +169,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             animate_window_bounds,
+            monitor_work_area,
             app::app_quit,
             auth::auth_set_tokens,
             auth::auth_get_tokens,

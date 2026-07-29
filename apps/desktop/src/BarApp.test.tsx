@@ -1,0 +1,325 @@
+import { act, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Procedure, UserPublic } from "@linvo/shared";
+
+import { BarApp } from "@/BarApp";
+import { hideAllWindows } from "@/lib/app-windows";
+import { expandFloatingToChecklist } from "@/lib/floating-checklist-mode";
+import { collapseToEdge, expandFromEdge } from "@/lib/floating-edge-mode";
+import {
+  collapseQuickMenuToFloating,
+  expandFloatingToQuickMenu,
+} from "@/lib/floating-quick-menu-mode";
+import type { ChecklistWindowPayload } from "@/lib/checklist-window";
+import { windowMock } from "@/test/mocks/tauri";
+
+vi.mock("@/hooks/use-floating-bootstrap", () => ({
+  useFloatingBootstrap: () => true,
+}));
+
+vi.mock("@/hooks/use-api-health", () => ({
+  useApiHealth: () => true,
+}));
+
+vi.mock("@/lib/floating-checklist-mode", () => ({
+  expandFloatingToChecklist: vi.fn(() => Promise.resolve()),
+  collapseChecklistToFloating: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock("@/lib/floating-quick-menu-mode", () => ({
+  expandFloatingToQuickMenu: vi.fn(() => Promise.resolve()),
+  collapseQuickMenuToFloating: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock("@/lib/floating-edge-mode", () => ({
+  collapseToEdge: vi.fn(() =>
+    Promise.resolve({ horizontal: "right", vertical: null }),
+  ),
+  expandFromEdge: vi.fn(() => Promise.resolve()),
+}));
+
+let payloadHandler:
+  | ((payload: ChecklistWindowPayload) => void | Promise<void>)
+  | null = null;
+type FocusHandler = (event: { payload: boolean }) => void;
+type OnFocusChangedMock = (handler: FocusHandler) => Promise<() => void>;
+let focusHandler: FocusHandler | null = null;
+
+vi.mock("@/lib/checklist-window", () => ({
+  rememberChecklistConversation: vi.fn(),
+  emitChecklistClosed: vi.fn(() => Promise.resolve()),
+  emitChecklistProgress: vi.fn(() => Promise.resolve()),
+  listenChecklistPayload: vi.fn((handler) => {
+    payloadHandler = handler;
+    return Promise.resolve(() => {});
+  }),
+  listenChecklistDismiss: vi.fn(() => Promise.resolve(() => {})),
+}));
+
+vi.mock("@/lib/panel-window", () => ({
+  openPanel: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock("@/lib/app-windows", () => ({
+  hideAllWindows: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock("@/hooks/use-quick-prompt", () => ({
+  useQuickPrompt: () => ({
+    status: "idle",
+    responseText: "",
+    errorMessage: null,
+    conversationId: null,
+    isThinking: false,
+    send: vi.fn(() => Promise.resolve(true)),
+    stop: vi.fn(),
+    reset: vi.fn(),
+  }),
+}));
+
+vi.mock("@/hooks/use-quick-center-workspace", () => ({
+  useQuickCenterWorkspace: () => ({ name: "Acme", isLoading: false }),
+}));
+
+const user: UserPublic = {
+  id: "user-1",
+  email: "a@b.com",
+  name: "Ana",
+} as UserPublic;
+
+function makeChecklistPayload(): ChecklistWindowPayload {
+  return {
+    conversationId: "conv-1",
+    procedure: {
+      id: "proc-1",
+      slug: "cancelamento",
+      title: "Cancelamento",
+      steps: ["Passo 1"],
+    } as Procedure,
+    progress: { completedStepIndexes: [], currentStepIndex: 0 },
+  };
+}
+
+describe("BarApp window modes", () => {
+  beforeEach(() => {
+    payloadHandler = null;
+    focusHandler = null;
+    localStorage.clear();
+    vi.clearAllMocks();
+    (
+      windowMock.onFocusChanged as unknown as {
+        mockImplementation: (implementation: OnFocusChangedMock) => void;
+      }
+    ).mockImplementation((handler) => {
+      focusHandler = handler;
+      return Promise.resolve(() => {});
+    });
+  });
+
+  it("expands to the quick menu when Chat is clicked", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
+
+    await waitFor(() =>
+      expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
+    );
+    expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
+  });
+
+  it("collapses the quick menu when it closes itself (Esc)", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
+    await waitFor(() => screen.getByLabelText("Quick Center"));
+
+    await userEventInstance.keyboard("{Escape}");
+
+    await waitFor(() =>
+      expect(collapseQuickMenuToFloating).toHaveBeenCalledTimes(1),
+    );
+    expect(screen.queryByLabelText("Quick Center")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Chat" })).toHaveFocus();
+  });
+
+  it("collapses on window blur without stealing focus back", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
+    await waitFor(() => screen.getByLabelText("Quick Center"));
+    await waitFor(() => expect(focusHandler).not.toBeNull());
+
+    act(() => {
+      focusHandler!({ payload: false });
+    });
+
+    await waitFor(() =>
+      expect(collapseQuickMenuToFloating).toHaveBeenCalledTimes(1),
+    );
+    const chatButton = screen.getByRole("button", { name: "Chat" });
+    expect(chatButton).not.toHaveFocus();
+  });
+
+  it("collapses the quick menu before expanding the checklist when a payload arrives", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
+    await waitFor(() => screen.getByLabelText("Quick Center"));
+
+    expect(payloadHandler).not.toBeNull();
+    await act(async () => {
+      await payloadHandler!(makeChecklistPayload());
+    });
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Checklist do procedure")).toBeInTheDocument(),
+    );
+    expect(collapseQuickMenuToFloating).toHaveBeenCalledTimes(1);
+    expect(expandFloatingToChecklist).toHaveBeenCalledTimes(1);
+    expect(screen.queryByLabelText("Quick Center")).not.toBeInTheDocument();
+  });
+
+  it("keeps checklist intent when blur races with quick-menu collapse", async () => {
+    let finishCollapse!: () => void;
+    vi.mocked(collapseQuickMenuToFloating).mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishCollapse = resolve;
+      }),
+    );
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
+    await waitFor(() => screen.getByLabelText("Quick Center"));
+    await waitFor(() => expect(focusHandler).not.toBeNull());
+
+    let payloadPromise: void | Promise<void> = undefined;
+    act(() => {
+      payloadPromise = payloadHandler!(makeChecklistPayload());
+    });
+    await waitFor(() =>
+      expect(collapseQuickMenuToFloating).toHaveBeenCalledTimes(1),
+    );
+
+    act(() => {
+      focusHandler!({ payload: false });
+      finishCollapse();
+    });
+    await act(async () => {
+      await payloadPromise;
+    });
+
+    expect(
+      screen.getByLabelText("Checklist do procedure"),
+    ).toBeInTheDocument();
+    expect(expandFloatingToChecklist).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not touch quick-menu collapse when compact on checklist payload", async () => {
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    expect(payloadHandler).not.toBeNull();
+    await act(async () => {
+      await payloadHandler!(makeChecklistPayload());
+    });
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Checklist do procedure")).toBeInTheDocument(),
+    );
+    expect(collapseQuickMenuToFloating).not.toHaveBeenCalled();
+    expect(expandFloatingToChecklist).toHaveBeenCalledTimes(1);
+  });
+
+  it("collapses to an edge handle when Encolher is clicked, and expands back on click", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(
+      screen.getByRole("button", { name: "Encolher" }),
+    );
+
+    await waitFor(() => expect(collapseToEdge).toHaveBeenCalledTimes(1));
+    expect(
+      screen.getByRole("button", { name: /Expandir barra/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Chat" })).not.toBeInTheDocument();
+
+    await userEventInstance.click(
+      screen.getByRole("button", { name: /Expandir barra/ }),
+    );
+
+    await waitFor(() => expect(expandFromEdge).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument();
+  });
+
+  it("stays compact when no monitor work area is available", async () => {
+    vi.mocked(collapseToEdge).mockResolvedValueOnce(null);
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(
+      screen.getByRole("button", { name: "Encolher" }),
+    );
+
+    await waitFor(() => expect(collapseToEdge).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Expandir barra/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("expands from the edge before opening the checklist when a payload arrives while collapsed", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(
+      screen.getByRole("button", { name: "Encolher" }),
+    );
+    await waitFor(() => expect(collapseToEdge).toHaveBeenCalledTimes(1));
+
+    expect(payloadHandler).not.toBeNull();
+    await act(async () => {
+      await payloadHandler!(makeChecklistPayload());
+    });
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Checklist do procedure")).toBeInTheDocument(),
+    );
+    expect(expandFromEdge).toHaveBeenCalledTimes(1);
+    expect(expandFloatingToChecklist).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls hideAllWindows when Minimizar is clicked", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(
+      screen.getByRole("button", { name: "Minimizar" }),
+    );
+
+    expect(hideAllWindows).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides and collapses the Quick Center back to compact mode", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
+    await waitFor(() => screen.getByLabelText("Quick Center"));
+
+    await userEventInstance.click(
+      screen.getByRole("button", { name: "Ocultar" }),
+    );
+
+    await waitFor(() => expect(hideAllWindows).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(collapseQuickMenuToFloating).toHaveBeenCalledTimes(1),
+    );
+    expect(screen.queryByLabelText("Quick Center")).not.toBeInTheDocument();
+  });
+});

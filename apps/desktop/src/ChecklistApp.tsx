@@ -18,6 +18,7 @@ export function ChecklistApp() {
     enabled: true,
     shouldPersist: () => true,
     storageKey: CHECKLIST_POSITION_STORAGE_KEY,
+    snapToEdges: false,
   });
 
   useEffect(() => {

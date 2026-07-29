@@ -16,6 +16,7 @@ vi.mock("@tauri-apps/plugin-global-shortcut", () => ({
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   readText: vi.fn(() => Promise.resolve("")),
+  writeText: vi.fn(() => Promise.resolve()),
 }));
 
 if (typeof globalThis.localStorage === "undefined") {

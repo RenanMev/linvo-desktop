@@ -36,6 +36,7 @@
     "allow-chat-save-messages",
     "allow-chat-clear-cache",
     "allow-animate-window-bounds",
+    "allow-monitor-work-area",
     "allow-panel-open",
     "allow-panel-close",
     "allow-panel-is-open",
@@ -52,6 +53,7 @@
     "core:menu:default",
     "core:app:allow-default-window-icon",
     "opener:default",
-    "clipboard-manager:allow-read-text"
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text"
   ]
 }

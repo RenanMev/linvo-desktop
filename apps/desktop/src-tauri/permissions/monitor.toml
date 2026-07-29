@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-monitor-work-area"
+description = "Allows reading the work area of the window's current monitor (excludes taskbar/dock)"
+commands.allow = ["monitor_work_area"]

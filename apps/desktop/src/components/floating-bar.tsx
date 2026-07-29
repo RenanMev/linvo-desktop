@@ -1,20 +1,21 @@
 import {
+  Minimize2,
+  Minus,
   GripVertical,
   MessageSquare,
-  Minus,
-  Settings,
   Video,
   type LucideIcon,
 } from "lucide-react";
+import type { Ref } from "react";
 
-import { hideAllWindows } from "@/lib/app-windows";
 import { cn } from "@/lib/utils";
 
 type FloatingBarProps = {
   isActive: boolean;
-  onChat?: () => void;
-  onOpenSettings: () => void;
-  disabled?: boolean;
+  onOpenQuickMenu: () => void;
+  onCollapseToEdge: () => void;
+  onMinimize: () => void;
+  chatButtonRef?: Ref<HTMLButtonElement>;
 };
 
 function BarDivider() {
@@ -26,14 +27,17 @@ function BarAction({
   label,
   onClick,
   disabled = false,
+  buttonRef,
 }: {
   icon: LucideIcon;
   label: string;
   onClick?: () => void;
   disabled?: boolean;
+  buttonRef?: Ref<HTMLButtonElement>;
 }) {
   return (
     <button
+      ref={buttonRef}
       type="button"
       title={label}
       aria-label={label}
@@ -56,9 +60,10 @@ function BarAction({
 
 export function FloatingBar({
   isActive,
-  onChat,
-  onOpenSettings,
-  disabled = false,
+  onOpenQuickMenu,
+  onCollapseToEdge,
+  onMinimize,
+  chatButtonRef,
 }: FloatingBarProps) {
   return (
     <div className="flex h-full w-full items-center gap-1 px-1.5">
@@ -90,22 +95,15 @@ export function FloatingBar({
 
       <BarDivider />
 
-      <BarAction icon={MessageSquare} label="Chat" onClick={onChat} />
+      <BarAction
+        icon={MessageSquare}
+        label="Chat"
+        onClick={onOpenQuickMenu}
+        buttonRef={chatButtonRef}
+      />
       <BarAction icon={Video} label="Gravar · em breve" disabled />
-      <BarAction
-        icon={Settings}
-        label="Configurações"
-        onClick={onOpenSettings}
-        disabled={disabled}
-      />
-
-      <BarDivider />
-
-      <BarAction
-        icon={Minus}
-        label="Minimizar"
-        onClick={() => void hideAllWindows()}
-      />
+      <BarAction icon={Minimize2} label="Encolher" onClick={onCollapseToEdge} />
+      <BarAction icon={Minus} label="Minimizar" onClick={onMinimize} />
     </div>
   );
 }

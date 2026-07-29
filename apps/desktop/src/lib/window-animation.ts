@@ -64,6 +64,15 @@ export async function applyWindowBoundsWithFallback(
   to: WindowBounds,
   options?: AnimateWindowBoundsOptions,
 ): Promise<void> {
+  if (
+    typeof document !== "undefined" &&
+    document.documentElement.dataset.reduceMotion === "true"
+  ) {
+    await win.setSize(new PhysicalSize(to.size.width, to.size.height));
+    await win.setPosition(new PhysicalPosition(to.position.x, to.position.y));
+    return;
+  }
+
   let needsFallback = true;
 
   try {

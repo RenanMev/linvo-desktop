@@ -1,4 +1,4 @@
-import { readText } from "@tauri-apps/plugin-clipboard-manager";
+import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { isTauri } from "@tauri-apps/api/core";
 
 export async function readClipboardText(): Promise<string> {
@@ -19,4 +19,26 @@ export async function readClipboardText(): Promise<string> {
   }
 
   return "";
+}
+
+export async function writeClipboardText(text: string): Promise<boolean> {
+  if (isTauri()) {
+    try {
+      await writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
 }
