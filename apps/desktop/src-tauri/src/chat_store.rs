@@ -35,7 +35,9 @@ pub fn chat_load_conversations(app: AppHandle) -> Result<Option<String>, String>
         return Ok(None);
     }
 
-    fs::read_to_string(path).map(Some).map_err(|error| error.to_string())
+    fs::read_to_string(path)
+        .map(Some)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -58,7 +60,9 @@ pub fn chat_load_messages(
         return Ok(None);
     }
 
-    fs::read_to_string(path).map(Some).map_err(|error| error.to_string())
+    fs::read_to_string(path)
+        .map(Some)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
