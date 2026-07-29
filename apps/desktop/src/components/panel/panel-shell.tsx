@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom";
+import { Outlet } from "react-router";
 
 import { PanelSidebar } from "@/components/panel/panel-sidebar";
 import { PanelTitlebar } from "@/components/panel/panel-titlebar";

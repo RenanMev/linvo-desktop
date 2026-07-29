@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import type { Workspace } from "@linvo/shared";
 
 import { useConversations } from "@/context/chat-conversations-context";

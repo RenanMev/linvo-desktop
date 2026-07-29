@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Procedure } from "@linvo/shared";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 
 import { ChatPanel } from "@/components/chat/chat-panel";
 import { useConversations } from "@/context/chat-conversations-context";

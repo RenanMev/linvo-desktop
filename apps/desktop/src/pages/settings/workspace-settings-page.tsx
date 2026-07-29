@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import type { Workspace, WorkspaceRole } from "@linvo/shared";
 import { Building2, Check, Plus, Settings } from "lucide-react";
 

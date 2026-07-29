@@ -22,7 +22,7 @@ import {
   User,
   type LucideIcon,
 } from "lucide-react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router";
 
 import { LinvoLogo } from "@/components/linvo-logo";
 import { Button } from "@/components/ui/button";

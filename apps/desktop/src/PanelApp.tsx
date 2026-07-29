@@ -5,7 +5,7 @@ import {
   Route,
   Routes,
   useNavigate,
-} from "react-router-dom";
+} from "react-router";
 
 import { PanelShell } from "@/components/panel/panel-shell";
 import { AccountSettingsPage } from "@/pages/settings/account-settings-page";

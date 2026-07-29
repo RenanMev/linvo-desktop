@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 import type { Procedure, ProcedureStatus } from "@linvo/shared";
 import { ArrowLeft, FileText, Loader2, Square, Video } from "lucide-react";
 
