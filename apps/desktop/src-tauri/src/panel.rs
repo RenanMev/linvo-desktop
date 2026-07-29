@@ -61,13 +61,16 @@ fn apply_native_blur(window: &tauri::WebviewWindow, level: &str) -> Result<(), S
     let _ = clear_acrylic(window);
 
     // `apply_blur` (blur-behind legado) é no-op no Windows 11 — todos os
-    // níveis usam acrylic, variando só o tint. A translucidez visível fica
-    // por conta do --panel-tint no CSS.
+    // níveis usam acrylic, variando só o tint (o SO não expõe raio de blur
+    // ajustável). O `--panel-tint` do CSS (~70% opaco por padrão) fica por
+    // cima da janela e dilui bastante essa diferença — os passos precisam
+    // ser bem espaçados (não 0/10/60) pra sobreviver a essa diluição e o
+    // usuário perceber alguma mudança entre os níveis.
     let tint: (u8, u8, u8, u8) = match level {
         "off" => return Ok(()),
-        "light" => (0, 0, 0, 0),
-        "strong" => (0, 0, 0, 60),
-        _ => (0, 0, 0, 10),
+        "light" => (0, 0, 0, 25),
+        "strong" => (0, 0, 0, 160),
+        _ => (0, 0, 0, 80),
     };
     apply_acrylic(window, Some(tint)).map_err(|e| e.to_string())
 }
@@ -77,10 +80,13 @@ fn apply_native_blur(window: &tauri::WebviewWindow, level: &str) -> Result<(), S
     use window_vibrancy::{apply_vibrancy, clear_vibrancy, NSVisualEffectMaterial};
 
     let _ = clear_vibrancy(window);
-    if level == "off" {
-        return Ok(());
-    }
-    apply_vibrancy(window, NSVisualEffectMaterial::HudWindow, None, None).map_err(|e| e.to_string())
+    let material = match level {
+        "off" => return Ok(()),
+        "light" => NSVisualEffectMaterial::Sidebar,
+        "strong" => NSVisualEffectMaterial::UltraDark,
+        _ => NSVisualEffectMaterial::HudWindow,
+    };
+    apply_vibrancy(window, material, None, None).map_err(|e| e.to_string())
 }
 
 #[cfg(not(any(windows, target_os = "macos")))]

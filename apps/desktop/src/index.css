@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..600&family=JetBrains+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..600&family=IBM+Plex+Mono:wght@400;500&family=Playfair+Display:wght@600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -74,7 +74,7 @@
 
   /* Tipografia */
   --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
   --font-serif: Newsreader, "Source Serif 4", Georgia, Cambria, serif;
 
   /* Código */
@@ -125,37 +125,50 @@
   --shadow-color: #000000;
   --tracking-normal: 0em;
   --spacing: 0.25rem;
+
+  /* Linvo AI Design System — tokens novos, aditivos (claro: derivados da escala existente) */
+  --text-secondary: #3a3a36;
+  --text-tertiary: #6b6b63;
+  --text-disabled: #a8a8a0;
+  --border-dashed: rgba(0, 0, 0, 0.18);
+  --success: #22c55e;
+  --success-foreground: #000000;
 }
 
 /*
  * Paleta grafite — baseline visual original do app, preservada valor a
  * valor. É a referência de regressão: nada aqui deve mudar visualmente
  * em relação ao Neural Premium Graphite anterior à introdução do claro.
+ *
+ * EXCEÇÃO (Linvo AI Design System): os valores abaixo foram atualizados
+ * para a paleta do novo design system — ver CLAUDE.md § Design System.
+ * Isso quebra a regra de regressão de propósito; só o escuro muda, o
+ * claro e os presets de accent (data-accent) continuam intocados.
  */
 .dark {
-  --background: #0a0a0a;
-  --foreground: #f2f2f2;
+  --background: #0b0b0c;
+  --foreground: #f0f0f1;
 
   --hairline: rgba(255, 255, 255, 0.08);
   --hairline-strong: rgba(255, 255, 255, 0.2);
   --pill-hairline: rgba(255, 255, 255, 0.12);
 
-  --panel-tint: rgba(10, 10, 10, 0.72);
+  --panel-tint: rgba(11, 11, 12, 0.72);
 
-  --card: #141414;
-  --card-foreground: #f2f2f2;
-  --popover: #1a1a1a;
-  --popover-foreground: #f2f2f2;
-  --surface: #141414;
-  --surface-foreground: #f2f2f2;
+  --card: #151517;
+  --card-foreground: #f0f0f1;
+  --popover: #1c1c1f;
+  --popover-foreground: #f0f0f1;
+  --surface: #151517;
+  --surface-foreground: #f0f0f1;
 
   --primary: #ffffff;
   --primary-foreground: #000000;
 
   --secondary: rgba(255, 255, 255, 0.06);
-  --secondary-foreground: #f2f2f2;
+  --secondary-foreground: #c8c8cc;
   --muted: rgba(255, 255, 255, 0.04);
-  --muted-foreground: #8f8f8f;
+  --muted-foreground: #6b6b70;
   --accent: rgba(255, 255, 255, 0.07);
   --accent-foreground: #ffffff;
 
@@ -164,7 +177,7 @@
 
   --border: var(--hairline);
   --input: rgba(255, 255, 255, 0.05);
-  --ring: rgba(167, 139, 250, 0.45);
+  --ring: rgba(124, 92, 250, 0.45);
 
   --chart-1: #10b981;
   --chart-2: #ffffff;
@@ -172,30 +185,38 @@
   --chart-4: rgba(255, 255, 255, 0.24);
   --chart-5: rgba(255, 255, 255, 0.12);
 
-  --sidebar: #111111;
-  --sidebar-foreground: #f2f2f2;
+  --sidebar: #0b0b0c;
+  --sidebar-foreground: #f0f0f1;
   --sidebar-primary: #ffffff;
   --sidebar-primary-foreground: #000000;
   --sidebar-accent: rgba(255, 255, 255, 0.07);
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: var(--hairline);
-  --sidebar-ring: rgba(167, 139, 250, 0.45);
+  --sidebar-ring: rgba(124, 92, 250, 0.45);
 
   --code: rgba(255, 255, 255, 0.04);
-  --code-foreground: #f2f2f2;
+  --code-foreground: #f0f0f1;
   --code-highlight: rgba(255, 255, 255, 0.08);
   --code-number: #6f6f6f;
 
-  --selection: #8b5cf6;
+  --selection: #7c5cfa;
   --selection-foreground: #ffffff;
 
-  --neutral-deep: #0a0a0a;
-  --neutral-raised: #141414;
-  --surface-premium: #141414;
-  /* Destaque roxo (violet-500): fundo sempre escuro o bastante para texto branco */
-  --accent-active: #8b5cf6;
+  --neutral-deep: #0b0b0c;
+  --neutral-raised: #151517;
+  --surface-premium: #151517;
+  /* Accent do Linvo AI Design System — default (preset "purple" em data-accent) */
+  --accent-active: #7c5cfa;
   --accent-active-foreground: #ffffff;
   --progress: #10b981;
+
+  /* Linvo AI Design System — tokens novos, aditivos */
+  --text-secondary: #c8c8cc;
+  --text-tertiary: #8b8b91;
+  --text-disabled: #5c5c62;
+  --border-dashed: rgba(255, 255, 255, 0.15);
+  --success: #22c55e;
+  --success-foreground: #000000;
 
   /* Consolidação intencional: os 3 níveis de hover (0.06/0.07/0.09) do
      design original viram um só — único desvio visual aceito no escuro. */
@@ -230,9 +251,19 @@
   /* Tokens estáticos — não variam por tema */
   --font-editorial: Newsreader, "Source Serif 4", Georgia, serif;
   --font-interface: Inter, ui-sans-serif, system-ui, sans-serif;
-  --font-technical: "JetBrains Mono", ui-monospace, monospace;
+  --font-technical: "IBM Plex Mono", ui-monospace, monospace;
+  /* Linvo AI Design System — só para títulos de destaque, nunca corpo de texto */
+  --font-display: "Playfair Display", Georgia, serif;
 
   --radius-premium: 12px;
+  /*
+   * Raio da pílula flutuante. Valor explícito em px (= metade da altura útil
+   * da barra), NÃO `rounded-full`/9999px: o raio da pílula é interpolado até
+   * `--radius-premium` quando a janela cresce pro quick menu, e um valor
+   * gigante pinta como metade do lado menor a cada frame — a janela passaria
+   * por um "blob" circular no meio da transição.
+   */
+  --radius-pill: 16px;
 
   --shadow-pill: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.35);
 }
@@ -329,6 +360,14 @@
   --color-surface-hover: var(--surface-hover);
 
   --shadow-inner-light: var(--shadow-inner-light);
+
+  /* Linvo AI Design System — tokens novos (ver CLAUDE.md § Design System) */
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-text-disabled: var(--text-disabled);
+  --color-border-dashed: var(--border-dashed);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
 }
 
 /*
@@ -449,6 +488,71 @@
     background-color: var(--color-neutral-raised);
     border: 1px solid var(--pill-hairline);
     box-shadow: var(--shadow-inner-light);
+    transition:
+      border-color 200ms ease-out,
+      box-shadow 200ms ease-out;
+  }
+
+  .floating-pill:hover {
+    border-color: var(--hairline-strong);
+  }
+
+  .floating-pill:focus-within {
+    border-color: var(--hairline-strong);
+    box-shadow:
+      var(--shadow-inner-light),
+      0 0 0 3px var(--ring);
+  }
+
+  .quick-center-panel-preopen {
+    opacity: 0;
+    filter: blur(6px);
+  }
+
+  /*
+   * Enter do painel: só opacidade + blur, sem transform. O conteúdo entra
+   * DURANTE o crescimento da janela (ver onResizeStart em BarApp), então a
+   * própria janela já fornece o movimento — animar transform aqui em cima
+   * daria duas motions concorrentes na mesma transição.
+   */
+  .quick-center-panel-ready {
+    animation: quick-center-panel-enter 200ms cubic-bezier(0.22, 1, 0.36, 1)
+      both;
+  }
+
+  .quick-center-panel-ready > :not(.sr-only) {
+    animation: quick-center-content-enter 320ms cubic-bezier(0.22, 1, 0.36, 1)
+      both;
+  }
+
+  .quick-center-panel-ready > :nth-child(2) {
+    animation-delay: 25ms;
+  }
+
+  .quick-center-panel-ready > :nth-child(3) {
+    animation-delay: 45ms;
+  }
+
+  .quick-center-panel-ready > :nth-child(4) {
+    animation-delay: 65ms;
+  }
+
+  .quick-center-panel-closing {
+    pointer-events: none;
+    animation: quick-center-panel-exit 120ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  .quick-center-panel-closing > :not(.sr-only) {
+    animation: quick-center-content-exit 110ms cubic-bezier(0.4, 0, 1, 1)
+      both;
+  }
+
+  /* Aparecimento de blocos condicionais dentro do painel já aberto
+     (resposta, ações de resposta, troca Enviar/Parar) — mais curto que
+     o enter do painel em si, que só roda uma vez na abertura. */
+  .quick-center-fade-in {
+    animation: quick-center-content-enter 200ms cubic-bezier(0.22, 1, 0.36, 1)
+      both;
   }
 
   /* Estado ativo de navegação: pílula de contraste máximo (inverte por tema) */
@@ -477,6 +581,60 @@
     box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55);
     animation: status-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
+
+  input[type="range"] {
+    transition:
+      background-color 180ms ease,
+      filter 180ms ease,
+      transform 180ms ease;
+  }
+
+  input[type="range"]:hover {
+    filter: brightness(1.08);
+  }
+
+  input[type="range"]:active {
+    transform: scaleY(1.18);
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 9999px;
+    background: var(--accent-active);
+    border: 2px solid var(--background);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+    transition:
+      box-shadow 180ms ease,
+      transform 180ms ease;
+  }
+
+  input[type="range"]:hover::-webkit-slider-thumb {
+    transform: scale(1.12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.32);
+  }
+
+  input[type="range"]:active::-webkit-slider-thumb {
+    transform: scale(0.96);
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 9999px;
+    background: var(--accent-active);
+    border: 2px solid var(--background);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+    transition:
+      box-shadow 180ms ease,
+      transform 180ms ease;
+  }
+
+  input[type="range"]:hover::-moz-range-thumb {
+    transform: scale(1.12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.32);
+  }
 }
 
 @keyframes status-pulse {
@@ -488,6 +646,50 @@
   }
   100% {
     box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+@keyframes quick-center-panel-enter {
+  0% {
+    opacity: 0;
+    filter: blur(6px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes quick-center-content-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes quick-center-panel-exit {
+  0% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(5px);
+  }
+}
+
+@keyframes quick-center-content-exit {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-3px);
   }
 }
 
