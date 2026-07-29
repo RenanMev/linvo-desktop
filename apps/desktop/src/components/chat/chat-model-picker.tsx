@@ -40,18 +40,20 @@ export function ChatModelPicker({
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={disabled}
-          className="h-7 gap-1 rounded-lg px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
-          title="Selecionar modelo"
-        >
-          <span className="max-w-40 truncate">{selected.label}</span>
-          <ChevronDown className="size-3.5 opacity-70" />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={disabled}
+            className="h-7 gap-1 rounded-lg px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+            title="Selecionar modelo"
+          />
+        }
+      >
+        <span className="max-w-40 truncate">{selected.label}</span>
+        <ChevronDown className="size-3.5 opacity-70" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-48">
         {models.map((model) => {
@@ -59,11 +61,12 @@ export function ChatModelPicker({
           return (
             <DropdownMenuItem
               key={model.id}
-              onSelect={() => {
+              selected={isSelected}
+              onClick={() => {
                 onChange(model.id);
                 setOpen(false);
               }}
-              className={cn(isSelected && "bg-accent")}
+              className={cn(isSelected && "text-foreground")}
             >
               <span className="flex-1 truncate">{model.label}</span>
               {isSelected ? <Check className="size-3.5" /> : null}

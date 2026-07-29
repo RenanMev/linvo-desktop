@@ -30,18 +30,20 @@ export function ChatToolsMenu({
 }: ChatToolsMenuProps) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={disabled}
-          className="gap-1.5 text-muted-foreground"
-          title="Tools"
-        >
-          <Wrench className="size-3.5" />
-          Tools
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={disabled}
+            className="gap-1.5 text-muted-foreground"
+            title="Tools"
+          />
+        }
+      >
+        <Wrench className="size-3.5" />
+        Tools
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top">
         {FORCE_TOOLS.map(({ id, icon: Icon }) => (

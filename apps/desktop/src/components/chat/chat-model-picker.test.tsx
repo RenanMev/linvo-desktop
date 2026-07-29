@@ -35,7 +35,7 @@ describe("ChatModelPicker", () => {
     );
 
     await user.click(screen.getByTitle("Selecionar modelo"));
-    await user.click(screen.getByText("GPT-4o"));
+    await user.click(await screen.findByText("GPT-4o"));
     expect(onChange).toHaveBeenCalledWith("gpt-4o");
   });
 });

@@ -577,28 +577,30 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
               )}
             >
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex min-w-0 flex-1 items-center gap-2.5 rounded-full px-1 py-1 text-left transition-colors hover:bg-surface-hover"
-                    title="Trocar workspace"
-                  >
-                    <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-sidebar-primary text-[10px] font-bold text-sidebar-primary-foreground">
-                      {activeWorkspaceImageSrc ? (
-                        <img
-                          src={activeWorkspaceImageSrc}
-                          alt=""
-                          className="size-full object-cover"
-                        />
-                      ) : (
-                        (activeWorkspace?.name ?? "L").slice(0, 1).toUpperCase()
-                      )}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-none">
-                      {activeWorkspace?.name ?? "Linvo"}
-                    </span>
-                    <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-                  </button>
+                <DropdownMenuTrigger
+                  render={
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-center gap-2.5 rounded-full px-1 py-1 text-left transition-colors hover:bg-surface-hover"
+                      title="Trocar workspace"
+                    />
+                  }
+                >
+                  <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-sidebar-primary text-[10px] font-bold text-sidebar-primary-foreground">
+                    {activeWorkspaceImageSrc ? (
+                      <img
+                        src={activeWorkspaceImageSrc}
+                        alt=""
+                        className="size-full object-cover"
+                      />
+                    ) : (
+                      (activeWorkspace?.name ?? "L").slice(0, 1).toUpperCase()
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-none">
+                    {activeWorkspace?.name ?? "Linvo"}
+                  </span>
+                  <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="min-w-48">
                   {workspaces.map((workspace) => (

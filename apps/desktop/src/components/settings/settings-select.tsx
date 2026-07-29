@@ -38,23 +38,35 @@ export function SettingsSelect<T extends string>({
           <p className="text-[11px] text-muted-foreground">{description}</p>
         </div>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                "inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-hairline bg-neutral-deep px-2.5 py-1.5 text-[11px] font-medium transition-colors",
-                "hover:bg-muted/60",
-              )}
-            >
-              {currentLabel}
-              <ChevronDown className="size-3 text-muted-foreground" />
-            </button>
+          <DropdownMenuTrigger
+            render={
+              <button
+                type="button"
+                className={cn(
+                  "group inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-hairline bg-neutral-deep px-2.5 py-1.5 text-[11px] font-medium transition-all duration-200 ease-out",
+                  "hover:-translate-y-px hover:border-hairline-strong hover:bg-muted/60 hover:shadow-sm active:translate-y-0 active:scale-[0.98]",
+                )}
+              />
+            }
+          >
+            {currentLabel}
+            <ChevronDown className="size-3 text-muted-foreground transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-y-0.5 group-data-[popup-open]:rotate-180" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-40">
+          <DropdownMenuContent
+            align="end"
+            className="min-w-40"
+          >
             {options.map((option) => (
               <DropdownMenuItem
                 key={option.value}
-                className="text-xs"
+                selected={option.value === value}
+                className={cn(
+                  "relative z-10 rounded-md bg-transparent text-xs transition-[color,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                  "data-highlighted:translate-x-0 data-highlighted:bg-transparent",
+                  option.value === value
+                    ? "text-foreground"
+                    : "text-foreground/70 data-highlighted:text-foreground",
+                )}
                 onClick={() => onChange(option.value)}
               >
                 {option.label}

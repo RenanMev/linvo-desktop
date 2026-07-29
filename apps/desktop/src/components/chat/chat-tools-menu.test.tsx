@@ -12,8 +12,8 @@ describe("ChatToolsMenu", () => {
     render(<ChatToolsMenu value={null} onChange={onChange} />);
 
     await user.click(screen.getByRole("button", { name: /Tools/i }));
-    expect(screen.getByText("Busca na internet")).toBeInTheDocument();
-    expect(screen.getByText("Base de conhecimento")).toBeInTheDocument();
+    expect(await screen.findByText("Busca na internet")).toBeInTheDocument();
+    expect(await screen.findByText("Base de conhecimento")).toBeInTheDocument();
 
     await user.click(screen.getByText("Busca na internet"));
     expect(onChange).toHaveBeenCalledWith("web_search");
