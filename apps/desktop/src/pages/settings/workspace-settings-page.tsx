@@ -6,6 +6,7 @@ import { Building2, Check, Plus, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspace } from "@/context/workspace-context";
+import { useWorkspaceFileBlob } from "@/hooks/use-workspace-file-blob";
 import { resolveWorkspaceImageUrl } from "@/lib/workspace/workspace-api";
 import { cn } from "@/lib/utils";
 
@@ -40,7 +41,8 @@ function WorkspaceCard({
   onActivate: () => void;
   onOpenSettings: () => void;
 }) {
-  const imageSrc = resolveWorkspaceImageUrl(workspace.imageUrl);
+  const imageUrl = resolveWorkspaceImageUrl(workspace.imageUrl);
+  const { blobUrl: imageSrc } = useWorkspaceFileBlob(imageUrl);
 
   return (
     <div

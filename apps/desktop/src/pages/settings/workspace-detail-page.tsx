@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspace } from "@/context/workspace-context";
+import { useWorkspaceFileBlob } from "@/hooks/use-workspace-file-blob";
 import { AuthApiError } from "@/lib/auth/auth-api";
 import { cn } from "@/lib/utils";
 import * as workspaceApi from "@/lib/workspace/workspace-api";
@@ -227,9 +228,10 @@ export function WorkspaceDetailPage() {
     !isLastWorkspace &&
     confirmName === (workspace?.name ?? "");
 
-  const imageSrc = workspace
+  const imageUrl = workspace
     ? resolveWorkspaceImageUrl(workspace.imageUrl)
     : null;
+  const { blobUrl: imageSrc } = useWorkspaceFileBlob(imageUrl);
 
   if (!workspace) {
     return (

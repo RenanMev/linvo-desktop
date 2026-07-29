@@ -36,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { useConversations } from "@/context/chat-conversations-context";
 import { useWorkspace } from "@/context/workspace-context";
 import type { PanelSession } from "@/hooks/use-panel-session";
+import { useWorkspaceFileBlob } from "@/hooks/use-workspace-file-blob";
 import { resolveWorkspaceImageUrl } from "@/lib/workspace/workspace-api";
 import { cn } from "@/lib/utils";
 
@@ -281,8 +282,11 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
     selectConversation,
   } = useConversations();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
-  const activeWorkspaceImageSrc = resolveWorkspaceImageUrl(
+  const activeWorkspaceImageUrl = resolveWorkspaceImageUrl(
     activeWorkspace?.imageUrl,
+  );
+  const { blobUrl: activeWorkspaceImageSrc } = useWorkspaceFileBlob(
+    activeWorkspaceImageUrl,
   );
 
   useEffect(() => {
