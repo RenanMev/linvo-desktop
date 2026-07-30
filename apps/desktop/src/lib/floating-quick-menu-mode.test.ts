@@ -38,7 +38,7 @@ describe("floating-quick-menu-mode positions", () => {
     expect(plan.finalPosition).toEqual({ x: 0, y: 0 });
   });
 
-  it("only resizes when bar is already visible", () => {
+  it("resizes without a pre-move when the bar is already visible, centering on the bar", () => {
     const plan = resolveQuickMenuExpandPosition({
       currentPosition: { x: 100, y: 80 },
       currentSize: { width: 140, height: 40 },
@@ -47,7 +47,9 @@ describe("floating-quick-menu-mode positions", () => {
     });
 
     expect(plan.moveFirst).toBeNull();
-    expect(plan.finalPosition).toEqual({ x: 100, y: 80 });
+    // Centro da barra (100 + 140/2 = 170) vira o centro do painel; o eixo
+    // vertical não caberia acima do topo, então só ele é grudado na borda.
+    expect(plan.finalPosition).toEqual({ x: 10, y: 0 });
   });
 
   it("clamps final quick-menu bounds to the monitor", () => {

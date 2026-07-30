@@ -5,7 +5,18 @@ import {
 } from "@/lib/window-animation";
 import type { EdgeAnchor } from "@/lib/window-anchor";
 import { CHECKLIST_SIZE, COMPACT_SIZE } from "@/lib/window-mode";
-import type { MonitorInfo, Position, Size } from "@/lib/window-position";
+import {
+  clampToMonitor,
+  type MonitorInfo,
+  type Position,
+  type Size,
+} from "@/lib/window-position";
+import {
+  clearRestoreOrigin,
+  loadRestoreOrigin,
+  rememberRestoreOrigin,
+  resolveRestorePosition,
+} from "@/lib/window-restore-origin";
 import { loadSavedAnchor } from "@/lib/window-storage";
 import {
   enqueueWindowAnimation,
@@ -30,6 +41,7 @@ export function resolveChecklistExpandPosition(input: {
 
 export function resolveChecklistCollapsePosition(input: {
   currentPosition: Position;
+  currentSize?: Size;
   targetSize: Size;
   monitor: MonitorInfo | null;
   anchor?: EdgeAnchor;
@@ -81,6 +93,12 @@ export async function expandFloatingToChecklist(): Promise<void> {
       return;
     }
 
+    rememberRestoreOrigin("checklist", {
+      compactPosition: plan.moveFirst ?? current.position,
+      expandedPosition: plan.finalPosition,
+      expandedSize: targetSize,
+    });
+
     await applyWindowBoundsWithFallback(
       win,
       { position: plan.finalPosition, size: targetSize },
@@ -98,12 +116,25 @@ export async function collapseChecklistToFloating(): Promise<void> {
     const monitorInfo = await readWorkArea();
     const anchor = loadSavedAnchor() ?? undefined;
 
-    const position = resolveChecklistCollapsePosition({
+    // Volta no pixel exato de onde saiu; só recalcula se o painel foi mexido.
+    const restored = resolveRestorePosition({
+      origin: loadRestoreOrigin("checklist"),
       currentPosition: current.position,
-      targetSize,
-      monitor: monitorInfo,
-      anchor,
+      currentSize: current.size,
     });
+    clearRestoreOrigin("checklist");
+
+    const position = restored
+      ? monitorInfo
+        ? clampToMonitor(restored, targetSize, monitorInfo)
+        : restored
+      : resolveChecklistCollapsePosition({
+          currentPosition: current.position,
+          currentSize: current.size,
+          targetSize,
+          monitor: monitorInfo,
+          anchor,
+        });
 
     await applyWindowBoundsWithFallback(
       win,

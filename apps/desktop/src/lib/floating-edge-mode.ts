@@ -14,7 +14,18 @@ import {
   EDGE_HANDLE_LENGTH,
   EDGE_HANDLE_THICKNESS,
 } from "@/lib/window-mode";
-import type { MonitorInfo, Position, Size } from "@/lib/window-position";
+import {
+  clampToMonitor,
+  type MonitorInfo,
+  type Position,
+  type Size,
+} from "@/lib/window-position";
+import {
+  clearRestoreOrigin,
+  loadRestoreOrigin,
+  rememberRestoreOrigin,
+  resolveRestorePosition,
+} from "@/lib/window-restore-origin";
 import { loadSavedAnchor, saveSavedAnchor, saveSavedPosition } from "@/lib/window-storage";
 import {
   enqueueWindowAnimation,
@@ -114,7 +125,21 @@ export async function collapseToEdge(): Promise<EdgeAnchor | null> {
       anchor,
       size: targetSize,
       workArea,
-      previousPosition: current.position,
+      // Centrado no eixo livre: `applyAnchor` preserva a coordenada que recebe,
+      // então passar a posição crua deixaria o handle alinhado pela ponta
+      // esquerda da pílula em vez de nascer onde ela estava.
+      previousPosition: {
+        x: current.position.x +
+          Math.round((current.size.width - targetSize.width) / 2),
+        y: current.position.y +
+          Math.round((current.size.height - targetSize.height) / 2),
+      },
+    });
+
+    rememberRestoreOrigin("edge", {
+      compactPosition: current.position,
+      expandedPosition: position,
+      expandedSize: targetSize,
     });
 
     await applyWindowBoundsWithFallback(
@@ -137,12 +162,26 @@ export async function expandFromEdge(): Promise<void> {
     const workArea = await readWorkArea();
     const anchor = loadSavedAnchor() ?? undefined;
 
-    const position = resolveCollapsePosition({
+    // Volta no pixel exato de onde encolheu; só recalcula se algo mexeu no
+    // handle (ver a nota de arredondamento em window-restore-origin).
+    const restored = resolveRestorePosition({
+      origin: loadRestoreOrigin("edge"),
       currentPosition: current.position,
-      targetSize,
-      monitor: workArea,
-      anchor,
+      currentSize: current.size,
     });
+    clearRestoreOrigin("edge");
+
+    const position = restored
+      ? workArea
+        ? clampToMonitor(restored, targetSize, workArea)
+        : restored
+      : resolveCollapsePosition({
+          currentPosition: current.position,
+          currentSize: current.size,
+          targetSize,
+          monitor: workArea,
+          anchor,
+        });
 
     await applyWindowBoundsWithFallback(
       win,

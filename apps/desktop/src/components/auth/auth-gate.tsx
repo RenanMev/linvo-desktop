@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { BarApp } from "@/BarApp";
 import { LoginView } from "@/components/auth/login-view";
 import { RegisterView } from "@/components/auth/register-view";
+import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 import { useWindowChrome } from "@/context/window-chrome-context";
 import { useAuth } from "@/hooks/use-auth";
 import { quitApp } from "@/lib/app-windows";
@@ -75,6 +76,15 @@ export function AuthGate() {
         sessionWarning={auth.sessionWarning}
         onLogin={auth.login}
         onGoToRegister={() => setScreen("register")}
+      />
+    );
+  }
+
+  if (auth.phase === "onboarding" && auth.user) {
+    return (
+      <OnboardingShell
+        user={auth.user}
+        onComplete={auth.completeOnboarding}
       />
     );
   }

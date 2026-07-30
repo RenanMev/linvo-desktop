@@ -2,3 +2,8 @@
 identifier = "allow-animate-window-bounds"
 description = "Allows animating window position and size"
 commands.allow = ["animate_window_bounds"]
+
+[[permission]]
+identifier = "allow-set-window-bounds"
+description = "Allows applying window position and size in a single step, without animating"
+commands.allow = ["set_window_bounds"]

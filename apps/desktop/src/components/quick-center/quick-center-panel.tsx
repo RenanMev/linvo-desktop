@@ -26,9 +26,11 @@ type QuickCenterPanelProps = {
   user: UserPublic;
   /** Só liga foco e busca de workspace depois que a animação de expansão termina. */
   ready: boolean;
+  closing?: boolean;
   onClose: (options?: { restoreFocus?: boolean }) => void;
   onOpenSettings: () => void;
   onHide: () => void;
+  onWindowDragStart?: () => void;
 };
 
 function statusLabel(apiHealthy: boolean, sessionWarning: string | null) {
@@ -46,9 +48,11 @@ export function QuickCenterPanel({
   sessionWarning,
   user,
   ready,
+  closing = false,
   onClose,
   onOpenSettings,
   onHide,
+  onWindowDragStart,
 }: QuickCenterPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -61,7 +65,7 @@ export function QuickCenterPanel({
   const workspace = useQuickCenterWorkspace(ready);
 
   useFocusTrap(containerRef, {
-    active: ready,
+    active: ready && !closing,
     initialFocusRef: inputRef,
   });
 
@@ -154,7 +158,16 @@ export function QuickCenterPanel({
       id="quick-center-panel"
       ref={containerRef}
       onKeyDown={handleContainerKeyDown}
-      className="flex h-full min-h-0 w-full flex-col text-card-foreground"
+      data-ready={ready ? "true" : "false"}
+      data-closing={closing ? "true" : "false"}
+      className={cn(
+        "quick-center-panel flex h-full min-h-0 w-full flex-col text-card-foreground",
+        closing
+          ? "quick-center-panel-closing"
+          : ready
+            ? "quick-center-panel-ready"
+            : "quick-center-panel-preopen",
+      )}
       role="dialog"
       aria-modal="true"
       aria-label="Quick Center"
@@ -174,11 +187,16 @@ export function QuickCenterPanel({
         <span
           data-tauri-drag-region
           title="Mover"
+          onPointerDown={onWindowDragStart}
           className="flex h-6 shrink-0 cursor-grab items-center rounded-full px-0.5 text-foreground/35 transition-colors hover:bg-surface-hover hover:text-foreground active:cursor-grabbing"
         >
           <GripVertical className="pointer-events-none size-3" />
         </span>
-        <div className="min-w-0 flex-1" data-tauri-drag-region>
+        <div
+          className="min-w-0 flex-1"
+          data-tauri-drag-region
+          onPointerDown={onWindowDragStart}
+        >
           <p className="truncate text-sm font-medium tracking-tight">
             {workspace.name ?? "Workspace"}
           </p>
@@ -208,7 +226,8 @@ export function QuickCenterPanel({
           rows={2}
           className={cn(
             "w-full shrink-0 resize-none rounded-lg border border-hairline bg-surface-raise-2 px-2.5 py-2 text-sm outline-none",
-            "placeholder:text-muted-foreground focus-visible:border-hairline-strong focus-visible:ring-2 focus-visible:ring-ring/40",
+            // Foco neutro: a borda de ênfase já basta, sem anel de accent.
+            "placeholder:text-muted-foreground focus-visible:border-hairline-strong",
             "disabled:opacity-50",
           )}
         />
@@ -232,9 +251,11 @@ export function QuickCenterPanel({
 
           {isStreaming ? (
             <Button
+              key="stop"
               type="button"
               variant="outline"
               size="xs"
+              className="quick-center-fade-in"
               onClick={() => prompt.stop()}
             >
               <Square className="size-3" />
@@ -242,9 +263,11 @@ export function QuickCenterPanel({
             </Button>
           ) : (
             <Button
+              key="send"
               type="button"
               variant="secondary"
               size="xs"
+              className="quick-center-fade-in"
               disabled={fieldsDisabled || !inputValue.trim()}
               onClick={() => void handleSend()}
             >
@@ -255,7 +278,7 @@ export function QuickCenterPanel({
         </div>
 
         {(prompt.responseText || prompt.status === "done") && (
-          <div className="scrollbar-elegant min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-lg border border-hairline bg-surface-raise-2 p-2.5">
+          <div className="quick-center-fade-in scrollbar-elegant min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-lg border border-hairline bg-surface-raise-2 p-2.5">
             <p className="whitespace-pre-wrap text-[13px] leading-snug">
               {prompt.responseText}
             </p>
@@ -263,7 +286,7 @@ export function QuickCenterPanel({
         )}
 
         {prompt.status === "done" && prompt.responseText && (
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="quick-center-fade-in flex shrink-0 items-center gap-1.5">
             <Button
               type="button"
               variant="ghost"

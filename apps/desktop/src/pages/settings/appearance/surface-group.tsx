@@ -72,7 +72,7 @@ export function SurfaceGroup() {
                 onClick={() => setPreference("blurLevel", option.value)}
                 aria-pressed={active}
                 className={cn(
-                  "flex-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors",
+                  "flex-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-all duration-200 ease-out hover:-translate-y-px active:translate-y-0 active:scale-[0.98]",
                   active
                     ? "nav-pill-active"
                     : "border border-hairline text-foreground/70 hover:bg-surface-hover",

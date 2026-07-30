@@ -9,6 +9,9 @@ const setDecorationsMock = vi.fn(() => Promise.resolve());
 const setAlwaysOnTopMock = vi.fn(() => Promise.resolve());
 const setSkipTaskbarMock = vi.fn(() => Promise.resolve());
 const setResizableMock = vi.fn(() => Promise.resolve());
+const setMaximizableMock = vi.fn(() => Promise.resolve());
+const setMinSizeMock = vi.fn(() => Promise.resolve());
+const setMaxSizeMock = vi.fn(() => Promise.resolve());
 const showMock = vi.fn(() => Promise.resolve());
 const hideMock = vi.fn(() => Promise.resolve());
 const unminimizeMock = vi.fn(() => Promise.resolve());
@@ -23,6 +26,9 @@ function createWindowMock(label: string) {
     setAlwaysOnTop: setAlwaysOnTopMock,
     setSkipTaskbar: setSkipTaskbarMock,
     setResizable: setResizableMock,
+    setMaximizable: setMaximizableMock,
+    setMinSize: setMinSizeMock,
+    setMaxSize: setMaxSizeMock,
     minimize: vi.fn(() => Promise.resolve()),
     maximize: vi.fn(() => Promise.resolve()),
     unmaximize: vi.fn(() => Promise.resolve()),
@@ -142,6 +148,10 @@ export {
   setSizeMock,
   setFocusMock,
   setDecorationsMock,
+  setResizableMock,
+  setMaximizableMock,
+  setMinSizeMock,
+  setMaxSizeMock,
   showMock,
   hideMock,
 };

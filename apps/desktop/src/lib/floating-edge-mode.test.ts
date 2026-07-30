@@ -5,6 +5,10 @@ import {
   resolveEdgeHandleBounds,
   resolveNearestAnchor,
 } from "@/lib/floating-edge-mode";
+import {
+  EDGE_HANDLE_LENGTH,
+  EDGE_HANDLE_THICKNESS,
+} from "@/lib/window-mode";
 import type { MonitorInfo } from "@/lib/window-position";
 
 const workArea: MonitorInfo = {
@@ -12,38 +16,37 @@ const workArea: MonitorInfo = {
   size: { width: 1920, height: 1040 },
 };
 
+// Derivado das constantes de propósito: a espessura/comprimento são valores de
+// ajuste, e fixá-los aqui só faria o teste quebrar a cada tuning.
+const stripeAcross = { width: EDGE_HANDLE_THICKNESS, height: EDGE_HANDLE_LENGTH };
+const stripeAlong = { width: EDGE_HANDLE_LENGTH, height: EDGE_HANDLE_THICKNESS };
+
 describe("edgeHandleSize", () => {
   it("is a vertical stripe when anchored to a side", () => {
-    expect(edgeHandleSize({ horizontal: "left", vertical: null })).toEqual({
-      width: 12,
-      height: 64,
-    });
-    expect(edgeHandleSize({ horizontal: "right", vertical: null })).toEqual({
-      width: 12,
-      height: 64,
-    });
+    expect(edgeHandleSize({ horizontal: "left", vertical: null })).toEqual(
+      stripeAcross,
+    );
+    expect(edgeHandleSize({ horizontal: "right", vertical: null })).toEqual(
+      stripeAcross,
+    );
   });
 
   it("is a horizontal stripe when anchored to top or bottom", () => {
-    expect(edgeHandleSize({ horizontal: null, vertical: "top" })).toEqual({
-      width: 64,
-      height: 12,
-    });
-    expect(edgeHandleSize({ horizontal: null, vertical: "bottom" })).toEqual({
-      width: 64,
-      height: 12,
-    });
+    expect(edgeHandleSize({ horizontal: null, vertical: "top" })).toEqual(
+      stripeAlong,
+    );
+    expect(edgeHandleSize({ horizontal: null, vertical: "bottom" })).toEqual(
+      stripeAlong,
+    );
   });
 
   it("falls back to a vertical stripe for a corner or no anchor", () => {
-    expect(edgeHandleSize({ horizontal: "left", vertical: "top" })).toEqual({
-      width: 12,
-      height: 64,
-    });
-    expect(edgeHandleSize({ horizontal: null, vertical: null })).toEqual({
-      width: 12,
-      height: 64,
-    });
+    expect(edgeHandleSize({ horizontal: "left", vertical: "top" })).toEqual(
+      stripeAcross,
+    );
+    expect(edgeHandleSize({ horizontal: null, vertical: null })).toEqual(
+      stripeAcross,
+    );
   });
 
   it("never exceeds 16px on the perpendicular axis", () => {

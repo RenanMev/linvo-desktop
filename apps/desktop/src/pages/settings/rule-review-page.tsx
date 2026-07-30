@@ -30,7 +30,7 @@ import { AuthApiError } from "@/lib/auth/auth-api";
 import { cn } from "@/lib/utils";
 import * as ruleDiscoveryApi from "@/lib/workspace/rule-discovery-api";
 
-const ACCEPTED_TYPES =
+export const ACCEPTED_TYPES =
   "text/plain,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 function sessionStatusLabel(

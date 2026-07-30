@@ -10,6 +10,7 @@ vi.mock("@tauri-apps/plugin-notification", () => ({
 }));
 
 vi.mock("@tauri-apps/plugin-global-shortcut", () => ({
+  isRegistered: vi.fn(() => Promise.resolve(true)),
   register: vi.fn(() => Promise.resolve()),
   unregister: vi.fn(() => Promise.resolve()),
 }));

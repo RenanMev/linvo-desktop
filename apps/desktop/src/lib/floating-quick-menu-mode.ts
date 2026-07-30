@@ -1,11 +1,23 @@
 import {
+  applyWindowBoundsImmediate,
   applyWindowBoundsWithFallback,
   logicalToPhysical,
   readWindowBounds,
 } from "@/lib/window-animation";
 import type { EdgeAnchor } from "@/lib/window-anchor";
 import { COMPACT_SIZE, QUICK_MENU_SIZE } from "@/lib/window-mode";
-import type { MonitorInfo, Position, Size } from "@/lib/window-position";
+import {
+  clampToMonitor,
+  type MonitorInfo,
+  type Position,
+  type Size,
+} from "@/lib/window-position";
+import {
+  clearRestoreOrigin,
+  loadRestoreOrigin,
+  rememberRestoreOrigin,
+  resolveRestorePosition,
+} from "@/lib/window-restore-origin";
 import {
   EDGE_MARGIN,
   loadSavedAnchor,
@@ -19,8 +31,20 @@ import {
 } from "@/lib/window-transition";
 import { readWorkArea } from "@/lib/window-work-area";
 
-export const QUICK_MENU_EXPAND_DURATION_MS = 220;
-export const QUICK_MENU_COLLAPSE_DURATION_MS = 200;
+/**
+ * A janela não é animada: vai ao tamanho final num único `SetWindowPos` e a
+ * transição visual fica toda no CSS (`.quick-center-panel-ready`).
+ *
+ * Animar o tamanho da janela frame a frame trepida por construção — o WebView2
+ * refaz o layout do DOM inteiro a cada `SetWindowPos`, e no Tauri isso é mais
+ * caro que no Wry (tauri-apps/tauri#6322). Duas tentativas anteriores tentaram
+ * contornar isso (expansão em duas fases, depois fase única mais curta) e as
+ * duas trepidaram; o caminho liso é não animar a janela.
+ */
+export type ExpandQuickMenuOptions = {
+  /** Chamado quando a janela já está no tamanho final, para o painel entrar. */
+  onResizeStart?: () => void;
+};
 
 export function resolveQuickMenuSize(input: {
   targetSize: Size;
@@ -56,6 +80,7 @@ export function resolveQuickMenuExpandPosition(input: {
 
 export function resolveQuickMenuCollapsePosition(input: {
   currentPosition: Position;
+  currentSize?: Size;
   targetSize: Size;
   monitor: MonitorInfo | null;
   anchor?: EdgeAnchor;
@@ -63,7 +88,9 @@ export function resolveQuickMenuCollapsePosition(input: {
   return resolveCollapsePosition(input);
 }
 
-export async function expandFloatingToQuickMenu(): Promise<void> {
+export async function expandFloatingToQuickMenu(
+  options: ExpandQuickMenuOptions = {},
+): Promise<void> {
   return enqueueWindowAnimation(async () => {
     const win = getCurrentWindow();
     await win.show();
@@ -109,14 +136,27 @@ export async function expandFloatingToQuickMenu(): Promise<void> {
       plan.finalPosition.y === (plan.moveFirst ?? current.position).y;
 
     if (sameSize && samePos) {
+      options.onResizeStart?.();
       return;
     }
 
-    await applyWindowBoundsWithFallback(
-      win,
-      { position: plan.finalPosition, size: targetSize },
-      { durationMs: QUICK_MENU_EXPAND_DURATION_MS },
-    );
+    rememberRestoreOrigin("quick-menu", {
+      compactPosition: plan.moveFirst ?? current.position,
+      expandedPosition: plan.finalPosition,
+      expandedSize: targetSize,
+    });
+
+    // Janela vai ao tamanho final num único SetWindowPos; o painel entra por
+    // transform no CSS (ver `.quick-center-panel-ready`). Animar os dois ao
+    // mesmo tempo é o que trepidava.
+    await applyWindowBoundsImmediate(win, {
+      position: plan.finalPosition,
+      size: targetSize,
+    });
+
+    // Só depois de a janela estar no tamanho final, para o painel nunca pintar
+    // recortado dentro da pílula.
+    options.onResizeStart?.();
   });
 }
 
@@ -129,18 +169,29 @@ export async function collapseQuickMenuToFloating(): Promise<void> {
     const monitorInfo = await readWorkArea();
     const anchor = loadSavedAnchor() ?? undefined;
 
-    const position = resolveQuickMenuCollapsePosition({
+    // Volta no pixel exato de onde saiu; só recalcula se o painel foi mexido.
+    const restored = resolveRestorePosition({
+      origin: loadRestoreOrigin("quick-menu"),
       currentPosition: current.position,
-      targetSize,
-      monitor: monitorInfo,
-      anchor,
+      currentSize: current.size,
     });
+    clearRestoreOrigin("quick-menu");
 
-    await applyWindowBoundsWithFallback(
-      win,
-      { position, size: targetSize },
-      { durationMs: QUICK_MENU_COLLAPSE_DURATION_MS },
-    );
+    const position = restored
+      ? monitorInfo
+        ? clampToMonitor(restored, targetSize, monitorInfo)
+        : restored
+      : resolveQuickMenuCollapsePosition({
+          currentPosition: current.position,
+          currentSize: current.size,
+          targetSize,
+          monitor: monitorInfo,
+          anchor,
+        });
+
+    // O conteúdo já saiu por CSS antes daqui (QUICK_MENU_EXIT_DURATION_MS em
+    // BarApp), então o encolhimento em si é invisível — não precisa animar.
+    await applyWindowBoundsImmediate(win, { position, size: targetSize });
 
     saveSavedPosition(position);
   });

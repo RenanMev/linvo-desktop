@@ -47,7 +47,7 @@ export function AccentGroup() {
                 aria-label={option.label}
                 onClick={() => setPreference("accentColor", option.value)}
                 className={cn(
-                  "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-2 text-[11px] font-medium transition-colors",
+                  "group flex flex-col items-center gap-1.5 rounded-lg border px-2 py-2 text-[11px] font-medium transition-all duration-200 ease-out hover:-translate-y-px active:translate-y-0 active:scale-[0.98]",
                   active
                     ? "border-hairline-strong bg-surface-raise-2 text-foreground"
                     : "border-hairline text-foreground/70 hover:bg-surface-hover",
@@ -55,7 +55,7 @@ export function AccentGroup() {
               >
                 <span
                   className={cn(
-                    "size-4 rounded-full border border-hairline",
+                    "size-4 rounded-full border border-hairline transition-transform duration-200 ease-out group-hover:scale-110",
                     option.swatchClass,
                     active && "ring-2 ring-ring ring-offset-1 ring-offset-background",
                   )}

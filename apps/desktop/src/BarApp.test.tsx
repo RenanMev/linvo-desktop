@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Procedure, UserPublic } from "@linvo/shared";
@@ -12,7 +12,13 @@ import {
   expandFloatingToQuickMenu,
 } from "@/lib/floating-quick-menu-mode";
 import type { ChecklistWindowPayload } from "@/lib/checklist-window";
-import { windowMock } from "@/test/mocks/tauri";
+import {
+  setMinSizeMock,
+  setMaximizableMock,
+  setResizableMock,
+  setSizeMock,
+  windowMock,
+} from "@/test/mocks/tauri";
 
 vi.mock("@/hooks/use-floating-bootstrap", () => ({
   useFloatingBootstrap: () => true,
@@ -129,6 +135,56 @@ describe("BarApp window modes", () => {
     expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
   });
 
+  it("expands to the quick menu when the local shortcut is pressed", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.keyboard("{Control>}{Shift>}l{/Shift}{/Control}");
+
+    await waitFor(() =>
+      expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
+    );
+    expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
+  });
+
+  it("toggles the quick menu closed with the local shortcut", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
+    await waitFor(() => screen.getByLabelText("Quick Center"));
+
+    await userEventInstance.keyboard("{Control>}{Shift>}l{/Shift}{/Control}");
+
+    await waitFor(() =>
+      expect(collapseQuickMenuToFloating).toHaveBeenCalledTimes(1),
+    );
+  });
+
+  it("allows resizing only while the quick menu is open", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await waitFor(() => expect(setResizableMock).toHaveBeenCalledWith(false));
+    await waitFor(() => expect(setMaximizableMock).toHaveBeenCalledWith(false));
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
+
+    await waitFor(() => expect(setResizableMock).toHaveBeenCalledWith(true));
+    expect(setMaximizableMock).toHaveBeenLastCalledWith(false);
+    expect(setMinSizeMock).toHaveBeenCalledWith({
+      width: 320,
+      height: 360,
+    });
+
+    await userEventInstance.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(setMinSizeMock).toHaveBeenCalledWith(null);
+      expect(setResizableMock).toHaveBeenLastCalledWith(false);
+    });
+  });
+
   it("collapses the quick menu when it closes itself (Esc)", async () => {
     const userEventInstance = userEvent.setup();
     render(<BarApp sessionWarning={null} user={user} />);
@@ -141,8 +197,10 @@ describe("BarApp window modes", () => {
     await waitFor(() =>
       expect(collapseQuickMenuToFloating).toHaveBeenCalledTimes(1),
     );
-    expect(screen.queryByLabelText("Quick Center")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Chat" })).toHaveFocus();
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Quick Center")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Chat" })).toHaveFocus();
+    });
   });
 
   it("collapses on window blur without stealing focus back", async () => {
@@ -162,6 +220,42 @@ describe("BarApp window modes", () => {
     );
     const chatButton = screen.getByRole("button", { name: "Chat" });
     expect(chatButton).not.toHaveFocus();
+  });
+
+  it("does not collapse when blur is caused by dragging the quick menu", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
+    await waitFor(() => screen.getByLabelText("Quick Center"));
+    await waitFor(() => expect(focusHandler).not.toBeNull());
+
+    fireEvent.pointerDown(screen.getByTitle("Mover"));
+    act(() => {
+      focusHandler!({ payload: false });
+    });
+
+    expect(collapseQuickMenuToFloating).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
+  });
+
+  it("keeps the quick menu open if collapse fails", async () => {
+    vi.mocked(collapseQuickMenuToFloating).mockRejectedValueOnce(
+      new Error("collapse interrupted"),
+    );
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
+    await waitFor(() => screen.getByLabelText("Quick Center"));
+
+    await userEventInstance.keyboard("{Escape}");
+
+    await waitFor(() =>
+      expect(collapseQuickMenuToFloating).toHaveBeenCalledTimes(1),
+    );
+    expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Chat" })).not.toBeInTheDocument();
   });
 
   it("collapses the quick menu before expanding the checklist when a payload arrives", async () => {
@@ -305,7 +399,16 @@ describe("BarApp window modes", () => {
     expect(hideAllWindows).toHaveBeenCalledTimes(1);
   });
 
-  it("hides and collapses the Quick Center back to compact mode", async () => {
+  it("collapses the Quick Center before hiding the window", async () => {
+    const callOrder: string[] = [];
+    vi.mocked(collapseQuickMenuToFloating).mockImplementationOnce(() => {
+      callOrder.push("collapse");
+      return Promise.resolve();
+    });
+    vi.mocked(hideAllWindows).mockImplementationOnce(() => {
+      callOrder.push("hide");
+      return Promise.resolve();
+    });
     const userEventInstance = userEvent.setup();
     render(<BarApp sessionWarning={null} user={user} />);
 
@@ -320,6 +423,28 @@ describe("BarApp window modes", () => {
     await waitFor(() =>
       expect(collapseQuickMenuToFloating).toHaveBeenCalledTimes(1),
     );
+    expect(callOrder).toEqual(["collapse", "hide"]);
+    expect(screen.queryByLabelText("Quick Center")).not.toBeInTheDocument();
+  });
+
+  it("still hides after forcing compact size when quick-menu collapse fails", async () => {
+    vi.mocked(collapseQuickMenuToFloating).mockRejectedValueOnce(
+      new Error("collapse interrupted"),
+    );
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
+    await waitFor(() => screen.getByLabelText("Quick Center"));
+
+    await userEventInstance.click(
+      screen.getByRole("button", { name: "Ocultar" }),
+    );
+
+    await waitFor(() => expect(hideAllWindows).toHaveBeenCalledTimes(1));
+    expect(setMinSizeMock).toHaveBeenCalledWith(null);
+    expect(setResizableMock).toHaveBeenLastCalledWith(false);
+    expect(setSizeMock).toHaveBeenCalledWith({ width: 168, height: 34 });
     expect(screen.queryByLabelText("Quick Center")).not.toBeInTheDocument();
   });
 });

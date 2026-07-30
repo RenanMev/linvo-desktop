@@ -1,7 +1,10 @@
 import { useState } from "react";
 
 import { SettingsSelect } from "@/components/settings/settings-select";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { requestOnboardingReview } from "@/lib/onboarding-review-sync";
+import { closePanel } from "@/lib/panel-window";
 
 const LANGUAGE_OPTIONS = [
   { value: "pt-BR", label: "Português (Brasil)" },
@@ -15,6 +18,11 @@ export function GeneralSettingsPage() {
   const [systemLanguage, setSystemLanguage] = useState<LanguageValue>("pt-BR");
   const [responseLanguage, setResponseLanguage] =
     useState<LanguageValue>("pt-BR");
+
+  async function handleReviewOnboarding() {
+    await requestOnboardingReview();
+    await closePanel();
+  }
 
   return (
     <ScrollArea className="h-full">
@@ -45,6 +53,22 @@ export function GeneralSettingsPage() {
             <p className="mt-0.5 text-[11px] text-muted-foreground">
               Use Ctrl+Shift+L para mostrar ou ocultar a barra flutuante.
             </p>
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-hairline bg-muted/40 p-3">
+            <div>
+              <p className="text-xs font-medium">Onboarding</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Reveja a configuração inicial sem reiniciar o aplicativo.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void handleReviewOnboarding()}
+            >
+              Rever onboarding
+            </Button>
           </div>
         </div>
       </div>

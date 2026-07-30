@@ -124,8 +124,8 @@ export function ProcedureChecklistPanel({
               <li key={`${index}-${step}`}>
                 <div
                   className={cn(
-                    "flex items-start gap-2.5 rounded-lg px-2 py-2 text-[13px] transition-colors",
-                    "hover:bg-surface-hover",
+                    "flex items-start gap-2.5 rounded-lg px-2 py-2 text-[13px] transition-[background-color,color,transform] duration-200 ease-out",
+                    "hover:translate-x-0.5 hover:bg-surface-hover",
                     isChecked && "text-foreground/45",
                   )}
                 >
@@ -136,7 +136,7 @@ export function ProcedureChecklistPanel({
                     aria-label={step}
                     onClick={() => toggle(index)}
                     className={cn(
-                      "mt-0.5 grid size-4 shrink-0 place-items-center rounded-[5px] border transition-all duration-150",
+                      "mt-0.5 grid size-4 shrink-0 place-items-center rounded-[5px] border transition-all duration-200 ease-out hover:scale-110 active:scale-95",
                       isChecked
                         ? "border-progress bg-progress text-progress-foreground"
                         : "border-hairline-strong bg-transparent text-transparent hover:border-hairline-strong",

@@ -1,8 +1,9 @@
 import type { Size } from "@/lib/window-position";
+import { ONBOARDING_SIZE } from "@/lib/window-mode";
 
 export const AUTH_SIZE: Size = { width: 880, height: 600 };
 
-export type WindowSurfaceMode = "auth" | "compact";
+export type WindowSurfaceMode = "auth" | "onboarding" | "compact";
 
 export type WindowSurfaceConfig = {
   mode: WindowSurfaceMode;
@@ -11,6 +12,7 @@ export type WindowSurfaceConfig = {
   alwaysOnTop: boolean;
   skipTaskbar: boolean;
   resizable: boolean;
+  maximizable: boolean;
   transparent: boolean;
 };
 
@@ -24,6 +26,18 @@ export function configForSurfaceMode(mode: WindowSurfaceMode): WindowSurfaceConf
         alwaysOnTop: false,
         skipTaskbar: false,
         resizable: true,
+        maximizable: false,
+        transparent: true,
+      };
+    case "onboarding":
+      return {
+        mode,
+        size: ONBOARDING_SIZE,
+        decorations: false,
+        alwaysOnTop: false,
+        skipTaskbar: false,
+        resizable: false,
+        maximizable: false,
         transparent: true,
       };
     case "compact":
@@ -34,6 +48,7 @@ export function configForSurfaceMode(mode: WindowSurfaceMode): WindowSurfaceConf
         alwaysOnTop: true,
         skipTaskbar: true,
         resizable: false,
+        maximizable: false,
         transparent: true,
       };
     default: {
@@ -44,7 +59,13 @@ export function configForSurfaceMode(mode: WindowSurfaceMode): WindowSurfaceConf
 }
 
 export function surfaceModeForAuthPhase(
-  phase: "checking" | "unauthenticated" | "floating",
+  phase: "checking" | "unauthenticated" | "onboarding" | "floating",
 ): WindowSurfaceMode {
-  return phase === "floating" ? "compact" : "auth";
+  if (phase === "floating") {
+    return "compact";
+  }
+  if (phase === "onboarding") {
+    return "onboarding";
+  }
+  return "auth";
 }

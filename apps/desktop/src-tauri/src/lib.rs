@@ -100,6 +100,7 @@ fn run_animation(
 
     let start = Instant::now();
     let duration = Duration::from_millis(duration_ms.max(1));
+    let mut frame: u32 = 0;
 
     loop {
         if ANIMATION_GENERATION.load(Ordering::SeqCst) != generation {
@@ -120,8 +121,31 @@ fn run_animation(
             return Ok(true);
         }
 
-        std::thread::sleep(FRAME_INTERVAL);
+        // Dorme até o próximo múltiplo de FRAME_INTERVAL, não um intervalo fixo
+        // depois do trabalho: `SetWindowPos` é síncrono e força relayout do
+        // WebView2, então "trabalho + 16.6ms" dava um período de frame variável
+        // (~40fps irregular) — é isso que se vê como trepidação. Se um frame
+        // estourou o deadline, segue direto pro próximo em vez de acumular atraso.
+        frame += 1;
+        if let Some(remaining) =
+            (start + FRAME_INTERVAL * frame).checked_duration_since(Instant::now())
+        {
+            std::thread::sleep(remaining);
+        }
     }
+}
+
+/// Aplica bounds numa única chamada, sem animar.
+///
+/// O WebView2 refaz o layout do DOM inteiro a cada `SetWindowPos`, então animar
+/// o tamanho da janela frame a frame trepida por construção (é mais grave no
+/// Tauri que no Wry — tauri-apps/tauri#6322). Para transições, o caminho liso é
+/// redimensionar de uma vez e animar o conteúdo por transform no CSS.
+#[tauri::command]
+fn set_window_bounds(window: WebviewWindow, to: TargetBounds) -> Result<(), String> {
+    // Invalida animação em voo para ela não sobrescrever estes bounds.
+    ANIMATION_GENERATION.fetch_add(1, Ordering::SeqCst);
+    apply_bounds(&window, to.x, to.y, to.width, to.height)
 }
 
 #[tauri::command]
@@ -169,6 +193,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             animate_window_bounds,
+            set_window_bounds,
             monitor_work_area,
             app::app_quit,
             auth::auth_set_tokens,

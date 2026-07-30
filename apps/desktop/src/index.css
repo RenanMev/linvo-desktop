@@ -493,31 +493,33 @@
       box-shadow 200ms ease-out;
   }
 
+  /*
+   * Sem realce de foco na pílula inteira: a janela tem só 1px de gutter, então
+   * qualquer halo externo é recortado e aparece como borda cortada. O foco vive
+   * nos próprios botões, inset (ver `floating-bar.tsx`).
+   */
   .floating-pill:hover {
     border-color: var(--hairline-strong);
   }
 
-  .floating-pill:focus-within {
-    border-color: var(--hairline-strong);
-    box-shadow:
-      var(--shadow-inner-light),
-      0 0 0 3px var(--ring);
-  }
-
   .quick-center-panel-preopen {
     opacity: 0;
-    filter: blur(6px);
   }
 
   /*
-   * Enter do painel: só opacidade + blur, sem transform. O conteúdo entra
-   * DURANTE o crescimento da janela (ver onResizeStart em BarApp), então a
-   * própria janela já fornece o movimento — animar transform aqui em cima
-   * daria duas motions concorrentes na mesma transição.
+   * Enter do painel: transform + opacidade, as duas propriedades que o
+   * compositor resolve sozinho, sem layout nem paint.
+   *
+   * Isto é a transição inteira — a janela já pulou para o tamanho final antes
+   * daqui (ver `applyWindowBoundsImmediate`), justamente para o WebView2 fazer
+   * um relayout só. Nada de `filter: blur()`: sobre a subárvore toda ele custa
+   * paint por frame e foi uma das causas da trepidação.
    */
   .quick-center-panel-ready {
     animation: quick-center-panel-enter 200ms cubic-bezier(0.22, 1, 0.36, 1)
       both;
+    transform-origin: top center;
+    will-change: transform, opacity;
   }
 
   .quick-center-panel-ready > :not(.sr-only) {
@@ -540,6 +542,8 @@
   .quick-center-panel-closing {
     pointer-events: none;
     animation: quick-center-panel-exit 120ms cubic-bezier(0.4, 0, 1, 1) both;
+    transform-origin: top center;
+    will-change: transform, opacity;
   }
 
   .quick-center-panel-closing > :not(.sr-only) {
@@ -652,11 +656,11 @@
 @keyframes quick-center-panel-enter {
   0% {
     opacity: 0;
-    filter: blur(6px);
+    transform: scale(0.96);
   }
   100% {
     opacity: 1;
-    filter: blur(0);
+    transform: scale(1);
   }
 }
 
@@ -674,11 +678,11 @@
 @keyframes quick-center-panel-exit {
   0% {
     opacity: 1;
-    filter: blur(0);
+    transform: scale(1);
   }
   100% {
     opacity: 0;
-    filter: blur(5px);
+    transform: scale(0.98);
   }
 }
 

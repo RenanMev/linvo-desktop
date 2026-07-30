@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { hideAllWindows } from "@/lib/app-windows";
+import { hideAllWindows, toggleAppVisibility } from "@/lib/app-windows";
 import type { AuthPhase } from "@/lib/auth/auth-state";
 import { closeChecklist } from "@/lib/checklist-window";
 import { closePanel } from "@/lib/panel-window";
@@ -24,6 +24,7 @@ type WindowChromeContextValue = {
   windowLabel: WindowLabel;
   registerAuthPhase: (phase: AuthPhase) => void;
   registerTrayHandlers: (handlers: TrayHandlers) => void;
+  setShortcutOverride: (handler: (() => void) | null) => void;
   updateTrayAuthState: typeof updateTrayAuthState;
 };
 
@@ -39,10 +40,27 @@ export function WindowChromeProvider({
   windowLabel,
 }: WindowChromeProviderProps) {
   const authPhaseRef = useRef<AuthPhase>("checking");
+  const shortcutOverrideRef = useRef<(() => void) | null>(null);
   const isMainWindow = windowLabel === "main";
 
   const registerAuthPhase = useCallback((phase: AuthPhase) => {
     authPhaseRef.current = phase;
+  }, []);
+
+  const setShortcutOverride = useCallback(
+    (handler: (() => void) | null) => {
+      shortcutOverrideRef.current = handler;
+    },
+    [],
+  );
+
+  const handleShortcutTrigger = useCallback(() => {
+    const handler = shortcutOverrideRef.current;
+    if (handler) {
+      handler();
+      return;
+    }
+    void toggleAppVisibility();
   }, []);
 
   const handleCloseRequest = useCallback(async () => {
@@ -72,16 +90,20 @@ export function WindowChromeProvider({
     onCloseRequest: handleCloseRequest,
     initTray: isMainWindow,
   });
-  useGlobalShortcut({ enabled: isMainWindow });
+  useGlobalShortcut({
+    enabled: isMainWindow,
+    onTrigger: handleShortcutTrigger,
+  });
 
   const value = useMemo(
     () => ({
       windowLabel,
       registerAuthPhase,
       registerTrayHandlers,
+      setShortcutOverride,
       updateTrayAuthState,
     }),
-    [windowLabel, registerAuthPhase],
+    [windowLabel, registerAuthPhase, setShortcutOverride],
   );
 
   return (
