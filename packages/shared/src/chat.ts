@@ -32,6 +32,17 @@ export const messageActivitySchema = z.object({
   kind: messageActivityKindSchema.optional(),
 });
 
+export const messageArtifactKindSchema = z.literal("pdf");
+
+export const messageArtifactSchema = z.object({
+  id: z.string(),
+  kind: messageArtifactKindSchema,
+  title: z.string(),
+  filename: z.string(),
+  sizeBytes: z.number().int().nonnegative(),
+  pageCount: z.number().int().positive().optional(),
+});
+
 export const reasoningChunkSchema = z.object({
   text: z.string(),
 });
@@ -75,23 +86,17 @@ export const deskStateSchema = z.object({
   screenKey: z.string().trim().min(1).optional(),
 });
 
-export const toolResultInputSchema = z
-  .object({
-    requestId: z.string().min(1),
-    approved: z.boolean(),
-    result: z.string().optional(),
-    deskState: deskStateSchema.optional(),
-    model: z.string().trim().min(1).optional(),
-  })
-  .superRefine((value, ctx) => {
-    if (value.approved && value.result === undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "result é obrigatório quando approved é true",
-        path: ["result"],
-      });
-    }
-  });
+// `result` é opcional mesmo com `approved: true`: tools com
+// `executionTarget: "server"` são executadas pela API depois da aprovação e
+// não recebem resultado do cliente. A obrigatoriedade para tools de cliente
+// é verificada na API, que é quem conhece o pending.
+export const toolResultInputSchema = z.object({
+  requestId: z.string().min(1),
+  approved: z.boolean(),
+  result: z.string().optional(),
+  deskState: deskStateSchema.optional(),
+  model: z.string().trim().min(1).optional(),
+});
 
 export const llmModelOptionSchema = z.object({
   id: z.string().trim().min(1),
@@ -109,6 +114,7 @@ export const TOOL_LABELS: Record<string, string> = {
   read_clipboard: "Área de transferência",
   create_procedure: "Criar procedimento",
   open_procedure: "Abrir procedimento",
+  generate_pdf: "Gerar PDF",
 };
 
 export function getToolLabel(name: string): string {
@@ -135,6 +141,7 @@ export const messageSchema = z.object({
   replyTo: messageReplyRefSchema.optional(),
   toolUses: z.array(messageToolUseSchema).optional(),
   activities: z.array(messageActivitySchema).optional(),
+  artifacts: z.array(messageArtifactSchema).optional(),
   reasoning: z.string().optional(),
   model: z.string().optional(),
 });
@@ -165,6 +172,8 @@ export type MessageToolUse = z.infer<typeof messageToolUseSchema>;
 export type MessageActivityStatus = z.infer<typeof messageActivityStatusSchema>;
 export type MessageActivityKind = z.infer<typeof messageActivityKindSchema>;
 export type MessageActivity = z.infer<typeof messageActivitySchema>;
+export type MessageArtifactKind = z.infer<typeof messageArtifactKindSchema>;
+export type MessageArtifact = z.infer<typeof messageArtifactSchema>;
 export type ReasoningChunk = z.infer<typeof reasoningChunkSchema>;
 export type ChatErrorCode = z.infer<typeof chatErrorCodeSchema>;
 export type ChatErrorEvent = z.infer<typeof chatErrorEventSchema>;

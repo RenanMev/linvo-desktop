@@ -1,6 +1,7 @@
 export * from "./appearance";
 export * from "./auth";
 export * from "./chat";
+export * from "./document";
 export * from "./health";
 export * from "./procedure";
 export * from "./rule-discovery";
