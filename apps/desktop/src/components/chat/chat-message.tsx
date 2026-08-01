@@ -1,5 +1,6 @@
 import { Bot, RefreshCw, User } from "lucide-react";
 
+import { ChatArtifactCard } from "@/components/chat/chat-artifact-card";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { ChatMessageOptions } from "@/components/chat/chat-message-options";
 import { ChatReasoningPanel } from "@/components/chat/chat-reasoning-panel";
@@ -181,6 +182,11 @@ export function ChatMessageBubble({
             isStreaming={isStreaming}
           />
         )}
+
+        {!isUser &&
+          message.artifacts?.map((artifact) => (
+            <ChatArtifactCard key={artifact.id} artifact={artifact} />
+          ))}
       </div>
     </div>
   );

@@ -1,6 +1,9 @@
-import { Clipboard, ListChecks, Wrench } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, Clipboard, FileText, ListChecks, Wrench } from "lucide-react";
 
+import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   isCreateProcedureToolRequest,
   parseCreateProcedureArgs,
@@ -33,26 +36,41 @@ function formatArgsPreview(args: Record<string, unknown>): string | null {
     .join(" · ");
 }
 
+function parseGeneratePdfArgs(
+  args: Record<string, unknown>,
+): { title: string; markdown: string } | null {
+  const title = typeof args.title === "string" ? args.title.trim() : "";
+  const markdown = typeof args.markdown === "string" ? args.markdown : "";
+  if (!title || !markdown) {
+    return null;
+  }
+  return { title, markdown };
+}
+
 export function ChatToolApproval({
   request,
   disabled = false,
   onApprove,
   onDeny,
 }: ChatToolApprovalProps) {
+  const [showPreview, setShowPreview] = useState(false);
   const isCreate = isCreateProcedureToolRequest(request);
   const isOpenProcedure = request.name === "open_procedure";
   const isClipboard = request.name === "read_clipboard";
+  const isGeneratePdf = request.name === "generate_pdf";
   const createArgs = isCreate ? parseCreateProcedureArgs(request.args) : null;
+  const pdfArgs = isGeneratePdf ? parseGeneratePdfArgs(request.args) : null;
   const procedureSlug = isOpenProcedure
     ? resolveProcedureSlugFromToolRequest(request)
     : null;
   const argsPreview =
-    !isCreate && !isOpenProcedure && !isClipboard
+    !isCreate && !isOpenProcedure && !isClipboard && !pdfArgs
       ? formatArgsPreview(request.args)
       : null;
 
-  const Icon =
-    isCreate || isOpenProcedure
+  const Icon = isGeneratePdf
+    ? FileText
+    : isCreate || isOpenProcedure
       ? ListChecks
       : isClipboard
         ? Clipboard
@@ -82,6 +100,31 @@ export function ChatToolApproval({
                   {createArgs.markdown}
                 </p>
               )}
+            </div>
+          ) : pdfArgs ? (
+            <div className="space-y-1.5 text-xs text-muted-foreground">
+              <p>Gerar um PDF para download:</p>
+              <p className="font-medium text-foreground">{pdfArgs.title}</p>
+              <button
+                type="button"
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                aria-expanded={showPreview}
+                onClick={() => setShowPreview((previous) => !previous)}
+              >
+                <ChevronDown
+                  className={cn(
+                    "size-3 transition-transform",
+                    showPreview && "rotate-180",
+                  )}
+                  aria-hidden
+                />
+                {showPreview ? "Ocultar prévia" : "Ver prévia"}
+              </button>
+              {showPreview ? (
+                <div className="max-h-48 overflow-y-auto rounded-lg border border-hairline bg-popover px-2 py-1.5">
+                  <ChatMarkdown content={pdfArgs.markdown} />
+                </div>
+              ) : null}
             </div>
           ) : isOpenProcedure ? (
             <span className="text-xs text-muted-foreground">

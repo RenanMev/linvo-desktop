@@ -10,6 +10,7 @@ import {
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { formatBytes } from "@/lib/documents/format-bytes";
 import type { OnboardingKnowledgeIntent } from "@/lib/onboarding/onboarding-routing";
 import { cn } from "@/lib/utils";
 import { ACCEPTED_TYPES } from "@/pages/settings/rule-review-page";
@@ -23,16 +24,6 @@ function acceptsFile(file: File): boolean {
     ACCEPTED_MIME_TYPES.has(file.type) ||
     (file.type === "" && file.name.toLowerCase().endsWith(".xlsx"))
   );
-}
-
-function formatBytes(size: number): string {
-  if (size < 1024) {
-    return `${size} B`;
-  }
-  if (size < 1024 * 1024) {
-    return `${Math.round(size / 1024)} KB`;
-  }
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 type KnowledgeStepProps = {
