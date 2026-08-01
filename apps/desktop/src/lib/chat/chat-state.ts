@@ -91,6 +91,21 @@ export function appendToolUse(
   );
 }
 
+export function appendArtifact(
+  messages: ChatMessage[],
+  id: string,
+  artifact: NonNullable<ChatMessage["artifacts"]>[number],
+): ChatMessage[] {
+  return messages.map((message) => {
+    if (message.id !== id) return message;
+    const artifacts = message.artifacts ?? [];
+    // O mesmo turno pode ser retomado depois de uma pausa e reemitir o card já
+    // recebido; o id do documento é único, então serve de chave.
+    if (artifacts.some((item) => item.id === artifact.id)) return message;
+    return { ...message, artifacts: [...artifacts, artifact] };
+  });
+}
+
 export function upsertActivity(
   messages: ChatMessage[],
   id: string,

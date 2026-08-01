@@ -19,6 +19,7 @@ import {
   createUserMessage,
   finalizeMessage,
   setMessageModel,
+  appendArtifact,
   upsertActivity,
 } from "@/lib/chat/chat-state";
 import {
@@ -411,6 +412,18 @@ export function useChat({
               return next;
             });
           },
+          onArtifact: (artifact) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
+            setMessages((prev) => {
+              const next = appendArtifact(prev, currentAssistantId, artifact);
+              if (isCurrentRun(activeConversationId, controller)) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
           onReasoningChunk: (text) => {
             if (!isCurrentRun(activeConversationId, controller)) {
               return;
@@ -631,6 +644,18 @@ export function useChat({
               return next;
             });
           },
+          onArtifact: (artifact) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
+            setMessages((prev) => {
+              const next = appendArtifact(prev, assistantId, artifact);
+              if (isCurrentRun(activeConversationId, controller)) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
           onReasoningChunk: (text) => {
             if (!isCurrentRun(activeConversationId, controller)) {
               return;
@@ -827,6 +852,18 @@ export function useChat({
             }
             setMessages((prev) => {
               const next = upsertActivity(prev, assistantId, activity);
+              if (isCurrentRun(activeConversationId, controller)) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onArtifact: (artifact) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
+            setMessages((prev) => {
+              const next = appendArtifact(prev, assistantId, artifact);
               if (isCurrentRun(activeConversationId, controller)) {
                 persistMessages(activeConversationId, next);
               }

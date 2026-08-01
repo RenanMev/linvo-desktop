@@ -2,6 +2,7 @@ import {
   conversationListSchema,
   conversationSchema,
   messageActivitySchema,
+  messageArtifactSchema,
   messageListSchema,
   messageToolUseSchema,
   modelInfoSchema,
@@ -12,6 +13,7 @@ import {
   type ForceTool,
   type Message,
   type MessageActivity,
+  type MessageArtifact,
   type MessageToolUse,
   type ToolRequest,
 } from "@linvo/shared";
@@ -161,6 +163,7 @@ type StreamHandlers = {
   onToolUsed?: (tool: MessageToolUse) => void;
   onToolRequest?: (request: ToolRequest) => void;
   onActivity?: (activity: MessageActivity) => void;
+  onArtifact?: (artifact: MessageArtifact) => void;
   onReasoningChunk?: (text: string) => void;
   onModel?: (model: string) => void;
   onAssistantDone?: (message: Message) => void;
@@ -217,6 +220,13 @@ async function* consumeSseStream(
           const activity = messageActivitySchema.safeParse(parsed.data);
           if (activity.success) {
             handlers.onActivity?.(activity.data);
+          }
+          break;
+        }
+        case "artifact": {
+          const artifact = messageArtifactSchema.safeParse(parsed.data);
+          if (artifact.success) {
+            handlers.onArtifact?.(artifact.data);
           }
           break;
         }

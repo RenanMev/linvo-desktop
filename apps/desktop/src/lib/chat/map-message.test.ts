@@ -80,4 +80,35 @@ describe("map-message", () => {
       { name: "search_knowledge", label: "Base de conhecimento" },
     ]);
   });
+
+  it("keeps artifacts so the card survives a conversation reload", () => {
+    const mapped = mapApiMessageToChat({
+      id: "msg-3",
+      role: "assistant",
+      content: "Segue o PDF",
+      status: "done",
+      createdAt: "2026-01-01T12:00:00.000Z",
+      artifacts: [
+        {
+          id: "doc-1",
+          kind: "pdf",
+          title: "Relatório",
+          filename: "relatorio.pdf",
+          sizeBytes: 2048,
+          pageCount: 2,
+        },
+      ],
+    });
+
+    expect(mapped.artifacts).toEqual([
+      {
+        id: "doc-1",
+        kind: "pdf",
+        title: "Relatório",
+        filename: "relatorio.pdf",
+        sizeBytes: 2048,
+        pageCount: 2,
+      },
+    ]);
+  });
 });
