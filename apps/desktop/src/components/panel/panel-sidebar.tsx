@@ -7,6 +7,7 @@ import {
   Boxes,
   ChevronDown,
   CreditCard,
+  FileText,
   Keyboard,
   Layers,
   LibraryBig,
@@ -96,6 +97,7 @@ const settingsGroups: NavGroup[] = [
 ];
 
 const chatExploreItems: NavItem[] = [
+  { label: "Documentos", icon: FileText, to: "/documents" },
   { label: "Arquivadas", icon: Archive, soon: true },
   { label: "Biblioteca", icon: LibraryBig, soon: true },
 ];
@@ -441,7 +443,9 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                 title={item.label}
                 icon={item.icon}
                 tabIndex={collapsedTabIndex}
-                disabled
+                active={item.to != null && location.pathname === item.to}
+                disabled={item.to == null}
+                onClick={item.to ? () => navigate(item.to!) : undefined}
               />
             ))}
           </>
@@ -711,7 +715,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                         onClick={() => {
                           if (
                             !window.confirm(
-                              "Apagar esta conversa? Esta ação não pode ser desfeita.",
+                              "Apagar esta conversa? Os PDFs gerados nela saem do workspace para todos os membros. Esta ação não pode ser desfeita.",
                             )
                           ) {
                             return;

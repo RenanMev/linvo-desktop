@@ -81,7 +81,7 @@ describe("PanelSidebar delete conversation", () => {
     );
 
     expect(window.confirm).toHaveBeenCalledWith(
-      "Apagar esta conversa? Esta ação não pode ser desfeita.",
+      expect.stringContaining("Os PDFs gerados nela saem do workspace"),
     );
     expect(deleteConversation).not.toHaveBeenCalled();
   });

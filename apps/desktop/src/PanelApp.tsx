@@ -17,6 +17,7 @@ import { RuleReviewPage } from "@/pages/settings/rule-review-page";
 import { ProcedurePage } from "@/pages/settings/procedure-page";
 import { WorkspaceSettingsPage } from "@/pages/settings/workspace-settings-page";
 import { ChatPage } from "@/pages/chat-page";
+import { DocumentsPage } from "@/pages/documents-page";
 import { usePanelSession } from "@/hooks/use-panel-session";
 import { listenPanelNavigate } from "@/lib/panel-window";
 
@@ -75,6 +76,7 @@ function PanelRoutes() {
       >
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:conversationId" element={<ChatPage />} />
+        <Route path="/documents" element={<DocumentsPage />} />
         <Route
           path="/workspaces"
           element={<Navigate to="/settings/workspace" replace />}
