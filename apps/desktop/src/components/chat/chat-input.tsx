@@ -318,7 +318,7 @@ export function ChatInput({
                 {getToolLabel(forceTool)}
                 <button
                   type="button"
-                  className="rounded-full p-0.5 hover:bg-surface-hover"
+                  className="rounded-md p-0.5 hover:bg-surface-hover"
                   title="Remover ferramenta"
                   disabled={controlsDisabled}
                   onClick={() => setForceTool(null)}
@@ -369,7 +369,7 @@ export function ChatInput({
               onClick={handleSend}
               disabled={!canSend || resolving}
               title="Enviar"
-              className="shrink-0 rounded-full"
+              className="shrink-0"
             >
               <ArrowUp />
             </Button>

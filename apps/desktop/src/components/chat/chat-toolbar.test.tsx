@@ -1,6 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { ChatToolbar } from "@/components/chat/chat-toolbar";
@@ -16,23 +15,15 @@ describe("ChatToolbar", () => {
     expect(screen.getByText("Conversa de teste")).toBeInTheDocument();
   });
 
-  it("navigates to settings when Configurações is clicked", async () => {
-    const user = userEvent.setup();
-
+  it("does not render a settings shortcut in the chat toolbar", () => {
     render(
-      <MemoryRouter initialEntries={["/chat"]}>
-        <Routes>
-          <Route path="/chat" element={<ChatToolbar title="Nova conversa" />} />
-          <Route
-            path="/settings/general"
-            element={<div>Página de configurações</div>}
-          />
-        </Routes>
+      <MemoryRouter>
+        <ChatToolbar title="Nova conversa" />
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /configurações/i }));
-
-    expect(screen.getByText("Página de configurações")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /configurações/i }),
+    ).not.toBeInTheDocument();
   });
 });

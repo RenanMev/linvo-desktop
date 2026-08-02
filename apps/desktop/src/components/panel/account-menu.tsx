@@ -38,6 +38,7 @@ export function AccountMenu({ session }: AccountMenuProps) {
           <button
             type="button"
             title="Conta"
+            aria-label="Abrir menu do usuário"
             className={cn(
               "flex size-7 items-center justify-center rounded-full bg-sidebar-primary text-xs font-semibold text-sidebar-primary-foreground",
               "outline-none transition-opacity hover:opacity-90 focus-visible:ring-[3px] focus-visible:ring-ring/50",

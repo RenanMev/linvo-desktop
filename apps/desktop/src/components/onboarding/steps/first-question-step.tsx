@@ -74,7 +74,7 @@ export function FirstQuestionStep({
             type="button"
             disabled={streaming}
             onClick={() => setQuestion(suggestion)}
-            className="rounded-full border border-hairline bg-surface-raise-1 px-3 py-1.5 text-left text-xs text-text-secondary outline-none transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-40"
+            className="rounded-lg border border-hairline bg-surface-raise-1 px-3 py-1.5 text-left text-xs text-text-secondary outline-none transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-40"
           >
             {suggestion}
           </button>

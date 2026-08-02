@@ -1,6 +1,7 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AccentGroup } from "@/pages/settings/appearance/accent-group";
 import { SurfaceGroup } from "@/pages/settings/appearance/surface-group";
+import { ThemeModeGroup } from "@/pages/settings/appearance/theme-mode-group";
 
 export function AppearancePage() {
   return (
@@ -13,6 +14,7 @@ export function AppearancePage() {
           </p>
         </div>
         <div className="mt-6 space-y-6">
+          <ThemeModeGroup />
           <AccentGroup />
           <SurfaceGroup />
         </div>
