@@ -3,7 +3,16 @@ import {
   applyWindowBoundsWithFallback,
   logicalToPhysical,
   readWindowBounds,
+  releaseMinWindowSize,
 } from "@/lib/window-animation";
+import {
+  resolveCollapseMorphGeometry,
+  resolveExpandMorphGeometry,
+  type IslandCollapseHooks,
+  type IslandExpandHooks,
+  type IslandMorphGeometry,
+  type PreparedIslandWindowTransition,
+} from "@/lib/floating-island-transition";
 import type { EdgeAnchor } from "@/lib/window-anchor";
 import { COMPACT_SIZE, QUICK_MENU_SIZE } from "@/lib/window-mode";
 import {
@@ -41,10 +50,8 @@ import { readWorkArea } from "@/lib/window-work-area";
  * contornar isso (expansão em duas fases, depois fase única mais curta) e as
  * duas trepidaram; o caminho liso é não animar a janela.
  */
-export type ExpandQuickMenuOptions = {
-  /** Chamado quando a janela já está no tamanho final, para o painel entrar. */
-  onResizeStart?: () => void;
-};
+export type ExpandQuickMenuOptions = IslandExpandHooks;
+export type PreparedQuickMenuCollapse = PreparedIslandWindowTransition;
 
 export function resolveQuickMenuSize(input: {
   targetSize: Size;
@@ -90,7 +97,7 @@ export function resolveQuickMenuCollapsePosition(input: {
 
 export async function expandFloatingToQuickMenu(
   options: ExpandQuickMenuOptions = {},
-): Promise<void> {
+): Promise<IslandMorphGeometry> {
   return enqueueWindowAnimation(async () => {
     const win = getCurrentWindow();
     await win.show();
@@ -135,13 +142,29 @@ export async function expandFloatingToQuickMenu(
       plan.finalPosition.x === (plan.moveFirst ?? current.position).x &&
       plan.finalPosition.y === (plan.moveFirst ?? current.position).y;
 
+    const sourceBounds = {
+      position: plan.moveFirst ?? current.position,
+      size: current.size,
+    };
+    const targetBounds = {
+      position: plan.finalPosition,
+      size: targetSize,
+    };
+    const geometry = resolveExpandMorphGeometry({
+      sourceBounds,
+      targetBounds,
+      scaleFactor: scale,
+    });
+
+    await options.onPrepare?.(geometry);
+
     if (sameSize && samePos) {
-      options.onResizeStart?.();
-      return;
+      await options.onResizeStart?.(geometry);
+      return geometry;
     }
 
     rememberRestoreOrigin("quick-menu", {
-      compactPosition: plan.moveFirst ?? current.position,
+      compactPosition: sourceBounds.position,
       expandedPosition: plan.finalPosition,
       expandedSize: targetSize,
     });
@@ -149,18 +172,16 @@ export async function expandFloatingToQuickMenu(
     // Janela vai ao tamanho final num único SetWindowPos; o painel entra por
     // transform no CSS (ver `.quick-center-panel-ready`). Animar os dois ao
     // mesmo tempo é o que trepidava.
-    await applyWindowBoundsImmediate(win, {
-      position: plan.finalPosition,
-      size: targetSize,
-    });
+    await applyWindowBoundsImmediate(win, targetBounds);
 
     // Só depois de a janela estar no tamanho final, para o painel nunca pintar
     // recortado dentro da pílula.
-    options.onResizeStart?.();
+    await options.onResizeStart?.(geometry);
+    return geometry;
   });
 }
 
-export async function collapseQuickMenuToFloating(): Promise<void> {
+export async function prepareQuickMenuCollapse(): Promise<PreparedQuickMenuCollapse> {
   return enqueueWindowAnimation(async () => {
     const win = getCurrentWindow();
     const scale = await win.scaleFactor();
@@ -175,8 +196,6 @@ export async function collapseQuickMenuToFloating(): Promise<void> {
       currentPosition: current.position,
       currentSize: current.size,
     });
-    clearRestoreOrigin("quick-menu");
-
     const position = restored
       ? monitorInfo
         ? clampToMonitor(restored, targetSize, monitorInfo)
@@ -189,10 +208,41 @@ export async function collapseQuickMenuToFloating(): Promise<void> {
           anchor,
         });
 
-    // O conteúdo já saiu por CSS antes daqui (QUICK_MENU_EXIT_DURATION_MS em
-    // BarApp), então o encolhimento em si é invisível — não precisa animar.
-    await applyWindowBoundsImmediate(win, { position, size: targetSize });
-
-    saveSavedPosition(position);
+    // O CSS recebe esta geometria antes do único commit nativo de bounds.
+    const targetBounds = { position, size: targetSize };
+    return {
+      targetBounds,
+      geometry: resolveCollapseMorphGeometry({
+        sourceBounds: current,
+        targetBounds,
+        scaleFactor: scale,
+      }),
+    };
   });
+}
+
+export async function commitQuickMenuCollapse(
+  transition: PreparedQuickMenuCollapse,
+): Promise<void> {
+  return enqueueWindowAnimation(async () => {
+    const win = getCurrentWindow();
+    // Windows otherwise constrains SetWindowPos to the expanded minimum.
+    await releaseMinWindowSize(win);
+    await win.setResizable(false);
+    await applyWindowBoundsImmediate(win, transition.targetBounds);
+    clearRestoreOrigin("quick-menu");
+    saveSavedPosition(transition.targetBounds.position);
+  });
+}
+
+/** Backwards-compatible immediate collapse for non-visual callers. */
+export async function collapseQuickMenuToFloating(
+  options: IslandCollapseHooks = {},
+): Promise<void> {
+  const transition = await prepareQuickMenuCollapse();
+  await options.onBeforeCommit?.(transition.geometry);
+  if (options.shouldCommit?.() === false) {
+    return;
+  }
+  await commitQuickMenuCollapse(transition);
 }

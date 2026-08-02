@@ -36,12 +36,16 @@ function BarAction({
   onClick,
   disabled = false,
   buttonRef,
+  controls,
+  expanded,
 }: {
   icon: LucideIcon;
   label: string;
   onClick?: () => void;
   disabled?: boolean;
   buttonRef?: Ref<HTMLButtonElement>;
+  controls?: string;
+  expanded?: boolean;
 }) {
   return (
     <button
@@ -49,6 +53,8 @@ function BarAction({
       type="button"
       title={label}
       aria-label={label}
+      aria-controls={controls}
+      aria-expanded={expanded}
       disabled={disabled}
       onClick={onClick}
       className={cn(
@@ -161,6 +167,8 @@ export function FloatingBar({
           label="Chat"
           onClick={onOpenQuickMenu}
           buttonRef={chatButtonRef}
+          controls="quick-center-panel"
+          expanded={false}
         />
         <ShortcutPopover />
       </div>

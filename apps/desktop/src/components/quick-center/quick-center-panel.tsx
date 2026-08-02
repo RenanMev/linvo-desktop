@@ -9,6 +9,7 @@ import {
   Send,
   Settings,
   Square,
+  X,
 } from "lucide-react";
 import type { UserPublic } from "@linvo/shared";
 
@@ -26,6 +27,8 @@ type QuickCenterPanelProps = {
   user: UserPublic;
   /** Só liga foco e busca de workspace depois que a animação de expansão termina. */
   ready: boolean;
+  /** Pode aparecer durante o morph sem ainda ativar foco ou carregamento. */
+  visible?: boolean;
   closing?: boolean;
   onClose: (options?: { restoreFocus?: boolean }) => void;
   onOpenSettings: () => void;
@@ -48,6 +51,7 @@ export function QuickCenterPanel({
   sessionWarning,
   user,
   ready,
+  visible = ready,
   closing = false,
   onClose,
   onOpenSettings,
@@ -164,7 +168,7 @@ export function QuickCenterPanel({
         "quick-center-panel flex h-full min-h-0 w-full flex-col text-card-foreground",
         closing
           ? "quick-center-panel-closing"
-          : ready
+          : visible
             ? "quick-center-panel-ready"
             : "quick-center-panel-preopen",
       )}
@@ -212,6 +216,17 @@ export function QuickCenterPanel({
           />
           {statusLabel(apiHealthy, sessionWarning)}
         </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          onClick={() => void handleClose()}
+          title="Fechar Quick Center"
+          aria-label="Fechar Quick Center"
+          className="text-foreground/50 hover:text-foreground"
+        >
+          <X />
+        </Button>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 p-2.5">

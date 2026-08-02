@@ -1,8 +1,17 @@
 import {
+  applyWindowBoundsImmediate,
   applyWindowBoundsWithFallback,
   logicalToPhysical,
   readWindowBounds,
 } from "@/lib/window-animation";
+import {
+  resolveCollapseMorphGeometry,
+  resolveExpandMorphGeometry,
+  type IslandCollapseHooks,
+  type IslandExpandHooks,
+  type IslandMorphGeometry,
+  type PreparedIslandWindowTransition,
+} from "@/lib/floating-island-transition";
 import type { EdgeAnchor } from "@/lib/window-anchor";
 import { CHECKLIST_SIZE, COMPACT_SIZE } from "@/lib/window-mode";
 import {
@@ -28,6 +37,7 @@ import { readWorkArea } from "@/lib/window-work-area";
 
 export const CHECKLIST_EXPAND_DURATION_MS = 320;
 export const CHECKLIST_COLLAPSE_DURATION_MS = 260;
+export type PreparedChecklistCollapse = PreparedIslandWindowTransition;
 
 export function resolveChecklistExpandPosition(input: {
   currentPosition: Position;
@@ -49,7 +59,9 @@ export function resolveChecklistCollapsePosition(input: {
   return resolveCollapsePosition(input);
 }
 
-export async function expandFloatingToChecklist(): Promise<void> {
+export async function expandFloatingToChecklist(
+  options: IslandExpandHooks = {},
+): Promise<IslandMorphGeometry> {
   return enqueueWindowAnimation(async () => {
     const win = getCurrentWindow();
     await win.show();
@@ -89,25 +101,40 @@ export async function expandFloatingToChecklist(): Promise<void> {
       plan.finalPosition.x === (plan.moveFirst ?? current.position).x &&
       plan.finalPosition.y === (plan.moveFirst ?? current.position).y;
 
+    const sourceBounds = {
+      position: plan.moveFirst ?? current.position,
+      size: current.size,
+    };
+    const targetBounds = {
+      position: plan.finalPosition,
+      size: targetSize,
+    };
+    const geometry = resolveExpandMorphGeometry({
+      sourceBounds,
+      targetBounds,
+      scaleFactor: scale,
+    });
+
+    await options.onPrepare?.(geometry);
+
     if (sameSize && samePos) {
-      return;
+      await options.onResizeStart?.(geometry);
+      return geometry;
     }
 
     rememberRestoreOrigin("checklist", {
-      compactPosition: plan.moveFirst ?? current.position,
+      compactPosition: sourceBounds.position,
       expandedPosition: plan.finalPosition,
       expandedSize: targetSize,
     });
 
-    await applyWindowBoundsWithFallback(
-      win,
-      { position: plan.finalPosition, size: targetSize },
-      { durationMs: CHECKLIST_EXPAND_DURATION_MS },
-    );
+    await applyWindowBoundsImmediate(win, targetBounds);
+    await options.onResizeStart?.(geometry);
+    return geometry;
   });
 }
 
-export async function collapseChecklistToFloating(): Promise<void> {
+export async function prepareChecklistCollapse(): Promise<PreparedChecklistCollapse> {
   return enqueueWindowAnimation(async () => {
     const win = getCurrentWindow();
     const scale = await win.scaleFactor();
@@ -122,8 +149,6 @@ export async function collapseChecklistToFloating(): Promise<void> {
       currentPosition: current.position,
       currentSize: current.size,
     });
-    clearRestoreOrigin("checklist");
-
     const position = restored
       ? monitorInfo
         ? clampToMonitor(restored, targetSize, monitorInfo)
@@ -136,10 +161,33 @@ export async function collapseChecklistToFloating(): Promise<void> {
           anchor,
         });
 
-    await applyWindowBoundsWithFallback(
-      win,
-      { position, size: targetSize },
-      { durationMs: CHECKLIST_COLLAPSE_DURATION_MS },
-    );
+    const targetBounds = { position, size: targetSize };
+    return {
+      targetBounds,
+      geometry: resolveCollapseMorphGeometry({
+        sourceBounds: current,
+        targetBounds,
+        scaleFactor: scale,
+      }),
+    };
   });
+}
+
+export async function commitChecklistCollapse(
+  transition: PreparedChecklistCollapse,
+): Promise<void> {
+  return enqueueWindowAnimation(async () => {
+    const win = getCurrentWindow();
+    await applyWindowBoundsImmediate(win, transition.targetBounds);
+    clearRestoreOrigin("checklist");
+  });
+}
+
+/** Backwards-compatible immediate collapse for non-visual callers. */
+export async function collapseChecklistToFloating(
+  options: IslandCollapseHooks = {},
+): Promise<void> {
+  const transition = await prepareChecklistCollapse();
+  await options.onBeforeCommit?.(transition.geometry);
+  await commitChecklistCollapse(transition);
 }

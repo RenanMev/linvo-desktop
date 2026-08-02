@@ -4,6 +4,11 @@ import { useEffect, useRef, useState } from "react";
 
 import { EdgeHandle } from "@/components/edge-handle";
 import { FloatingBar } from "@/components/floating-bar";
+import {
+  FloatingIslandShell,
+  type FloatingIslandMode,
+  type FloatingIslandMorph,
+} from "@/components/floating-island-shell";
 import { ProcedureChecklistPanel } from "@/components/procedure/procedure-checklist-panel";
 import { QuickCenterPanel } from "@/components/quick-center/quick-center-panel";
 import { useApiHealth } from "@/hooks/use-api-health";
@@ -14,15 +19,22 @@ import {
   collapseChecklistToFloating,
   expandFloatingToChecklist,
 } from "@/lib/floating-checklist-mode";
+import { ensureCompactWindowBounds } from "@/lib/floating-compact-bounds";
 import { collapseToEdge, expandFromEdge } from "@/lib/floating-edge-mode";
 import { resetFloatingPosition } from "@/lib/floating-position-reset";
 import {
   collapseQuickMenuToFloating,
   expandFloatingToQuickMenu,
 } from "@/lib/floating-quick-menu-mode";
-import { COMPACT_SIZE } from "@/lib/window-mode";
+import {
+  hasMeaningfulMorph,
+  ISLAND_MORPH_DURATION_MS,
+  ISLAND_MORPH_WATCHDOG_MS,
+  ISLAND_PAINT_WATCHDOG_MS,
+  type IslandMorphGeometry,
+} from "@/lib/floating-island-transition";
+import { releaseMinWindowSize } from "@/lib/window-animation";
 import { NO_ANCHOR, type EdgeAnchor } from "@/lib/window-anchor";
-import { cn } from "@/lib/utils";
 import {
   emitChecklistClosed,
   emitChecklistProgress,
@@ -37,13 +49,29 @@ type BarAppProps = {
   user: UserPublic;
 };
 
-type WindowMode = "compact" | "quick-menu" | "checklist" | "edge-collapsed";
+type WindowMode = FloatingIslandMode;
 type CloseQuickMenuOptions = {
   restoreFocus?: boolean;
   preserveIntent?: boolean;
 };
 const QUICK_MENU_MIN_SIZE = { width: 320, height: 360 };
-const QUICK_MENU_EXIT_DURATION_MS = 140;
+const QUICK_MENU_CLOSE_DEADLINE_MS = 600;
+
+async function withDeadline<T>(task: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeoutId = 0;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(
+      () => reject(new Error("floating close timed out")),
+      timeoutMs,
+    );
+  });
+
+  try {
+    return await Promise.race([task, timeout]);
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
 
 export function BarApp({ sessionWarning, user }: BarAppProps) {
   const floatingReady = useFloatingBootstrap();
@@ -56,14 +84,27 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   const [quickMenuClosing, setQuickMenuClosing] = useState(false);
   const [edgeAnchor, setEdgeAnchor] = useState<EdgeAnchor>(NO_ANCHOR);
   const [transitioning, setTransitioning] = useState(false);
+  const [islandMorph, setIslandMorph] = useState<FloatingIslandMorph | null>(
+    null,
+  );
   const windowModeRef = useRef(windowMode);
   const modeIntentRef = useRef<WindowMode>("compact");
   const transitionCountRef = useRef(0);
   const quickMenuCloseInFlightRef = useRef<Promise<void> | null>(null);
+  const quickMenuCloseAttemptRef = useRef(0);
   const restoreChatFocusRef = useRef(false);
   const chatButtonRef = useRef<HTMLButtonElement>(null);
   const edgeHandleRef = useRef<HTMLButtonElement>(null);
   const suppressBlurCloseUntilRef = useRef(0);
+  const islandMorphRef = useRef<FloatingIslandMorph | null>(null);
+  const islandMorphIdRef = useRef(0);
+  const islandMorphCompletionRef = useRef<{
+    id: number;
+    promise: Promise<void>;
+    resolve: () => void;
+    settled: boolean;
+    timeoutId: number;
+  } | null>(null);
   windowModeRef.current = windowMode;
 
   const isActive = floatingReady && apiHealthy && !sessionWarning;
@@ -80,6 +121,116 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     if (transitionCountRef.current === 0) {
       setTransitioning(false);
     }
+  }
+
+  function clearIslandMorph() {
+    const completion = islandMorphCompletionRef.current;
+    if (completion && !completion.settled) {
+      completion.settled = true;
+      window.clearTimeout(completion.timeoutId);
+      completion.resolve();
+    }
+    islandMorphRef.current = null;
+    islandMorphCompletionRef.current = null;
+    setIslandMorph(null);
+  }
+
+  function waitForIslandPaint(): Promise<void> {
+    return new Promise((resolve) => {
+      let settled = false;
+      let firstFrame = 0;
+      let secondFrame = 0;
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeoutId);
+        window.cancelAnimationFrame(firstFrame);
+        window.cancelAnimationFrame(secondFrame);
+        resolve();
+      };
+
+      const timeoutId = window.setTimeout(finish, ISLAND_PAINT_WATCHDOG_MS);
+      firstFrame = window.requestAnimationFrame(() => {
+        secondFrame = window.requestAnimationFrame(finish);
+      });
+    });
+  }
+
+  async function prepareIslandMorph(
+    geometry: IslandMorphGeometry,
+    fromMode: WindowMode,
+    toMode: WindowMode,
+  ) {
+    if (!hasMeaningfulMorph(geometry)) {
+      clearIslandMorph();
+      return;
+    }
+
+    const nextMorph: FloatingIslandMorph = {
+      id: ++islandMorphIdRef.current,
+      active: false,
+      fromMode,
+      toMode,
+      geometry,
+    };
+    islandMorphRef.current = nextMorph;
+    setIslandMorph(nextMorph);
+
+    /*
+     * O estado inicial precisa estar pintado antes de ativar, senão o browser
+     * junta os dois commits e não sobra transição para animar. A geometria já
+     * vale nos dois tamanhos de janela (ver `resolveIslandPlacement`), então
+     * não há reposicionamento depois do resize — era ele que deixava a pílula
+     * alguns frames no canto da janela recém-expandida.
+     */
+    await waitForIslandPaint();
+  }
+
+  function startIslandMorph(): Promise<void> {
+    const current = islandMorphRef.current;
+    if (!current) {
+      return Promise.resolve();
+    }
+
+    let resolveCompletion = () => {};
+    const promise = new Promise<void>((resolve) => {
+      resolveCompletion = resolve;
+    });
+    const completion = {
+      id: current.id,
+      promise,
+      resolve: resolveCompletion,
+      settled: false,
+      timeoutId: 0,
+    };
+    completion.timeoutId = window.setTimeout(
+      () => completeIslandMorph(current.id),
+      ISLAND_MORPH_DURATION_MS + ISLAND_MORPH_WATCHDOG_MS,
+    );
+    islandMorphCompletionRef.current = completion;
+
+    const activeMorph = { ...current, active: true };
+    islandMorphRef.current = activeMorph;
+    setIslandMorph(activeMorph);
+    return promise;
+  }
+
+  function completeIslandMorph(id: number) {
+    const completion = islandMorphCompletionRef.current;
+    if (completion?.id !== id) {
+      return;
+    }
+    if (completion.settled) {
+      return;
+    }
+    completion.settled = true;
+    window.clearTimeout(completion.timeoutId);
+    completion.resolve();
+  }
+
+  async function waitForIslandMorph() {
+    await islandMorphCompletionRef.current?.promise;
   }
 
   useWindowPosition({
@@ -113,8 +264,16 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
         }
         if (cancelled || modeIntentRef.current !== "checklist") return;
         setChecklist(payload);
-        setWindowMode("checklist");
-        await expandFloatingToChecklist();
+        await expandFloatingToChecklist({
+          onPrepare: async (geometry) => {
+            await prepareIslandMorph(geometry, "compact", "checklist");
+          },
+          onResizeStart: () => {
+            void startIslandMorph();
+          },
+        });
+        await waitForIslandMorph();
+        clearIslandMorph();
         if (!cancelled && modeIntentRef.current === "checklist") {
           setWindowMode("checklist");
         }
@@ -130,14 +289,26 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     void listenChecklistDismiss(() => {
       if (cancelled) return;
       modeIntentRef.current = "compact";
-      setChecklist(null);
       rememberChecklistConversation(null);
       startTransition();
-      void collapseChecklistToFloating()
+      void collapseChecklistToFloating({
+        onBeforeCommit: async (geometry) => {
+          await prepareIslandMorph(geometry, "checklist", "compact");
+          await startIslandMorph();
+        },
+      })
         .then(() => {
           if (!cancelled && modeIntentRef.current === "compact") {
             setWindowMode("compact");
+            setChecklist(null);
+            clearIslandMorph();
           }
+        })
+        .catch(() => {
+          if (modeIntentRef.current === "compact") {
+            modeIntentRef.current = "checklist";
+          }
+          clearIslandMorph();
         })
         .finally(() => {
           if (!cancelled) {
@@ -158,43 +329,63 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   async function handleChecklistClose() {
     modeIntentRef.current = "compact";
     const conversationId = checklist?.conversationId ?? null;
-    setChecklist(null);
     rememberChecklistConversation(null);
     if (conversationId) {
       await emitChecklistClosed({ conversationId });
     }
     startTransition();
     try {
-      await collapseChecklistToFloating();
+      await collapseChecklistToFloating({
+        onBeforeCommit: async (geometry) => {
+          await prepareIslandMorph(geometry, "checklist", "compact");
+          await startIslandMorph();
+        },
+      });
       if (modeIntentRef.current === "compact") {
         restoreChatFocusRef.current = true;
         setWindowMode("compact");
+        setChecklist(null);
+      }
+    } catch {
+      if (modeIntentRef.current === "compact") {
+        modeIntentRef.current = "checklist";
       }
     } finally {
+      clearIslandMorph();
       finishTransition();
     }
   }
 
   async function handleOpenQuickMenu() {
-    if (windowModeRef.current !== "compact") {
+    if (
+      windowModeRef.current !== "compact" ||
+      transitionCountRef.current > 0
+    ) {
       return;
     }
     modeIntentRef.current = "quick-menu";
     startTransition();
-    setWindowMode("quick-menu");
     try {
       await expandFloatingToQuickMenu({
-        // Conteúdo entra junto com o crescimento da janela, não depois dele.
+        onPrepare: async (geometry) => {
+          await prepareIslandMorph(geometry, "compact", "quick-menu");
+        },
         onResizeStart: () => {
           if (modeIntentRef.current === "quick-menu") {
-            setPanelReady(true);
+            void startIslandMorph();
           }
         },
       });
+      await waitForIslandMorph();
       if (modeIntentRef.current === "quick-menu") {
+        clearIslandMorph();
+        setWindowMode("quick-menu");
         setPanelReady(true);
+      } else {
+        clearIslandMorph();
       }
     } catch {
+      clearIslandMorph();
       if (modeIntentRef.current === "quick-menu") {
         modeIntentRef.current = "compact";
         setPanelReady(false);
@@ -208,6 +399,12 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   async function closeQuickMenu(
     options: CloseQuickMenuOptions = {},
   ): Promise<void> {
+    const quickMenuIsVisibleOrTransitioning =
+      windowModeRef.current === "quick-menu" ||
+      modeIntentRef.current === "quick-menu" ||
+      islandMorphRef.current?.fromMode === "quick-menu" ||
+      islandMorphRef.current?.toMode === "quick-menu";
+
     if (
       !options.preserveIntent &&
       modeIntentRef.current === "quick-menu"
@@ -216,7 +413,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     }
 
     if (
-      windowModeRef.current !== "quick-menu" &&
+      !quickMenuIsVisibleOrTransitioning &&
       !quickMenuCloseInFlightRef.current
     ) {
       return;
@@ -231,26 +428,39 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     }
 
     startTransition();
+    const closeAttempt = ++quickMenuCloseAttemptRef.current;
     const closeTask = (async () => {
-      let collapsed = false;
       try {
         setQuickMenuClosing(true);
         setPanelReady(false);
-        await new Promise((resolve) =>
-          window.setTimeout(resolve, QUICK_MENU_EXIT_DURATION_MS),
+        await withDeadline(
+          collapseQuickMenuToFloating({
+            onBeforeCommit: async (geometry) => {
+              if (quickMenuCloseAttemptRef.current !== closeAttempt) return;
+              await prepareIslandMorph(geometry, "quick-menu", "compact");
+              if (quickMenuCloseAttemptRef.current !== closeAttempt) {
+                clearIslandMorph();
+                return;
+              }
+              await startIslandMorph();
+            },
+            shouldCommit: () =>
+              quickMenuCloseAttemptRef.current === closeAttempt,
+          }),
+          QUICK_MENU_CLOSE_DEADLINE_MS,
         );
-        await collapseQuickMenuToFloating();
-        collapsed = true;
       } catch {
-        if (modeIntentRef.current === "compact") {
-          modeIntentRef.current = "quick-menu";
+        if (quickMenuCloseAttemptRef.current === closeAttempt) {
+          quickMenuCloseAttemptRef.current += 1;
         }
-        return;
+        void ensureCompactWindowBounds().catch(() => undefined);
       } finally {
-        if (collapsed && modeIntentRef.current === "compact") {
-          setWindowMode("compact");
+        if (quickMenuCloseAttemptRef.current === closeAttempt) {
+          quickMenuCloseAttemptRef.current += 1;
         }
+        setWindowMode("compact");
         setPanelReady(false);
+        clearIslandMorph();
         setQuickMenuClosing(false);
       }
     })();
@@ -299,27 +509,17 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     }
   }
 
-  async function forceCompactWindowSize() {
-    const win = getCurrentWindow();
-    const scale = await win.scaleFactor();
-    await win.setMinSize(null);
-    await win.setResizable(false);
-    await win.setSize(
-      new PhysicalSize(
-        Math.ceil(COMPACT_SIZE.width * scale),
-        Math.ceil(COMPACT_SIZE.height * scale),
-      ),
-    );
-  }
-
   async function handleHideQuickMenu() {
     await closeQuickMenu({ restoreFocus: false });
-    if (modeIntentRef.current !== "compact") {
-      modeIntentRef.current = "compact";
-      await forceCompactWindowSize();
-      setPanelReady(false);
-      setWindowMode("compact");
-    }
+    /*
+     * Esconder a janela ainda expandida a traz de volta expandida na próxima
+     * vez, com a pílula desenhada dentro dela — daí a reconciliação aqui, mesmo
+     * quando o fecho acima já pareceu bem-sucedido. É no-op se já está compacta.
+     */
+    modeIntentRef.current = "compact";
+    await ensureCompactWindowBounds().catch(() => undefined);
+    setPanelReady(false);
+    setWindowMode("compact");
     await hideAllWindows();
   }
 
@@ -428,10 +628,6 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     };
   }, []);
 
-  const checklistOpen = windowMode === "checklist" && checklist !== null;
-  const quickMenuOpen = windowMode === "quick-menu";
-  const edgeCollapsed = windowMode === "edge-collapsed";
-
   useEffect(() => {
     let cancelled = false;
     const win = getCurrentWindow();
@@ -443,16 +639,20 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
         await win.setResizable(true);
         await win.setMaximizable(false);
         if (cancelled) return;
-        await win.setMinSize(
-          new PhysicalSize(
-            Math.ceil(QUICK_MENU_MIN_SIZE.width * scale),
-            Math.ceil(QUICK_MENU_MIN_SIZE.height * scale),
-          ),
-        );
+        // Tolerante por si só: perder o mínimo só afeta o quanto o painel
+        // encolhe no arraste, e não vale derrubar o resto da política.
+        await win
+          .setMinSize(
+            new PhysicalSize(
+              Math.ceil(QUICK_MENU_MIN_SIZE.width * scale),
+              Math.ceil(QUICK_MENU_MIN_SIZE.height * scale),
+            ),
+          )
+          .catch(() => undefined);
         return;
       }
 
-      await win.setMinSize(null);
+      await releaseMinWindowSize(win);
       if (cancelled) return;
       await win.setResizable(false);
       await win.setMaximizable(false);
@@ -465,84 +665,102 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     };
   }, [windowMode]);
 
+  /*
+   * Rede de segurança do morph: os bounds nativos e o CSS são aplicados em
+   * metades separadas, então todo caminho que aborta no meio (deadline de fecho
+   * estourado, intenção trocada durante a expansão, erro de IPC) deixa a janela
+   * grande com a pílula desenhada dentro dela. Em vez de tapar cada buraco
+   * desses, o estado compacto é reconciliado sempre que assenta.
+   */
+  useEffect(() => {
+    if (
+      !floatingReady ||
+      windowMode !== "compact" ||
+      transitioning ||
+      islandMorph
+    ) {
+      return;
+    }
+
+    void ensureCompactWindowBounds({
+      shouldApply: () =>
+        windowModeRef.current === "compact" &&
+        modeIntentRef.current === "compact" &&
+        transitionCountRef.current === 0,
+    }).catch(() => undefined);
+  }, [floatingReady, windowMode, transitioning, islandMorph]);
+
+  function renderIslandMode(mode: WindowMode) {
+    if (mode === "checklist") {
+      if (!checklist) return null;
+      return (
+        <ProcedureChecklistPanel
+          key={`${checklist.conversationId}-${checklist.procedure.id}`}
+          title={
+            checklist.procedure.title?.trim() ||
+            checklist.procedure.slug ||
+            "Procedure"
+          }
+          slug={checklist.procedure.slug ?? ""}
+          steps={checklist.procedure.steps ?? []}
+          initialCompleted={checklist.progress.completedStepIndexes}
+          onProgressChange={(progress) => {
+            void emitChecklistProgress({
+              conversationId: checklist.conversationId,
+              progress,
+            });
+          }}
+          onClose={() => void handleChecklistClose()}
+        />
+      );
+    }
+
+    if (mode === "quick-menu") {
+      return (
+        <QuickCenterPanel
+          apiHealthy={apiHealthy}
+          sessionWarning={sessionWarning}
+          user={user}
+          ready={panelReady}
+          visible
+          closing={quickMenuClosing}
+          onClose={(options) => void closeQuickMenu(options)}
+          onOpenSettings={() => void closeQuickMenu({ restoreFocus: false })}
+          onHide={() => void handleHideQuickMenu()}
+          onWindowDragStart={handleQuickMenuDragStart}
+        />
+      );
+    }
+
+    if (mode === "edge-collapsed") {
+      return (
+        <EdgeHandle
+          anchor={edgeAnchor}
+          isActive={isActive}
+          onExpand={() => void handleExpandFromEdge()}
+          buttonRef={edgeHandleRef}
+        />
+      );
+    }
+
+    return (
+      <FloatingBar
+        isActive={isActive}
+        onOpenQuickMenu={() => void handleOpenQuickMenu()}
+        onCollapseToEdge={() => void handleCollapseToEdge()}
+        onMinimize={() => void hideAllWindows()}
+        onResetPosition={() => void handleResetPosition()}
+        chatButtonRef={chatButtonRef}
+      />
+    );
+  }
+
   return (
-    /*
-     * Gutter transparente de 1px em volta da superfície. A janela Tauri tem
-     * exatamente o tamanho do conteúdo, então uma borda de 1px encostada na
-     * borda do viewport cai na última linha de pixels físicos e desaparece no
-     * antialiasing em DPI fracionário (125%/150%) — era por isso que a pílula
-     * ficava sem border-bottom. Com o gutter, o arredondamento sobra na área
-     * transparente e a borda sempre pinta inteira.
-     */
-    <div className="h-full w-full p-px">
-      <div
-        className={cn(
-          /*
-           * Sem transição de border-radius/cor aqui: a janela pula direto pro
-           * tamanho final, então a troca pílula→painel acontece atrás do
-           * scale-in do painel e não precisa ser animada. Transicionar o pai
-           * enquanto o filho escala custaria paint da superfície inteira por
-           * frame — era parte do que trepidava.
-           */
-          "relative h-full w-full overflow-hidden text-card-foreground",
-          checklistOpen || quickMenuOpen
-            ? "window-shell rounded-premium"
-            : "floating-pill rounded-pill",
-        )}
-      >
-        {checklistOpen && checklist ? (
-          <ProcedureChecklistPanel
-            key={`${checklist.conversationId}-${checklist.procedure.id}`}
-            title={
-              checklist.procedure.title?.trim() ||
-              checklist.procedure.slug ||
-              "Procedure"
-            }
-            slug={checklist.procedure.slug ?? ""}
-            steps={checklist.procedure.steps ?? []}
-            initialCompleted={checklist.progress.completedStepIndexes}
-            onProgressChange={(progress) => {
-              void emitChecklistProgress({
-                conversationId: checklist.conversationId,
-                progress,
-              });
-            }}
-            onClose={() => {
-              void handleChecklistClose();
-            }}
-          />
-        ) : quickMenuOpen ? (
-          <QuickCenterPanel
-            apiHealthy={apiHealthy}
-            sessionWarning={sessionWarning}
-            user={user}
-            ready={panelReady}
-            closing={quickMenuClosing}
-            onClose={(options) => void closeQuickMenu(options)}
-            onOpenSettings={() =>
-              void closeQuickMenu({ restoreFocus: false })
-            }
-            onHide={() => void handleHideQuickMenu()}
-            onWindowDragStart={handleQuickMenuDragStart}
-          />
-        ) : edgeCollapsed ? (
-          <EdgeHandle
-            anchor={edgeAnchor}
-            isActive={isActive}
-            onExpand={() => void handleExpandFromEdge()}
-            buttonRef={edgeHandleRef}
-          />
-        ) : (
-          <FloatingBar
-            isActive={isActive}
-            onOpenQuickMenu={() => void handleOpenQuickMenu()}
-            onCollapseToEdge={() => void handleCollapseToEdge()}
-            onMinimize={() => void hideAllWindows()}
-            onResetPosition={() => void handleResetPosition()}
-            chatButtonRef={chatButtonRef}
-          />
-        )}
-      </div>
-    </div>
+    <FloatingIslandShell
+      mode={windowMode}
+      morph={islandMorph}
+      renderMode={renderIslandMode}
+      onMorphComplete={completeIslandMorph}
+    />
   );
 }

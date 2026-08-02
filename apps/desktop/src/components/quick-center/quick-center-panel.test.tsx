@@ -193,6 +193,19 @@ describe("QuickCenterPanel", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("closes from the visible header action", async () => {
+    const onClose = vi.fn();
+    vi.mocked(useQuickPrompt).mockReturnValue(makePrompt());
+    const userEventInstance = userEvent.setup();
+
+    renderPanel({ onClose });
+    await userEventInstance.click(
+      screen.getByRole("button", { name: "Fechar Quick Center" }),
+    );
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("disables the prompt field when the API is unavailable", () => {
     vi.mocked(useQuickPrompt).mockReturnValue(makePrompt());
     renderPanel({ apiHealthy: false });

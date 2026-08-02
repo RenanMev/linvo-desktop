@@ -43,6 +43,24 @@ export async function readWindowBounds(win: Window): Promise<WindowBounds> {
   };
 }
 
+/**
+ * Solta o tamanho mínimo antes de encolher a janela.
+ *
+ * No Windows o `WM_GETMINMAXINFO` clampa o `SetWindowPos` no mínimo em vigor,
+ * então sem isto a janela não volta ao tamanho da pílula depois do quick menu.
+ *
+ * Nunca lança: `setMinSize` depende de `core:window:allow-set-min-size` na
+ * capability, e deixar a rejeição propagar aborta a transição inteira antes do
+ * resize — a janela fica do tamanho do painel com a pílula desenhada dentro.
+ */
+export async function releaseMinWindowSize(win: Window): Promise<void> {
+  try {
+    await win.setMinSize(null);
+  } catch {
+    // Segue para o resize: sem mínimo aplicado ele já passa direto.
+  }
+}
+
 export type AnimateWindowBoundsOptions = {
   durationMs?: number;
 };

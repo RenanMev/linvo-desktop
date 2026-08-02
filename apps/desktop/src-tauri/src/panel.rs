@@ -54,11 +54,44 @@ pub fn init_native_blur(window: &tauri::WebviewWindow) {
     }
 }
 
+/// Manda o DWM recortar a janela em cantos arredondados (Windows 11+).
+///
+/// O acrylic é pintado pelo compositor na janela nativa, que é retangular — o
+/// `border-radius` do CSS arredonda só o conteúdo do webview e deixa o vidro
+/// aparecendo nos quatro cantos. Sem isto, arredondar no CSS não adianta.
+#[cfg(windows)]
+pub fn round_window_corners(window: &tauri::WebviewWindow) {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::Graphics::Dwm::{
+        DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
+    };
+
+    let Ok(handle) = window.hwnd() else {
+        return;
+    };
+
+    let preference = DWMWCP_ROUND;
+    // Em Windows 10 o atributo não existe e a chamada só devolve erro — daí o
+    // resultado ser ignorado em vez de propagado.
+    unsafe {
+        DwmSetWindowAttribute(
+            handle.0 as HWND,
+            DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+            &preference as *const _ as *const core::ffi::c_void,
+            core::mem::size_of_val(&preference) as u32,
+        );
+    }
+}
+
+#[cfg(not(windows))]
+pub fn round_window_corners(_window: &tauri::WebviewWindow) {}
+
 #[cfg(windows)]
 fn apply_native_blur(window: &tauri::WebviewWindow, level: &str) -> Result<(), String> {
     use window_vibrancy::{apply_acrylic, clear_acrylic};
 
     let _ = clear_acrylic(window);
+    round_window_corners(window);
 
     // `apply_blur` (blur-behind legado) é no-op no Windows 11 — todos os
     // níveis usam acrylic, variando só o tint (o SO não expõe raio de blur
