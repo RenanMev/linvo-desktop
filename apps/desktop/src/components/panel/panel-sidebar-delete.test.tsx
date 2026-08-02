@@ -72,7 +72,7 @@ describe("PanelSidebar delete conversation", () => {
 
     render(
       <MemoryRouter initialEntries={["/chat/conv-1"]}>
-        <PanelSidebar session={session} />
+        <PanelSidebar session={session} collapsed={false} />
       </MemoryRouter>,
     );
 
@@ -93,7 +93,7 @@ describe("PanelSidebar delete conversation", () => {
 
     render(
       <MemoryRouter initialEntries={["/chat/conv-1"]}>
-        <PanelSidebar session={session} />
+        <PanelSidebar session={session} collapsed={false} />
       </MemoryRouter>,
     );
 
