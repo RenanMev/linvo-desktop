@@ -2,8 +2,6 @@
 
 Cliente desktop do Linvo — assistente de atendimento com barra flutuante, painel de chat e autenticação.
 
-Repositório **público**. O backend vive no repositório privado [linvo-api](https://github.com/RenanMev/linvo-api).
-
 ---
 
 ## Estrutura
@@ -28,7 +26,7 @@ linvo-desktop/
 - Node.js 22 (`.nvmrc`)
 - pnpm 11
 - Rust + toolchain Tauri ([guia oficial](https://v2.tauri.app/start/prerequisites/))
-- API Linvo rodando localmente ([linvo-api](https://github.com/RenanMev/linvo-api))
+- Uma API disponível: rode um back local da forma que você quiser, ou utilize o back do projeto: `api.linvo.com.br`
 
 ---
 
@@ -37,25 +35,12 @@ linvo-desktop/
 ```bash
 git clone https://github.com/RenanMev/linvo-desktop.git
 cd linvo-desktop
-
 pnpm install
-
 cp .env.example .env
-
 pnpm tauri dev
 ```
 
 Atalho: `pnpm dev:desktop`
-
-### API em paralelo
-
-O desktop consome a API via `VITE_API_URL`. Para desenvolvimento completo, clone o backend como repositório irmão:
-
-```
-GitHub/
-├── linvo-desktop/   ← este repo
-└── linvo-api/       ← backend privado
-```
 
 ---
 
@@ -81,7 +66,7 @@ GitHub/
 
 ## Contratos compartilhados
 
-O pacote `@linvo/shared` em `packages/shared/` é a **fonte canônica** dos schemas Zod e tipos da API. O `linvo-api` consome este pacote via dependência local — não duplique os contratos no backend.
+O pacote `@linvo/shared` em `packages/shared/` é a **fonte canônica** dos schemas Zod e tipos da API.
 
 Antes de publicar ou consumir externamente, compile o pacote:
 
