@@ -72,7 +72,7 @@ describe("PanelSidebar delete conversation", () => {
 
     render(
       <MemoryRouter initialEntries={["/chat/conv-1"]}>
-        <PanelSidebar session={session} />
+        <PanelSidebar session={session} collapsed={false} />
       </MemoryRouter>,
     );
 
@@ -81,7 +81,7 @@ describe("PanelSidebar delete conversation", () => {
     );
 
     expect(window.confirm).toHaveBeenCalledWith(
-      "Apagar esta conversa? Esta ação não pode ser desfeita.",
+      expect.stringContaining("Os PDFs gerados nela saem do workspace"),
     );
     expect(deleteConversation).not.toHaveBeenCalled();
   });
@@ -93,7 +93,7 @@ describe("PanelSidebar delete conversation", () => {
 
     render(
       <MemoryRouter initialEntries={["/chat/conv-1"]}>
-        <PanelSidebar session={session} />
+        <PanelSidebar session={session} collapsed={false} />
       </MemoryRouter>,
     );
 

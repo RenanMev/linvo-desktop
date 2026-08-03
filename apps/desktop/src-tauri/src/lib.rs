@@ -2,6 +2,7 @@ mod app;
 mod auth;
 mod chat_store;
 mod checklist;
+mod documents;
 mod panel;
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -184,6 +185,7 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             use tauri::Manager;
             if let Some(panel) = app.get_webview_window("panel") {
@@ -211,6 +213,7 @@ pub fn run() {
             checklist::checklist_open,
             checklist::checklist_close,
             checklist::checklist_is_open,
+            documents::documents_save_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

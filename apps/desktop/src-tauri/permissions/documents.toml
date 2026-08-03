@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-documents-save-file"
+description = "Allows writing a generated document to a path picked by the user"
+commands.allow = ["documents_save_file"]

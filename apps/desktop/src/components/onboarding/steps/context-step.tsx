@@ -72,7 +72,7 @@ export function ContextStep({
             key={preset.title}
             type="button"
             onClick={() => onAddRule(preset)}
-            className="rounded-full border border-hairline bg-surface-raise-1 px-3 py-1.5 text-xs text-text-secondary outline-none transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="rounded-lg border border-hairline bg-surface-raise-1 px-3 py-1.5 text-xs text-text-secondary outline-none transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
           >
             {preset.title}
           </button>

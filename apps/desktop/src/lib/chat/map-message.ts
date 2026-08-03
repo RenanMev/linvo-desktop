@@ -12,6 +12,7 @@ export function mapApiMessageToChat(message: Message): ChatMessage {
     replyTo: message.replyTo,
     toolUses: message.toolUses,
     activities: message.activities,
+    artifacts: message.artifacts,
     reasoning: message.reasoning,
     model: message.model,
   };

@@ -126,6 +126,18 @@
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
+  /* Motion da ilha flutuante: uma curva única para shell e conteúdo. */
+  --island-gutter: 1px;
+  --motion-duration-island: 260ms;
+  /* Cross-fade das superfícies: some antes do fim do transform, para nunca
+     mostrar a borda da forma que está saindo já muito esticada. */
+  --motion-duration-island-fade: 140ms;
+  --motion-duration-island-content: 150ms;
+  --motion-delay-island-content: 55ms;
+  --motion-distance-island-content: 6px;
+  --motion-distance-island-content-exit: -2px;
+  --motion-ease-island: cubic-bezier(0.2, 0.82, 0.2, 1);
+
   /* Linvo AI Design System — tokens novos, aditivos (claro: derivados da escala existente) */
   --text-secondary: #3a3a36;
   --text-tertiary: #6b6b63;
@@ -502,29 +514,116 @@
     border-color: var(--hairline-strong);
   }
 
+  .floating-island-stage {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  /*
+   * `transform` e `opacity` são as duas únicas propriedades que o compositor
+   * resolve sem re-rasterizar. `border-radius` NÃO entra aqui: animá-lo obriga
+   * o WebView a redesenhar a máscara arredondada e a box-shadow da camada
+   * inteira a cada frame, e os frames que não ficam prontos são apresentados
+   * vazios — a ilha sumindo e voltando durante a transição inteira. Cada forma
+   * tem a sua superfície, com raio fixo, e elas se cruzam (ver
+   * `resolveSurfaceLayers`).
+   */
+  .floating-island-surface {
+    position: absolute;
+    z-index: 0;
+    top: var(--island-gutter);
+    left: var(--island-gutter);
+    box-sizing: border-box;
+    transform-origin: top left;
+    contain: layout paint;
+    will-change: transform, opacity;
+    transition:
+      transform var(--island-morph-duration, var(--motion-duration-island))
+        var(--motion-ease-island),
+      opacity var(--motion-duration-island-fade) ease-out;
+  }
+
+  /*
+   * Estado assentado. Não anima geometria: ao sair do morph o `transform` cai
+   * de volta para `none` sobre um elemento que acabou de mudar de tamanho, e
+   * transicionar isso fazia a pílula encolher e voltar no fim de cada
+   * transição. Só as cores seguem animando, para o hover não ficar seco.
+   */
+  .floating-island-surface-stable {
+    inset: var(--island-gutter);
+    width: auto;
+    height: auto;
+    transform: none;
+    opacity: 1;
+    will-change: auto;
+    transition:
+      border-color var(--motion-duration-island-content) ease-out,
+      box-shadow var(--motion-duration-island-content) ease-out;
+  }
+
+  .floating-island-stage[data-morphing="true"]
+    .floating-island-surface[data-active="false"] {
+    transition: none;
+  }
+
+  .floating-island-content {
+    position: absolute;
+    z-index: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .floating-island-content[data-phase="stable"] {
+    inset: var(--island-gutter);
+  }
+
+  /*
+   * Só translação e opacidade. O `scale(0.985)` que havia aqui obrigava o
+   * WebView a re-rasterizar a subárvore inteira para manter o texto nítido, a
+   * cada frame — pelo mesmo motivo que o raio animado, ele pisca. `will-change`
+   * declarado enquanto a camada existe evita a promoção e despromoção repetida
+   * da camada durante a transição.
+   */
+  .floating-island-content[data-phase="source"],
+  .floating-island-content[data-phase="target"] {
+    pointer-events: none;
+    will-change: opacity, transform;
+    transition:
+      opacity var(--motion-duration-island-content) ease-out,
+      transform var(--motion-duration-island-content)
+        var(--motion-ease-island);
+  }
+
+  .floating-island-content[data-phase="source"][data-active="true"] {
+    opacity: 0;
+    transform: translate3d(0, var(--motion-distance-island-content-exit), 0);
+  }
+
+  .floating-island-content[data-phase="target"] {
+    opacity: 0;
+    transform: translate3d(0, var(--motion-distance-island-content), 0);
+  }
+
+  .floating-island-content[data-phase="target"][data-active="true"] {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    transition-delay: var(--motion-delay-island-content);
+  }
+
   .quick-center-panel-preopen {
     opacity: 0;
   }
 
-  /*
-   * Enter do painel: transform + opacidade, as duas propriedades que o
-   * compositor resolve sozinho, sem layout nem paint.
-   *
-   * Isto é a transição inteira — a janela já pulou para o tamanho final antes
-   * daqui (ver `applyWindowBoundsImmediate`), justamente para o WebView2 fazer
-   * um relayout só. Nada de `filter: blur()`: sobre a subárvore toda ele custa
-   * paint por frame e foi uma das causas da trepidação.
-   */
+  /* O shell faz o morph; os blocos do painel entram sem escalar o layout. */
   .quick-center-panel-ready {
-    animation: quick-center-panel-enter 200ms cubic-bezier(0.22, 1, 0.36, 1)
-      both;
-    transform-origin: top center;
-    will-change: transform, opacity;
+    opacity: 1;
   }
 
   .quick-center-panel-ready > :not(.sr-only) {
-    animation: quick-center-content-enter 320ms cubic-bezier(0.22, 1, 0.36, 1)
-      both;
+    animation: quick-center-content-enter var(--motion-duration-island-content)
+      var(--motion-ease-island) both;
   }
 
   .quick-center-panel-ready > :nth-child(2) {
@@ -541,14 +640,11 @@
 
   .quick-center-panel-closing {
     pointer-events: none;
-    animation: quick-center-panel-exit 120ms cubic-bezier(0.4, 0, 1, 1) both;
-    transform-origin: top center;
-    will-change: transform, opacity;
+    opacity: 1;
   }
 
   .quick-center-panel-closing > :not(.sr-only) {
-    animation: quick-center-content-exit 110ms cubic-bezier(0.4, 0, 1, 1)
-      both;
+    animation: none;
   }
 
   /* Aparecimento de blocos condicionais dentro do painel já aberto
@@ -559,11 +655,15 @@
       both;
   }
 
-  /* Estado ativo de navegação: pílula de contraste máximo (inverte por tema) */
+  /*
+   * Estado ativo de navegação: contraste máximo (inverte por tema).
+   * Sem sombra de propósito — o item está assentado na superfície da lista, não
+   * flutuando sobre ela; `--shadow-pill` é para os elementos que de fato pairam
+   * (barra flutuante, botão primário).
+   */
   .nav-pill-active {
     background-color: var(--color-accent-active);
     color: var(--color-accent-active-foreground);
-    box-shadow: var(--shadow-pill);
   }
 
   /* Corpo editorial das respostas da IA */

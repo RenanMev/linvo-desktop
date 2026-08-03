@@ -24,6 +24,16 @@ export type ChatActivity = {
   kind?: "research" | "tool" | "think";
 };
 
+/** Anexo gerado por uma tool e exibido como card na mensagem. */
+export type ChatArtifact = {
+  id: string;
+  kind: "pdf";
+  title: string;
+  filename: string;
+  sizeBytes: number;
+  pageCount?: number;
+};
+
 export type ChatMessage = {
   id: string;
   role: ChatRole;
@@ -33,6 +43,7 @@ export type ChatMessage = {
   replyTo?: ChatReplyRef;
   toolUses?: { name: string; label: string }[];
   activities?: ChatActivity[];
+  artifacts?: ChatArtifact[];
   reasoning?: string;
   model?: string;
 };

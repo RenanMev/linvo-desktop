@@ -13,6 +13,15 @@ export default defineConfig({
   test: {
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
+    // Um worker por core satura a memória da máquina quando a suíte do
+    // linvo-api roda em paralelo, e a contenção de CPU faz testes com timing
+    // (BarApp) estourarem timeout. Com 4 forks o pico cai e a suíte estabiliza.
+    maxWorkers: 4,
+    minWorkers: 1,
+    pool: "forks",
+    poolOptions: {
+      forks: { maxForks: 4, minForks: 1 },
+    },
     projects: [
       {
         extends: true,

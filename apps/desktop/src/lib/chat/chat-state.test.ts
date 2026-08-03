@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  appendArtifact,
   appendReasoning,
   appendToMessage,
   appendToolUse,
@@ -144,6 +145,44 @@ describe("upsertActivity", () => {
     expect(withDone[0]?.activities).toEqual([
       { id: "start", label: "Analisando…", status: "done" },
     ]);
+  });
+});
+
+describe("appendArtifact", () => {
+  const pdf = {
+    id: "doc-1",
+    kind: "pdf" as const,
+    title: "Relatório",
+    filename: "relatorio.pdf",
+    sizeBytes: 2048,
+    pageCount: 2,
+  };
+
+  it("appends artifacts to the matching message", () => {
+    const messages = [createAssistantPlaceholder("a1", 1)];
+    const withOne = appendArtifact(messages, "a1", pdf);
+    const withTwo = appendArtifact(withOne, "a1", { ...pdf, id: "doc-2" });
+
+    expect(withTwo[0]?.artifacts).toEqual([pdf, { ...pdf, id: "doc-2" }]);
+  });
+
+  it("ignores an artifact already present", () => {
+    const messages = [createAssistantPlaceholder("a1", 1)];
+    const withOne = appendArtifact(messages, "a1", pdf);
+    const again = appendArtifact(withOne, "a1", pdf);
+
+    expect(again[0]?.artifacts).toHaveLength(1);
+    expect(again[0]).toBe(withOne[0]);
+  });
+
+  it("leaves other messages untouched", () => {
+    const messages = [
+      createAssistantPlaceholder("a1", 1),
+      createAssistantPlaceholder("a2", 2),
+    ];
+    const next = appendArtifact(messages, "a1", pdf);
+
+    expect(next[1]?.artifacts).toBeUndefined();
   });
 });
 

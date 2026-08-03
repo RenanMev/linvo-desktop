@@ -5,6 +5,7 @@ import {
   chatErrorEventSchema,
   getToolLabel,
   messageActivitySchema,
+  messageArtifactSchema,
   messageSchema,
   messageToolUseSchema,
   reasoningChunkSchema,
@@ -224,10 +225,22 @@ describe("toolRequestSchema", () => {
 });
 
 describe("toolResultInputSchema", () => {
-  it("requires result when approved", () => {
-    expect(() =>
-      toolResultInputSchema.parse({ requestId: "r1", approved: true }),
-    ).toThrow();
+  it("aceita approved sem result (tools executadas no servidor)", () => {
+    const parsed = toolResultInputSchema.parse({
+      requestId: "r1",
+      approved: true,
+    });
+    expect(parsed.approved).toBe(true);
+    expect(parsed.result).toBeUndefined();
+  });
+
+  it("aceita approved com result (tools executadas no cliente)", () => {
+    const parsed = toolResultInputSchema.parse({
+      requestId: "r1",
+      approved: true,
+      result: "conteúdo",
+    });
+    expect(parsed.result).toBe("conteúdo");
   });
 
   it("allows deny without result", () => {
@@ -236,5 +249,56 @@ describe("toolResultInputSchema", () => {
       approved: false,
     });
     expect(parsed.approved).toBe(false);
+  });
+});
+
+describe("messageArtifactSchema", () => {
+  it("aceita artifact de pdf completo", () => {
+    const parsed = messageArtifactSchema.parse({
+      id: "doc-1",
+      kind: "pdf",
+      title: "Relatório",
+      filename: "relatorio.pdf",
+      sizeBytes: 2048,
+      pageCount: 3,
+    });
+    expect(parsed.kind).toBe("pdf");
+    expect(parsed.pageCount).toBe(3);
+  });
+
+  it("aceita artifact sem pageCount", () => {
+    const parsed = messageArtifactSchema.parse({
+      id: "doc-1",
+      kind: "pdf",
+      title: "Relatório",
+      filename: "relatorio.pdf",
+      sizeBytes: 0,
+    });
+    expect(parsed.pageCount).toBeUndefined();
+  });
+
+  it("rejeita kind desconhecido", () => {
+    expect(() =>
+      messageArtifactSchema.parse({
+        id: "doc-1",
+        kind: "docx",
+        title: "Relatório",
+        filename: "relatorio.docx",
+        sizeBytes: 10,
+      }),
+    ).toThrow();
+  });
+
+  it("rejeita pageCount zero", () => {
+    expect(() =>
+      messageArtifactSchema.parse({
+        id: "doc-1",
+        kind: "pdf",
+        title: "Relatório",
+        filename: "relatorio.pdf",
+        sizeBytes: 10,
+        pageCount: 0,
+      }),
+    ).toThrow();
   });
 });

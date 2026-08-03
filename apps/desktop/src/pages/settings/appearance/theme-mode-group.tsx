@@ -46,7 +46,7 @@ export function ThemeModeGroup() {
                 aria-label={option.label}
                 onClick={() => setPreference("themeMode", option.value)}
                 className={cn(
-                  "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-2 text-[11px] font-medium transition-all duration-200 ease-out hover:-translate-y-px active:translate-y-0 active:scale-[0.98]",
+                  "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-2 text-[11px] font-medium outline-none transition-[background-color,border-color,color,transform] duration-200 ease-out hover:-translate-y-px focus-visible:ring-[3px] focus-visible:ring-ring/50 active:translate-y-0 active:scale-[0.96]",
                   active
                     ? "border-hairline-strong bg-surface-raise-2 text-foreground"
                     : "border-hairline text-foreground/70 hover:bg-surface-hover",

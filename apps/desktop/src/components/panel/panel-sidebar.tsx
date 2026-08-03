@@ -7,14 +7,13 @@ import {
   Boxes,
   ChevronDown,
   CreditCard,
+  FileText,
   Keyboard,
   Layers,
   LibraryBig,
   LifeBuoy,
   MessageSquarePlus,
   Palette,
-  PanelLeft,
-  PanelLeftClose,
   Search,
   Settings,
   ShieldCheck,
@@ -39,8 +38,6 @@ import type { PanelSession } from "@/hooks/use-panel-session";
 import { useWorkspaceFileBlob } from "@/hooks/use-workspace-file-blob";
 import { resolveWorkspaceImageUrl } from "@/lib/workspace/workspace-api";
 import { cn } from "@/lib/utils";
-
-const SIDEBAR_COLLAPSED_KEY = "linvo.panel.sidebar-collapsed";
 
 type NavItem = {
   label: string;
@@ -96,6 +93,7 @@ const settingsGroups: NavGroup[] = [
 ];
 
 const chatExploreItems: NavItem[] = [
+  { label: "Documentos", icon: FileText, to: "/documents" },
   { label: "Arquivadas", icon: Archive, soon: true },
   { label: "Biblioteca", icon: LibraryBig, soon: true },
 ];
@@ -127,23 +125,20 @@ function accountInitials(name: string): string {
   return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
 }
 
-function readCollapsedPreference(): boolean {
-  try {
-    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-const navRowBase =
-  "flex w-full items-center gap-2.5 rounded-full px-2.5 py-1.5 text-xs transition-all duration-150";
+/*
+ * Goteira única da sidebar: o container dá px-3 (12px) e toda linha dá px-2.5
+ * (10px), então ícone começa em 22px e texto em 48px — do header ao rodapé.
+ * Qualquer bloco novo deve usar `sidebarRowX` em vez de um padding próprio.
+ */
+const sidebarRowX = "px-2.5";
+const navRowBase = `flex w-full items-center gap-2.5 rounded-lg ${sidebarRowX} py-1.5 text-xs transition-colors duration-150`;
 const navRowIdle =
   "text-sidebar-foreground/70 [&_svg]:opacity-50 hover:bg-surface-hover hover:text-sidebar-foreground hover:[&_svg]:opacity-80";
 const navRowActive =
   "nav-pill-active font-medium [&_svg]:opacity-100";
 
 const collapsedIconBase =
-  "inline-flex size-8 shrink-0 items-center justify-center rounded-full transition-all duration-150";
+  "inline-flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-150";
 const collapsedIconIdle =
   "text-sidebar-foreground/70 [&_svg]:opacity-50 hover:bg-surface-hover hover:text-sidebar-foreground hover:[&_svg]:opacity-90";
 const navIcon = "size-4 shrink-0";
@@ -265,13 +260,14 @@ function CollapsedSettingsNavItem({
 
 type PanelSidebarProps = {
   session: PanelSession;
+  /** Controlado pelo shell: o botão que alterna isto vive na titlebar. */
+  collapsed: boolean;
 };
 
-export function PanelSidebar({ session }: PanelSidebarProps) {
+export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const inSettings = location.pathname.startsWith("/settings");
-  const [collapsed, setCollapsed] = useState(readCollapsedPreference);
   const [searchQuery, setSearchQuery] = useState("");
   const {
     conversations,
@@ -288,14 +284,6 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
   const { blobUrl: activeWorkspaceImageSrc } = useWorkspaceFileBlob(
     activeWorkspaceImageUrl,
   );
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
-    } catch {
-      return;
-    }
-  }, [collapsed]);
 
   useEffect(() => {
     setSearchQuery("");
@@ -324,7 +312,6 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
   }, [searchQuery]);
 
   const resetSearch = () => setSearchQuery("");
-  const toggleCollapsed = () => setCollapsed((current) => !current);
   const collapsedTabIndex = collapsed ? 0 : -1;
   const allSettingsItems = useMemo(
     () => settingsGroups.flatMap((group) => group.items),
@@ -359,13 +346,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
             >
               {accountInitials(session.user.name)}
             </button>
-            <CollapsedIconButton
-              title="Expandir sidebar"
-              icon={PanelLeft}
-              tabIndex={collapsedTabIndex}
-              onClick={toggleCollapsed}
-            />
-            <div className="my-0.5 h-px w-6 shrink-0 bg-surface-raise-2" />
+            <div className="my-0.5 h-px w-8 shrink-0 bg-surface-raise-2" />
             <CollapsedIconButton
               title="Voltar ao chat"
               icon={ArrowLeft}
@@ -381,7 +362,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                 />
               ))}
             </div>
-            <div className="my-0.5 h-px w-6 shrink-0 bg-surface-raise-2" />
+            <div className="my-0.5 h-px w-8 shrink-0 bg-surface-raise-2" />
             <CollapsedIconButton
               title="Central de ajuda"
               icon={LifeBuoy}
@@ -400,13 +381,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
             >
               <LinvoLogo className="size-4 invert dark:invert-0" />
             </button>
-            <CollapsedIconButton
-              title="Expandir sidebar"
-              icon={PanelLeft}
-              tabIndex={collapsedTabIndex}
-              onClick={toggleCollapsed}
-            />
-            <div className="my-0.5 h-px w-6 shrink-0 bg-surface-raise-2" />
+            <div className="my-0.5 h-px w-8 shrink-0 bg-surface-raise-2" />
             <CollapsedIconButton
               title="Nova conversa"
               icon={MessageSquarePlus}
@@ -423,7 +398,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                     tabIndex={collapsedTabIndex}
                     onClick={() => selectConversation(conversation.id)}
                     className={cn(
-                      "flex size-8 shrink-0 items-center justify-center rounded-full font-technical text-[10px] font-semibold transition-all duration-150",
+                      "flex size-8 shrink-0 items-center justify-center rounded-lg font-technical text-[10px] font-semibold transition-colors duration-150",
                       activeId === conversation.id
                         ? "nav-pill-active"
                         : "text-muted-foreground hover:bg-surface-hover hover:text-sidebar-foreground",
@@ -434,14 +409,16 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                   </button>
                 ))}
             </div>
-            <div className="my-0.5 h-px w-6 shrink-0 bg-surface-raise-2" />
+            <div className="my-0.5 h-px w-8 shrink-0 bg-surface-raise-2" />
             {chatExploreItems.map((item) => (
               <CollapsedIconButton
                 key={item.label}
                 title={item.label}
                 icon={item.icon}
                 tabIndex={collapsedTabIndex}
-                disabled
+                active={item.to != null && location.pathname === item.to}
+                disabled={item.to == null}
+                onClick={item.to ? () => navigate(item.to!) : undefined}
               />
             ))}
           </>
@@ -466,7 +443,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                 sidebarHeaderY,
               )}
             >
-              <div className="flex min-w-0 items-center gap-2">
+              <div className={cn("flex min-w-0 items-center gap-2.5", sidebarRowX)}>
                 <span className="grid size-8 shrink-0 place-items-center rounded-full border border-hairline bg-surface-raise-2 font-technical text-[10px] font-semibold text-sidebar-accent-foreground">
                   {accountInitials(session.user.name)}
                 </span>
@@ -479,16 +456,6 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                   </p>
                 </div>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                title="Recolher sidebar"
-                onClick={toggleCollapsed}
-                className="size-8 shrink-0 text-muted-foreground"
-              >
-                <PanelLeftClose className="size-3.5" />
-              </Button>
             </div>
 
             <div className={cn(sidebarSectionX, sidebarBlockBottom)}>
@@ -504,12 +471,12 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
 
             <div className={cn(sidebarSectionX, sidebarBlockBottom)}>
               <div className="relative">
-                <Search className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Buscar configurações"
-                  className="h-8 rounded-full border-hairline bg-surface-raise-1 pl-7 text-xs"
+                  className="h-8 rounded-lg border-hairline bg-surface-raise-1 pl-9 text-xs"
                 />
               </div>
             </div>
@@ -522,7 +489,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
               aria-label="Seções de configurações"
             >
               {filteredSettingsGroups.length === 0 ? (
-                <p className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                <p className="px-2.5 py-1.5 text-[11px] text-muted-foreground">
                   Nenhuma configuração encontrada
                 </p>
               ) : (
@@ -557,7 +524,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                   "cursor-default justify-between text-sidebar-foreground/45",
                 )}
               >
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-2.5">
                   <LifeBuoy className={navIcon} />
                   Central de ajuda
                 </span>
@@ -581,7 +548,10 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                   render={
                     <button
                       type="button"
-                      className="flex min-w-0 flex-1 items-center gap-2.5 rounded-full px-1 py-1 text-left transition-colors hover:bg-surface-hover"
+                      className={cn(
+                        "flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1 text-left transition-colors hover:bg-surface-hover",
+                        sidebarRowX,
+                      )}
                       title="Trocar workspace"
                     />
                   }
@@ -625,16 +595,6 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                title="Recolher sidebar"
-                onClick={toggleCollapsed}
-                className="size-8 shrink-0 text-muted-foreground"
-              >
-                <PanelLeftClose className="size-3.5" />
-              </Button>
             </div>
 
             <div className={cn(sidebarSectionX, sidebarBlockBottom)}>
@@ -642,7 +602,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                 type="button"
                 variant="secondary"
                 size="sm"
-                className="h-8 w-full justify-start gap-2.5 rounded-full text-xs"
+                className={cn("h-8 w-full justify-start gap-2.5 text-xs", sidebarRowX)}
                 onClick={() => void createConversation()}
               >
                 <MessageSquarePlus className="size-4 opacity-70" />
@@ -652,12 +612,12 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
 
             <div className={cn(sidebarSectionX, sidebarBlockBottom)}>
               <div className="relative">
-                <Search className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Buscar conversas"
-                  className="h-8 rounded-full border-hairline bg-surface-raise-1 pl-7 text-xs"
+                  className="h-8 rounded-lg border-hairline bg-surface-raise-1 pl-9 text-xs"
                 />
               </div>
             </div>
@@ -667,15 +627,19 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                 Conversas
               </p>
               <nav
-                className="scrollbar-elegant scrollbar-sidebar min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-0.5"
+                // -mr-3/pr-3 joga a scrollbar (7px, ocupa espaço) para dentro da
+                // goteira do container: sem isso as linhas terminam ~9px antes
+                // das dos outros blocos e o item ativo fica mais curto que os
+                // do rodapé.
+                className="scrollbar-elegant scrollbar-sidebar -mr-3 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-3"
                 aria-label="Conversas"
               >
                 {isLoading ? (
-                  <p className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                  <p className="px-2.5 py-1.5 text-[11px] text-muted-foreground">
                     Carregando conversas...
                   </p>
                 ) : filteredConversations.length === 0 ? (
-                  <p className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                  <p className="px-2.5 py-1.5 text-[11px] text-muted-foreground">
                     {conversations.length === 0
                       ? "Nenhuma conversa ainda"
                       : "Nenhuma conversa encontrada"}
@@ -685,7 +649,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                     <div
                       key={conversation.id}
                       className={cn(
-                        "group relative flex items-stretch rounded-xl transition-all duration-150",
+                        "group relative flex items-stretch rounded-lg transition-colors duration-150",
                         activeId === conversation.id
                           ? "nav-pill-active font-medium"
                           : "text-sidebar-foreground/70 hover:bg-surface-hover hover:text-sidebar-foreground",
@@ -694,9 +658,17 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                       <button
                         type="button"
                         onClick={() => selectConversation(conversation.id)}
-                        className="flex min-w-0 flex-1 flex-col px-2 py-1.5 text-left text-xs"
+                        className={cn(
+                          "flex min-w-0 flex-1 flex-col py-1.5 text-left text-xs",
+                          sidebarRowX,
+                          // Depois de sidebarRowX: o twMerge mantém a última
+                          // classe do mesmo eixo. Reserva a coluna do botão de
+                          // apagar nas duas linhas — antes só o título a
+                          // evitava e a data passava por baixo do ícone.
+                          "pr-7",
+                        )}
                       >
-                        <span className="truncate pr-6">
+                        <span className="truncate">
                           {conversation.title}
                         </span>
                         <span className="font-technical text-[10px] tracking-wide opacity-55">
@@ -707,11 +679,11 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                         type="button"
                         title="Apagar conversa"
                         aria-label={`Apagar conversa ${conversation.title}`}
-                        className="absolute right-1.5 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full opacity-0 transition-opacity hover:bg-current/10 hover:text-destructive group-hover:opacity-60 hover:opacity-100 focus-visible:opacity-100"
+                        className="absolute right-1.5 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-md opacity-0 transition-opacity hover:bg-current/10 hover:text-destructive group-hover:opacity-60 hover:opacity-100 focus-visible:opacity-100"
                         onClick={() => {
                           if (
                             !window.confirm(
-                              "Apagar esta conversa? Esta ação não pode ser desfeita.",
+                              "Apagar esta conversa? Os PDFs gerados nela saem do workspace para todos os membros. Esta ação não pode ser desfeita.",
                             )
                           ) {
                             return;
@@ -719,7 +691,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                           void deleteConversation(conversation.id);
                         }}
                       >
-                        <Trash2 className="size-3" />
+                        <Trash2 className="size-3.5" />
                       </button>
                     </div>
                   ))

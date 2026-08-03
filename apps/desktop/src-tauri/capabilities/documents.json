@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "documents",
+  "description": "Save generated PDFs from the panel window only",
+  "windows": ["panel"],
+  "permissions": ["dialog:allow-save", "allow-documents-save-file"]
+}

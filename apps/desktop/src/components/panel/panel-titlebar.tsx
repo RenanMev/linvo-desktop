@@ -1,4 +1,4 @@
-import { Copy, Minus, Square, X } from "lucide-react";
+import { Copy, Minus, PanelLeft, PanelLeftClose, Square, X } from "lucide-react";
 
 import { AccountMenu } from "@/components/panel/account-menu";
 import { Button } from "@/components/ui/button";
@@ -19,15 +19,30 @@ type PanelTitlebarProps = {
   session: PanelSession;
   maximized: boolean;
   onToggleMaximize: () => void | Promise<void>;
+  sidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
 };
 
 export function PanelTitlebar({
   session,
   maximized,
   onToggleMaximize,
+  sidebarCollapsed,
+  onToggleSidebar,
 }: PanelTitlebarProps) {
   return (
     <header className="flex h-10 shrink-0 items-center justify-between border-b border-hairline px-2">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={onToggleSidebar}
+        title={sidebarCollapsed ? "Expandir sidebar" : "Recolher sidebar"}
+        aria-label={sidebarCollapsed ? "Expandir sidebar" : "Recolher sidebar"}
+        aria-pressed={sidebarCollapsed}
+        className="text-muted-foreground"
+      >
+        {sidebarCollapsed ? <PanelLeft /> : <PanelLeftClose />}
+      </Button>
       <div
         data-tauri-drag-region
         className="h-full min-w-0 flex-1"

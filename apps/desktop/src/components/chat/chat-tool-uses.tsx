@@ -1,4 +1,4 @@
-import { Clipboard, Globe, ListChecks, Search, Wrench } from "lucide-react";
+import { Clipboard, FileText, Globe, ListChecks, Search, Wrench } from "lucide-react";
 
 import type { ChatMessage } from "@/lib/chat/types";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,8 @@ function ToolIcon({ name }: { name: string }) {
     case "create_procedure":
     case "open_procedure":
       return <ListChecks className="size-3 shrink-0" aria-hidden />;
+    case "generate_pdf":
+      return <FileText className="size-3 shrink-0" aria-hidden />;
     default:
       if (name.includes("procedimento") || name.includes("procedure")) {
         return <ListChecks className="size-3 shrink-0" aria-hidden />;
