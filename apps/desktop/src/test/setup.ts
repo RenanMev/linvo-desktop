@@ -1,28 +1,7 @@
-import { ReadableStream as NodeReadableStream } from "node:stream/web";
-
 import "@testing-library/jest-dom/vitest";
 import { vi } from "vitest";
 
 import "./mocks/tauri";
-
-// O Blob do jsdom não implementa stream(), e o Response do undici chama
-// object.stream() ao receber um Blob como body — no Node 22 (versão do .nvmrc,
-// usada no CI) isso estoura em `object.stream is not a function`.
-if (
-  typeof Blob !== "undefined" &&
-  typeof Blob.prototype.stream === "undefined"
-) {
-  const StreamCtor = globalThis.ReadableStream ?? NodeReadableStream;
-  Blob.prototype.stream = function stream(this: Blob) {
-    const bytes = this.arrayBuffer();
-    return new StreamCtor({
-      async start(controller) {
-        controller.enqueue(new Uint8Array(await bytes));
-        controller.close();
-      },
-    }) as ReadableStream<Uint8Array>;
-  };
-}
 
 vi.mock("@tauri-apps/plugin-notification", () => ({
   isPermissionGranted: vi.fn(() => Promise.resolve(true)),
