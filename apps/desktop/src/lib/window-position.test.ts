@@ -4,6 +4,7 @@ import {
   clampToMonitor,
   computeBottomLeft,
   computeTopCenter,
+  isFullyVisibleOnMonitor,
   parsePosition,
   serializePosition,
   type MonitorInfo,
@@ -65,6 +66,22 @@ describe("clampToMonitor", () => {
   it("clamps a negative position back to the monitor origin", () => {
     const pos = { x: -300, y: -300 };
     expect(clampToMonitor(pos, winSize, primaryMonitor)).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe("isFullyVisibleOnMonitor", () => {
+  const winSize = { width: 140, height: 40 };
+
+  it("returns true when fully inside the monitor", () => {
+    expect(
+      isFullyVisibleOnMonitor({ x: 100, y: 100 }, winSize, primaryMonitor),
+    ).toBe(true);
+  });
+
+  it("returns false when partially outside", () => {
+    expect(
+      isFullyVisibleOnMonitor({ x: -10, y: 100 }, winSize, primaryMonitor),
+    ).toBe(false);
   });
 });
 

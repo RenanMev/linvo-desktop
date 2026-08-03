@@ -12,3 +12,8 @@ commands.allow = ["panel_close"]
 identifier = "allow-panel-is-open"
 description = "Allows checking panel window visibility"
 commands.allow = ["panel_is_open"]
+
+[[permission]]
+identifier = "allow-panel-set-blur"
+description = "Allows applying native OS blur (acrylic) behind the panel window"
+commands.allow = ["panel_set_blur"]

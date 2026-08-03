@@ -63,6 +63,7 @@ export async function enterFloatingMode(): Promise<void> {
   await win.setAlwaysOnTop(config.alwaysOnTop);
   await win.setSkipTaskbar(config.skipTaskbar);
   await win.setResizable(config.resizable);
+  await win.setMaximizable(config.maximizable);
 
   await win.setSize(new PhysicalSize(targetSize.width, targetSize.height));
   await win.setPosition(

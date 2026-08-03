@@ -1,11 +1,17 @@
 import {
   conversationListSchema,
   conversationSchema,
+  messageActivitySchema,
   messageListSchema,
   messageToolUseSchema,
+  modelInfoSchema,
+  reasoningChunkSchema,
   toolRequestSchema,
   type Conversation,
+  type DeskState,
+  type ForceTool,
   type Message,
+  type MessageActivity,
   type MessageToolUse,
   type ToolRequest,
 } from "@linvo/shared";
@@ -154,6 +160,9 @@ type StreamHandlers = {
   onUserMessage?: (message: Message) => void;
   onToolUsed?: (tool: MessageToolUse) => void;
   onToolRequest?: (request: ToolRequest) => void;
+  onActivity?: (activity: MessageActivity) => void;
+  onReasoningChunk?: (text: string) => void;
+  onModel?: (model: string) => void;
   onAssistantDone?: (message: Message) => void;
 };
 
@@ -204,6 +213,27 @@ async function* consumeSseStream(
           }
           break;
         }
+        case "activity": {
+          const activity = messageActivitySchema.safeParse(parsed.data);
+          if (activity.success) {
+            handlers.onActivity?.(activity.data);
+          }
+          break;
+        }
+        case "reasoning_chunk": {
+          const chunk = reasoningChunkSchema.safeParse(parsed.data);
+          if (chunk.success) {
+            handlers.onReasoningChunk?.(chunk.data.text);
+          }
+          break;
+        }
+        case "model": {
+          const info = modelInfoSchema.safeParse(parsed.data);
+          if (info.success) {
+            handlers.onModel?.(info.data.model);
+          }
+          break;
+        }
         case "done":
           handlers.onAssistantDone?.(parsed.data as Message);
           break;
@@ -222,14 +252,25 @@ export type StreamChatOptions = {
   conversationId: string;
   content: string;
   replyToMessageId?: string;
+  deskState?: DeskState;
+  model?: string;
+  forceTool?: ForceTool;
   signal?: AbortSignal;
 } & StreamHandlers;
 
 export async function* streamChatResponse(
   options: StreamChatOptions,
 ): AsyncGenerator<string> {
-  const { conversationId, content, replyToMessageId, signal, ...handlers } =
-    options;
+  const {
+    conversationId,
+    content,
+    replyToMessageId,
+    deskState,
+    model,
+    forceTool,
+    signal,
+    ...handlers
+  } = options;
 
   const path = `/api/conversations/${conversationId}/messages`;
   authDebug("chat.request", { path, stream: true });
@@ -247,6 +288,64 @@ export async function* streamChatResponse(
         body: JSON.stringify({
           content,
           replyToMessageId,
+          deskState,
+          model,
+          ...(forceTool ? { forceTool } : {}),
+        }),
+        signal,
+      },
+      CHAT_AUTH_OPTIONS,
+    );
+  } catch (error) {
+    authDebug("chat.error", {
+      path,
+      reason: error instanceof Error ? error.name : "unknown",
+    });
+    if (error instanceof AuthApiError || error instanceof AuthNetworkError) {
+      throw error;
+    }
+    throw new ChatApiError("Erro inesperado", 500);
+  }
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    authDebug("chat.error", { path, status: response.status, message });
+    throw new ChatApiError(message, response.status);
+  }
+
+  yield* consumeSseStream(response, handlers);
+}
+
+export type RegenerateMessageOptions = {
+  conversationId: string;
+  messageId: string;
+  deskState?: DeskState;
+  model?: string;
+  signal?: AbortSignal;
+} & StreamHandlers;
+
+export async function* regenerateMessage(
+  options: RegenerateMessageOptions,
+): AsyncGenerator<string> {
+  const { conversationId, messageId, deskState, model, signal, ...handlers } =
+    options;
+
+  const path = `/api/conversations/${conversationId}/messages/${messageId}/regenerate`;
+  authDebug("chat.request", { path, stream: true });
+  let response: Response;
+
+  try {
+    response = await authorizedFetch(
+      `${API_URL}${path}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify({
+          deskState,
+          model,
         }),
         signal,
       },
@@ -277,14 +376,24 @@ export type SubmitToolResultOptions = {
   requestId: string;
   approved: boolean;
   result?: string;
+  deskState?: DeskState;
+  model?: string;
   signal?: AbortSignal;
 } & StreamHandlers;
 
 export async function* submitToolResult(
   options: SubmitToolResultOptions,
 ): AsyncGenerator<string> {
-  const { conversationId, requestId, approved, result, signal, ...handlers } =
-    options;
+  const {
+    conversationId,
+    requestId,
+    approved,
+    result,
+    deskState,
+    model,
+    signal,
+    ...handlers
+  } = options;
 
   const path = `/api/conversations/${conversationId}/tool-results`;
   authDebug("chat.request", { path, stream: true });
@@ -303,6 +412,8 @@ export async function* submitToolResult(
           requestId,
           approved,
           result,
+          deskState,
+          model,
         }),
         signal,
       },

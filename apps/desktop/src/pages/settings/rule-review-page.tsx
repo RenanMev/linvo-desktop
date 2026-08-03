@@ -1,25 +1,41 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 import type {
   AcceptRuleCandidateInput,
   RuleCandidate,
   RuleDiscoverySessionDetail,
   RuleDiscoverySessionSummary,
 } from "@linvo/shared";
-import { ArrowLeft, ClipboardCheck, Loader2, Upload } from "lucide-react";
+import {
+  ArrowLeft,
+  BookOpen,
+  Check,
+  ChevronRight,
+  ClipboardCheck,
+  FileText,
+  Loader2,
+  Scale,
+  Sparkles,
+  Square,
+  Undo2,
+  Upload,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { RuleReviewReasoningPanel } from "@/pages/settings/rule-review-reasoning-panel";
 import { useWorkspace } from "@/context/workspace-context";
 import { AuthApiError } from "@/lib/auth/auth-api";
 import { cn } from "@/lib/utils";
 import * as ruleDiscoveryApi from "@/lib/workspace/rule-discovery-api";
 
-const ACCEPTED_TYPES =
+export const ACCEPTED_TYPES =
   "text/plain,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-function sessionStatusLabel(status: RuleDiscoverySessionDetail["status"]): string {
+function sessionStatusLabel(
+  status: RuleDiscoverySessionDetail["status"],
+): string {
   switch (status) {
     case "PENDING":
       return "Pendente";
@@ -29,6 +45,8 @@ function sessionStatusLabel(status: RuleDiscoverySessionDetail["status"]): strin
       return "Pronta";
     case "FAILED":
       return "Falhou";
+    case "CANCELLED":
+      return "Encerrada";
     default: {
       const _exhaustive: never = status;
       return _exhaustive;
@@ -36,9 +54,7 @@ function sessionStatusLabel(status: RuleDiscoverySessionDetail["status"]): strin
   }
 }
 
-function candidateCategoryLabel(
-  category: RuleCandidate["category"],
-): string {
+function candidateCategoryLabel(category: RuleCandidate["category"]): string {
   switch (category) {
     case "BUSINESS_RULE":
       return "Regra de negócio";
@@ -68,6 +84,19 @@ function candidateStatusLabel(status: RuleCandidate["status"]): string {
   }
 }
 
+function approvalModeLabel(mode: "QUESTION" | "ALLOW"): string {
+  switch (mode) {
+    case "QUESTION":
+      return "Questionar";
+    case "ALLOW":
+      return "Permitir";
+    default: {
+      const _exhaustive: never = mode;
+      return _exhaustive;
+    }
+  }
+}
+
 type CandidateDraft = {
   title: string;
   content: string;
@@ -79,9 +108,84 @@ function buildDraft(candidate: RuleCandidate): CandidateDraft {
   return {
     title: candidate.title,
     content: candidate.content,
-    promoteToRule: false,
-    promoteToKnowledge: false,
+    promoteToRule: candidate.promoteToRule === true,
+    promoteToKnowledge: candidate.promoteToKnowledge === true,
   };
+}
+
+function SectionHeading({
+  title,
+  description,
+  count,
+  action,
+}: {
+  title: string;
+  description?: string;
+  count?: number;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="space-y-0.5">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </h2>
+        {description ? (
+          <p className="text-[11px] text-muted-foreground">{description}</p>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {typeof count === "number" ? (
+          <span className="grid size-6 place-items-center rounded-md bg-muted text-[11px] font-medium tabular-nums text-muted-foreground">
+            {count}
+          </span>
+        ) : null}
+        {action}
+      </div>
+    </div>
+  );
+}
+
+function PromoteCheck({
+  checked,
+  disabled,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <label
+      className={cn(
+        "inline-flex select-none items-center gap-2 text-xs",
+        disabled
+          ? "cursor-not-allowed opacity-60"
+          : "cursor-pointer text-foreground",
+      )}
+    >
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={checked}
+        aria-label={label}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={cn(
+          "grid size-4 place-items-center rounded border transition-colors",
+          checked
+            ? "border-accent-active bg-accent-active text-accent-active-foreground"
+            : "border-hairline-strong bg-transparent text-transparent",
+          disabled && "pointer-events-none",
+        )}
+      >
+        <Check className="size-3" strokeWidth={3} />
+      </button>
+      {label}
+    </label>
+  );
 }
 
 export function RuleReviewPage() {
@@ -99,8 +203,13 @@ export function RuleReviewPage() {
   const [sessionDetail, setSessionDetail] =
     useState<RuleDiscoverySessionDetail | null>(null);
   const [drafts, setDrafts] = useState<Record<string, CandidateDraft>>({});
+  const [approvalMode, setApprovalMode] = useState<"QUESTION" | "ALLOW">(
+    "QUESTION",
+  );
+  const [confidenceThreshold, setConfidenceThreshold] = useState(0.75);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refreshSessions = useCallback(async () => {
@@ -116,6 +225,8 @@ export function RuleReviewPage() {
       selectedSessionId,
     );
     setSessionDetail(detail);
+    setApprovalMode(detail.approvalMode);
+    setConfidenceThreshold(detail.confidenceThreshold);
     setDrafts((prev) => {
       const next = { ...prev };
       for (const candidate of detail.candidates) {
@@ -164,7 +275,7 @@ export function RuleReviewPage() {
     return () => clearInterval(interval);
   }, [sessionDetail?.id, sessionDetail?.status, refreshSessionDetail]);
 
-  async function handleUpload(files: FileList | null) {
+  async function handleUpload(files: FileList | File[] | null) {
     if (!workspace || !files?.length) return;
     setBusy(true);
     setError(null);
@@ -172,10 +283,12 @@ export function RuleReviewPage() {
       const session = await ruleDiscoveryApi.createSession(
         workspace.id,
         Array.from(files),
+        { approvalMode, confidenceThreshold },
       );
       await refreshSessions();
       setSelectedSessionId(session.id);
       setSessionDetail(session);
+      setDrafts({});
     } catch (err) {
       if (err instanceof AuthApiError) {
         setError(err.message);
@@ -187,6 +300,61 @@ export function RuleReviewPage() {
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+    }
+  }
+
+  async function handleControlsChange(next: {
+    approvalMode?: "QUESTION" | "ALLOW";
+    confidenceThreshold?: number;
+  }) {
+    const mode = next.approvalMode ?? approvalMode;
+    const threshold = next.confidenceThreshold ?? confidenceThreshold;
+    setApprovalMode(mode);
+    setConfidenceThreshold(threshold);
+
+    if (!workspace || !selectedSessionId) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      const session = await ruleDiscoveryApi.updateSession(
+        workspace.id,
+        selectedSessionId,
+        { approvalMode: mode, confidenceThreshold: threshold },
+      );
+      setSessionDetail(session);
+    } catch (err) {
+      if (err instanceof AuthApiError) {
+        setError(err.message);
+      } else {
+        setError("Não foi possível atualizar o modo");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCancelSession(sessionId: string) {
+    if (!workspace) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const session = await ruleDiscoveryApi.cancelSession(
+        workspace.id,
+        sessionId,
+      );
+      await refreshSessions();
+      if (selectedSessionId === sessionId) {
+        setSessionDetail(session);
+      }
+    } catch (err) {
+      if (err instanceof AuthApiError) {
+        setError(err.message);
+      } else {
+        setError("Não foi possível encerrar a análise");
+      }
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -252,6 +420,28 @@ export function RuleReviewPage() {
     }
   }
 
+  async function handleUndo(candidate: RuleCandidate) {
+    if (!workspace || !selectedSessionId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await ruleDiscoveryApi.undoCandidate(
+        workspace.id,
+        selectedSessionId,
+        candidate.id,
+      );
+      await refreshSessionDetail();
+    } catch (err) {
+      if (err instanceof AuthApiError) {
+        setError(err.message);
+      } else {
+        setError("Não foi possível desfazer");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function updateDraft(
     candidateId: string,
     patch: Partial<CandidateDraft>,
@@ -284,7 +474,10 @@ export function RuleReviewPage() {
             <ArrowLeft className="size-3.5" />
             Voltar
           </Button>
-          <p className="text-xs text-muted-foreground">Workspace não encontrado</p>
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-10 text-center">
+            <ClipboardCheck className="size-5 text-muted-foreground/70" />
+            <p className="text-xs font-medium">Workspace não encontrado</p>
+          </div>
         </div>
       </ScrollArea>
     );
@@ -299,16 +492,15 @@ export function RuleReviewPage() {
             size="sm"
             variant="ghost"
             className="-ml-2 text-muted-foreground"
-            onClick={() =>
-              navigate(`/settings/workspace/${workspace.id}`)
-            }
+            onClick={() => navigate(`/settings/workspace/${workspace.id}`)}
           >
             <ArrowLeft className="size-3.5" />
             Voltar
           </Button>
-          <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-10 text-center">
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-10 text-center">
+            <ClipboardCheck className="size-5 text-muted-foreground/70" />
             <p className="text-xs font-medium">Acesso restrito ao proprietário</p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
+            <p className="max-w-xs text-[11px] text-muted-foreground">
               Apenas o owner pode revisar regras descobertas neste workspace.
             </p>
           </div>
@@ -317,13 +509,12 @@ export function RuleReviewPage() {
     );
   }
 
-  const isProcessing =
-    sessionDetail?.status === "PROCESSING" ||
-    sessionDetail?.status === "PENDING";
+  const pendingCount =
+    sessionDetail?.candidates.filter((c) => c.status === "PENDING").length ?? 0;
 
   return (
     <ScrollArea className="h-full">
-      <div className="mx-auto max-w-2xl space-y-8 px-6 py-6">
+      <div className="mx-auto flex w-full max-w-[780px] flex-col gap-9 px-6 py-8">
         <div className="space-y-3">
           <Button
             type="button"
@@ -335,24 +526,116 @@ export function RuleReviewPage() {
             <ArrowLeft className="size-3.5" />
             Voltar
           </Button>
-          <div className="space-y-1">
+
+          <div className="space-y-2">
             <h1 className="text-lg font-semibold tracking-tight">Rule Review</h1>
-            <p className="text-xs text-muted-foreground">
-              Envie documentos, acompanhe a extração e revise candidatos antes de
-              promover para regras ou knowledge.
+            <p className="max-w-lg text-xs leading-relaxed text-muted-foreground">
+              Envie documentos, acompanhe o raciocínio da IA e revise candidatos
+              antes de promover para regras ou knowledge.
             </p>
           </div>
         </div>
 
         {error ? (
-          <div className="rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2.5">
+          <div className="flex items-start justify-between gap-3 rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2.5">
             <p className="text-xs text-destructive">{error}</p>
+            <button
+              type="button"
+              className="text-destructive/70 hover:text-destructive"
+              aria-label="Fechar erro"
+              onClick={() => setError(null)}
+            >
+              <X className="size-3.5" />
+            </button>
           </div>
         ) : null}
 
         <section className="space-y-3">
-          <h2 className="text-sm font-medium">Upload</h2>
-          <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
+          <SectionHeading
+            title="Modo da IA"
+            description="Vale para o próximo upload e para a sessão aberta."
+          />
+          <div className="rounded-xl border border-hairline bg-muted/40 p-4">
+            <div className="flex flex-col gap-6 sm:flex-row sm:gap-7">
+              <div className="min-w-0 flex-1">
+                <label className="mb-2 block font-technical text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Aprovação
+                </label>
+                <div
+                  role="radiogroup"
+                  aria-label="Modo de aprovação"
+                  className="flex gap-1.5"
+                >
+                  {(["QUESTION", "ALLOW"] as const).map((mode) => {
+                    const active = approvalMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        disabled={busy}
+                        onClick={() =>
+                          void handleControlsChange({ approvalMode: mode })
+                        }
+                        className={cn(
+                          "flex-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-50",
+                          active
+                            ? "nav-pill-active"
+                            : "border border-hairline text-foreground/70 hover:bg-surface-hover",
+                        )}
+                      >
+                        {approvalModeLabel(mode)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <label className="mb-2 block font-technical text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Limiar de confiança
+                </label>
+                <div className="space-y-2">
+                  <span className="font-technical text-lg tabular-nums">
+                    {confidenceThreshold.toLocaleString("pt-BR", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={confidenceThreshold}
+                    aria-label="Limiar de confiança"
+                    disabled={busy}
+                    className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-surface-raise-2 accent-accent-active disabled:opacity-50"
+                    onChange={(event) =>
+                      setConfidenceThreshold(Number(event.target.value))
+                    }
+                    onPointerUp={() =>
+                      void handleControlsChange({ confidenceThreshold })
+                    }
+                    onKeyUp={() =>
+                      void handleControlsChange({ confidenceThreshold })
+                    }
+                  />
+                  <div className="flex justify-between font-technical text-[10px] text-muted-foreground">
+                    <span>0,0</span>
+                    <span>0,5</span>
+                    <span>1,0</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <SectionHeading title="Upload" />
+          <div className="rounded-xl border border-hairline bg-muted/40 p-4">
             <input
               ref={fileInputRef}
               type="file"
@@ -361,200 +644,338 @@ export function RuleReviewPage() {
               className="hidden"
               onChange={(event) => void handleUpload(event.target.files)}
             />
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              disabled={busy}
-              onClick={() => fileInputRef.current?.click()}
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Arraste arquivos ou clique para enviar"
+              onClick={() => !busy && fileInputRef.current?.click()}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDragOver(false);
+                void handleUpload(event.dataTransfer.files);
+              }}
+              className={cn(
+                "flex flex-col items-center gap-3 rounded-lg border border-dashed px-4 py-8 text-center transition-colors",
+                dragOver
+                  ? "border-hairline-strong bg-surface-raise-2"
+                  : "border-hairline bg-muted/20 hover:border-hairline-strong hover:bg-surface-hover",
+                busy && "pointer-events-none opacity-60",
+              )}
             >
-              <Upload className="size-3.5" />
-              Enviar arquivos
-            </Button>
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              TXT, PDF ou XLSX · até 4 arquivos · 5 MB cada
-            </p>
+              {busy ? (
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              ) : (
+                <Upload className="size-5 text-muted-foreground" />
+              )}
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  fileInputRef.current?.click();
+                }}
+              >
+                <Upload className="size-3.5" />
+                {busy ? "Enviando…" : "Enviar arquivos"}
+              </Button>
+              <p className="font-technical text-[11px] text-muted-foreground">
+                TXT, PDF ou XLSX · até 4 arquivos · 5 MB cada
+              </p>
+            </div>
           </div>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-medium">Sessões recentes</h2>
+          <SectionHeading title="Sessões recentes" count={sessions.length} />
           {sessions.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground">
-              Nenhuma sessão ainda.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {sessions.map((session) => (
-                <button
-                  key={session.id}
-                  type="button"
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-xs transition-colors",
-                    selectedSessionId === session.id
-                      ? "border-primary/40 bg-primary/5"
-                      : "border-border/60 bg-muted/20 hover:bg-muted/40",
-                  )}
-                  onClick={() => setSelectedSessionId(session.id)}
-                >
-                  <span className="font-medium">
-                    {new Date(session.createdAt).toLocaleString("pt-BR")}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {sessionStatusLabel(session.status)} · {session.candidateCount}{" "}
-                    candidatos
-                  </span>
-                </button>
-              ))}
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-8 text-center">
+              <FileText className="size-5 text-muted-foreground/70" />
+              <p className="text-xs font-medium">Nenhuma sessão ainda</p>
+              <p className="max-w-xs text-[11px] text-muted-foreground">
+                Envie um documento acima para a IA começar a extrair candidatos.
+              </p>
             </div>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {sessions.map((session) => {
+                const selected = selectedSessionId === session.id;
+                const canCancel =
+                  session.status === "PROCESSING" ||
+                  session.status === "PENDING";
+                const muted =
+                  session.status === "CANCELLED" ||
+                  session.status === "FAILED";
+                return (
+                  <li key={session.id} className="flex items-stretch gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSessionId(session.id)}
+                      className={cn(
+                        "group flex min-w-0 flex-1 items-center justify-between gap-4 rounded-xl border px-4 py-3 text-left transition-colors",
+                        selected
+                          ? "border-hairline-strong bg-surface-raise-2"
+                          : "border-hairline bg-muted/40 hover:bg-surface-hover",
+                      )}
+                    >
+                      <span className="font-technical text-xs text-foreground">
+                        {new Date(session.createdAt).toLocaleString("pt-BR")}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-3">
+                        <span
+                          className={cn(
+                            "rounded-md px-2 py-0.5 text-[11px] font-medium",
+                            muted
+                              ? "bg-muted/50 text-muted-foreground"
+                              : "bg-muted text-foreground",
+                          )}
+                        >
+                          {canCancel ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Loader2 className="size-2.5 animate-spin" />
+                              {sessionStatusLabel(session.status)}
+                            </span>
+                          ) : (
+                            sessionStatusLabel(session.status)
+                          )}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {session.candidateCount} candidato
+                          {session.candidateCount === 1 ? "" : "s"}
+                        </span>
+                        <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                      </span>
+                    </button>
+                    {canCancel ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        className="h-auto shrink-0 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                        aria-label="Encerrar análise"
+                        onClick={() => void handleCancelSession(session.id)}
+                      >
+                        <Square className="size-3" />
+                        Encerrar
+                      </Button>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </section>
 
         {sessionDetail ? (
-          <section className="space-y-4">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-medium">Detalhe da sessão</h2>
-              {isProcessing ? (
-                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <Loader2 className="size-3 animate-spin" />
-                  Atualizando...
-                </span>
-              ) : null}
-            </div>
+          <>
+            <RuleReviewReasoningPanel
+              session={sessionDetail}
+              busy={busy}
+              onCancel={() => void handleCancelSession(sessionDetail.id)}
+            />
 
-            <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-3">
-              <p className="text-xs font-medium">
-                Status: {sessionStatusLabel(sessionDetail.status)}
-              </p>
-              <div className="space-y-1">
-                {sessionDetail.documents.map((document) => (
-                  <div
-                    key={document.id}
-                    className="flex items-center justify-between text-[11px] text-muted-foreground"
-                  >
-                    <span>{document.originalName}</span>
-                    <span>{document.status}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <section className="space-y-4">
+              <SectionHeading
+                title="Checklist de candidatos"
+                description="Ajuste destinos e aceite, negue ou desfaça promoções."
+                count={sessionDetail.candidates.length}
+                action={
+                  pendingCount > 0 ? (
+                    <span className="rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-foreground">
+                      {pendingCount} pendente{pendingCount === 1 ? "" : "s"}
+                    </span>
+                  ) : null
+                }
+              />
 
-            <div className="space-y-3">
-              <h3 className="text-sm font-medium">Checklist de candidatos</h3>
               {sessionDetail.candidates.length === 0 ? (
-                <p className="text-[11px] text-muted-foreground">
-                  Nenhum candidato nesta sessão.
-                </p>
+                <div className="rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-8 text-center">
+                  <p className="text-xs font-medium">Nenhum candidato ainda</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    Eles aparecem aqui conforme a IA classifica o documento.
+                  </p>
+                </div>
               ) : (
-                sessionDetail.candidates.map((candidate) => {
-                  const draft = drafts[candidate.id] ?? buildDraft(candidate);
-                  const isPending = candidate.status === "PENDING";
+                <div className="flex flex-col gap-4">
+                  {sessionDetail.candidates.map((candidate) => {
+                    const draft =
+                      drafts[candidate.id] ?? buildDraft(candidate);
+                    const isPending = candidate.status === "PENDING";
+                    const isAccepted = candidate.status === "ACCEPTED";
+                    const isRejected = candidate.status === "REJECTED";
+                    const CategoryIcon =
+                      candidate.category === "BUSINESS_RULE"
+                        ? Scale
+                        : BookOpen;
 
-                  return (
-                    <article
-                      key={candidate.id}
-                      className="space-y-3 rounded-xl border border-border/60 bg-muted/30 p-4"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <ClipboardCheck className="size-4 text-muted-foreground" />
-                        <span className="text-xs font-medium">
-                          {candidateCategoryLabel(candidate.category)}
-                        </span>
-                        <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                          {Math.round(candidate.confidence * 100)}%
-                        </span>
-                        <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                          {candidateStatusLabel(candidate.status)}
-                        </span>
-                      </div>
-
-                      {isPending ? (
-                        <>
-                          <Input
-                            value={draft.title}
-                            onChange={(event) =>
-                              updateDraft(candidate.id, {
-                                title: event.target.value,
-                              })
-                            }
-                            className="h-8 text-xs"
-                            aria-label="Título do candidato"
-                          />
-                          <textarea
-                            value={draft.content}
-                            onChange={(event) =>
-                              updateDraft(candidate.id, {
-                                content: event.target.value,
-                              })
-                            }
-                            className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-xs"
-                            aria-label="Conteúdo do candidato"
-                          />
-                          {candidate.sourceExcerpt ? (
-                            <p className="text-[11px] text-muted-foreground">
-                              Trecho: {candidate.sourceExcerpt}
-                            </p>
+                    return (
+                      <article
+                        key={candidate.id}
+                        className={cn(
+                          "rounded-xl border border-hairline bg-muted/40 p-4 transition-opacity",
+                          !isPending && "opacity-70",
+                        )}
+                      >
+                        <div className="mb-3 flex flex-wrap items-center gap-2">
+                          <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground">
+                            <CategoryIcon className="size-3.5" />
+                            {candidateCategoryLabel(candidate.category)}
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 rounded-md bg-muted/50 px-2 py-0.5 font-technical text-[11px] font-medium tabular-nums text-muted-foreground">
+                            <Sparkles className="size-3" />
+                            {Math.round(candidate.confidence * 100)}%
+                          </span>
+                          <span
+                            className={cn(
+                              "rounded-md px-2 py-0.5 text-[11px] font-medium",
+                              isPending && "bg-muted text-foreground",
+                              isAccepted &&
+                                "bg-accent-active text-accent-active-foreground",
+                              isRejected &&
+                                "bg-muted/50 text-muted-foreground line-through",
+                            )}
+                          >
+                            {isAccepted ? (
+                              <span className="inline-flex items-center gap-1">
+                                <Check className="size-3" />
+                                {candidateStatusLabel(candidate.status)}
+                              </span>
+                            ) : (
+                              candidateStatusLabel(candidate.status)
+                            )}
+                          </span>
+                          {candidate.promotionSource ? (
+                            <span className="rounded-md bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                              {candidate.promotionSource === "AUTO"
+                                ? "Auto"
+                                : "Manual"}
+                            </span>
                           ) : null}
-                          <div className="flex flex-wrap gap-3 text-xs">
-                            <label className="inline-flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={draft.promoteToRule}
-                                onChange={(event) =>
-                                  updateDraft(candidate.id, {
-                                    promoteToRule: event.target.checked,
-                                  })
-                                }
-                              />
-                              Promover para regra
-                            </label>
-                            <label className="inline-flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={draft.promoteToKnowledge}
-                                onChange={(event) =>
-                                  updateDraft(candidate.id, {
-                                    promoteToKnowledge: event.target.checked,
-                                  })
-                                }
-                              />
-                              Promover para knowledge
-                            </label>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              disabled={busy}
-                              onClick={() => void handleAccept(candidate)}
-                            >
-                              Aceitar
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              disabled={busy}
-                              onClick={() => void handleReject(candidate)}
-                            >
-                              Negar
-                            </Button>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-xs font-medium">{candidate.title}</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {candidate.content}
+                        </div>
+
+                        <input
+                          value={isPending ? draft.title : candidate.title}
+                          disabled={!isPending}
+                          onChange={(event) =>
+                            updateDraft(candidate.id, {
+                              title: event.target.value,
+                            })
+                          }
+                          className="w-full rounded-lg border border-hairline bg-neutral-deep px-3 py-2.5 text-xs font-medium text-foreground shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-80"
+                          aria-label="Título do candidato"
+                        />
+                        <textarea
+                          value={
+                            isPending ? draft.content : candidate.content
+                          }
+                          disabled={!isPending}
+                          onChange={(event) =>
+                            updateDraft(candidate.id, {
+                              content: event.target.value,
+                            })
+                          }
+                          rows={2}
+                          className="mt-2 w-full resize-y rounded-lg border border-hairline bg-neutral-deep px-3 py-2.5 text-xs leading-relaxed text-muted-foreground shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-80"
+                          aria-label="Conteúdo do candidato"
+                        />
+
+                        {isPending && candidate.sourceExcerpt ? (
+                          <p className="mt-2 rounded-lg bg-muted/50 px-2.5 py-2 text-[11px] text-muted-foreground">
+                            Trecho: {candidate.sourceExcerpt}
                           </p>
-                        </>
-                      )}
-                    </article>
-                  );
-                })
+                        ) : null}
+
+                        <div className="mt-3 flex flex-wrap items-center gap-5">
+                          <PromoteCheck
+                            checked={
+                              isPending
+                                ? draft.promoteToRule
+                                : candidate.promoteToRule === true
+                            }
+                            disabled={!isPending}
+                            label="Promover para regra"
+                            onChange={(next) =>
+                              updateDraft(candidate.id, {
+                                promoteToRule: next,
+                              })
+                            }
+                          />
+                          <PromoteCheck
+                            checked={
+                              isPending
+                                ? draft.promoteToKnowledge
+                                : candidate.promoteToKnowledge === true
+                            }
+                            disabled={!isPending}
+                            label="Promover para knowledge"
+                            onChange={(next) =>
+                              updateDraft(candidate.id, {
+                                promoteToKnowledge: next,
+                              })
+                            }
+                          />
+                        </div>
+
+                        <div className="mt-4 flex items-center gap-3">
+                          {isPending ? (
+                            <>
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void handleAccept(candidate)}
+                                className="rounded-lg bg-accent-active px-4 py-2 text-xs font-semibold text-accent-active-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                              >
+                                Aceitar
+                              </button>
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void handleReject(candidate)}
+                                className="rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
+                              >
+                                Negar
+                              </button>
+                            </>
+                          ) : isAccepted ? (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void handleUndo(candidate)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
+                            >
+                              <Undo2 className="size-3.5" />
+                              Desfazer
+                            </button>
+                          ) : null}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
               )}
-            </div>
-          </section>
+            </section>
+          </>
+        ) : sessions.length > 0 ? (
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-10 text-center">
+            <Sparkles className="size-5 text-muted-foreground/70" />
+            <p className="text-xs font-medium">Selecione uma sessão</p>
+            <p className="max-w-xs text-[11px] text-muted-foreground">
+              O raciocínio e o checklist aparecem aqui quando você abre uma
+              análise.
+            </p>
+          </div>
         ) : null}
       </div>
     </ScrollArea>

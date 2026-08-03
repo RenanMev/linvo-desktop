@@ -26,4 +26,19 @@ describe("ChatToolUses", () => {
     const { container } = render(<ChatToolUses toolUses={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
+
+  it("renderiza label de skill de procedimento", () => {
+    render(
+      <ChatToolUses
+        toolUses={[
+          {
+            name: "procedimento_para_cancelamento_de_planos_no_crm",
+            label: "Cancelamento de planos",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Cancelamento de planos")).toBeInTheDocument();
+  });
 });

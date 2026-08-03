@@ -1,4 +1,4 @@
-import { Clipboard, Globe, Search, Wrench } from "lucide-react";
+import { Clipboard, Globe, ListChecks, Search, Wrench } from "lucide-react";
 
 import type { ChatMessage } from "@/lib/chat/types";
 import { cn } from "@/lib/utils";
@@ -16,7 +16,13 @@ function ToolIcon({ name }: { name: string }) {
       return <Globe className="size-3 shrink-0" aria-hidden />;
     case "read_clipboard":
       return <Clipboard className="size-3 shrink-0" aria-hidden />;
+    case "create_procedure":
+    case "open_procedure":
+      return <ListChecks className="size-3 shrink-0" aria-hidden />;
     default:
+      if (name.includes("procedimento") || name.includes("procedure")) {
+        return <ListChecks className="size-3 shrink-0" aria-hidden />;
+      }
       return <Wrench className="size-3 shrink-0" aria-hidden />;
   }
 }
@@ -32,7 +38,7 @@ export function ChatToolUses({ toolUses, isStreaming = false }: ChatToolUsesProp
         <span
           key={`${tool.name}-${index}`}
           className={cn(
-            "inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground",
+            "inline-flex items-center gap-1 rounded-md border border-hairline bg-neutral-raised px-2 py-0.5 text-xs text-foreground/80",
             isStreaming && index === toolUses.length - 1 && "animate-pulse",
           )}
         >

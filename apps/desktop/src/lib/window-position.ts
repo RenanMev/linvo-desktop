@@ -53,6 +53,15 @@ export function clampToMonitor(
   };
 }
 
+export function isFullyVisibleOnMonitor(
+  pos: Position,
+  winSize: Size,
+  monitor: MonitorInfo,
+): boolean {
+  const clamped = clampToMonitor(pos, winSize, monitor);
+  return clamped.x === pos.x && clamped.y === pos.y;
+}
+
 export function serializePosition(pos: Position): string {
   return JSON.stringify({ x: pos.x, y: pos.y });
 }

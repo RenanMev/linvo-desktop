@@ -91,6 +91,46 @@ export function appendToolUse(
   );
 }
 
+export function upsertActivity(
+  messages: ChatMessage[],
+  id: string,
+  activity: NonNullable<ChatMessage["activities"]>[number],
+): ChatMessage[] {
+  return messages.map((message) => {
+    if (message.id !== id) return message;
+    const activities = [...(message.activities ?? [])];
+    const index = activities.findIndex((item) => item.id === activity.id);
+    if (index >= 0) {
+      activities[index] = activity;
+    } else {
+      activities.push(activity);
+    }
+    return { ...message, activities };
+  });
+}
+
+export function appendReasoning(
+  messages: ChatMessage[],
+  id: string,
+  chunk: string,
+): ChatMessage[] {
+  return messages.map((message) =>
+    message.id === id
+      ? { ...message, reasoning: `${message.reasoning ?? ""}${chunk}` }
+      : message,
+  );
+}
+
+export function setMessageModel(
+  messages: ChatMessage[],
+  id: string,
+  model: string,
+): ChatMessage[] {
+  return messages.map((message) =>
+    message.id === id ? { ...message, model } : message,
+  );
+}
+
 export function canSendMessage(content: string, isResponding: boolean): boolean {
   return content.trim().length > 0 && !isResponding;
 }

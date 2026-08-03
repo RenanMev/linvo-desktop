@@ -1,12 +1,38 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  chatErrorCodeSchema,
+  chatErrorEventSchema,
   getToolLabel,
+  messageActivitySchema,
   messageSchema,
   messageToolUseSchema,
+  reasoningChunkSchema,
+  regenerateMessageInputSchema,
+  sendMessageInputSchema,
   toolRequestSchema,
   toolResultInputSchema,
 } from "./chat";
+
+describe("chatErrorEventSchema", () => {
+  it("aceita evento sem code (compatibilidade retroativa)", () => {
+    const parsed = chatErrorEventSchema.parse({ message: "falhou" });
+    expect(parsed.code).toBeUndefined();
+  });
+
+  it("aceita todos os codes definidos", () => {
+    for (const code of chatErrorCodeSchema.options) {
+      const parsed = chatErrorEventSchema.parse({ message: "x", code });
+      expect(parsed.code).toBe(code);
+    }
+  });
+
+  it("rejeita code desconhecido", () => {
+    expect(() =>
+      chatErrorEventSchema.parse({ message: "x", code: "nao_existe" }),
+    ).toThrow();
+  });
+});
 
 describe("messageToolUseSchema", () => {
   it("validates name and label", () => {
@@ -29,6 +55,130 @@ describe("messageSchema toolUses", () => {
       toolUses: [{ name: "search_knowledge", label: "Base de conhecimento" }],
     });
     expect(message.toolUses).toHaveLength(1);
+  });
+});
+
+describe("messageSchema reasoning", () => {
+  it("round-trips optional reasoning", () => {
+    const message = messageSchema.parse({
+      id: "m1",
+      role: "assistant",
+      content: "Resposta",
+      status: "done",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      reasoning: "Vou consultar a base primeiro.",
+    });
+    expect(message.reasoning).toBe("Vou consultar a base primeiro.");
+  });
+});
+
+describe("messageActivitySchema", () => {
+  it("validates activity payload", () => {
+    const parsed = messageActivitySchema.parse({
+      id: "act-1",
+      label: "Base de conhecimento",
+      status: "running",
+    });
+    expect(parsed.status).toBe("running");
+  });
+
+  it("accepts kind and detail", () => {
+    const parsed = messageActivitySchema.parse({
+      id: "act-2",
+      label: "Base de conhecimento",
+      status: "done",
+      kind: "research",
+      detail: "cancelamento",
+    });
+    expect(parsed.kind).toBe("research");
+    expect(parsed.detail).toBe("cancelamento");
+  });
+});
+
+describe("messageSchema activities", () => {
+  it("round-trips optional activities", () => {
+    const message = messageSchema.parse({
+      id: "m1",
+      role: "assistant",
+      content: "Resposta",
+      status: "done",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      activities: [
+        {
+          id: "a1",
+          label: "Base de conhecimento",
+          status: "done",
+          kind: "research",
+        },
+      ],
+    });
+    expect(message.activities).toHaveLength(1);
+  });
+});
+
+describe("sendMessageInputSchema deskState", () => {
+  it("accepts deskState snapshot", () => {
+    const parsed = sendMessageInputSchema.parse({
+      content: "em que passo estou?",
+      deskState: {
+        screenKey: "chat",
+        openProcedure: {
+          slug: "cancelamento",
+          title: "Cancelamento",
+          stepCount: 3,
+          currentStepIndex: 1,
+          completedStepIndexes: [0],
+        },
+      },
+    });
+    expect(parsed.deskState?.openProcedure?.slug).toBe("cancelamento");
+  });
+
+  it("accepts model override", () => {
+    const parsed = sendMessageInputSchema.parse({
+      content: "oi",
+      model: "gpt-4o",
+    });
+    expect(parsed.model).toBe("gpt-4o");
+  });
+
+  it("accepts forceTool web_search", () => {
+    const parsed = sendMessageInputSchema.parse({
+      content: "sobre cancelamento",
+      forceTool: "web_search",
+    });
+    expect(parsed.forceTool).toBe("web_search");
+  });
+
+  it("rejects unknown forceTool", () => {
+    expect(() =>
+      sendMessageInputSchema.parse({
+        content: "oi",
+        forceTool: "bash",
+      }),
+    ).toThrow();
+  });
+});
+
+describe("regenerateMessageInputSchema", () => {
+  it("accepts empty body", () => {
+    const parsed = regenerateMessageInputSchema.parse({});
+    expect(parsed.model).toBeUndefined();
+  });
+
+  it("accepts model and deskState", () => {
+    const parsed = regenerateMessageInputSchema.parse({
+      model: "gpt-4o",
+      deskState: { screenKey: "chat" },
+    });
+    expect(parsed.model).toBe("gpt-4o");
+  });
+});
+
+describe("reasoningChunkSchema", () => {
+  it("validates reasoning chunk payload", () => {
+    const parsed = reasoningChunkSchema.parse({ text: "pensando…" });
+    expect(parsed.text).toBe("pensando…");
   });
 });
 

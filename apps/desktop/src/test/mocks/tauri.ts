@@ -9,6 +9,9 @@ const setDecorationsMock = vi.fn(() => Promise.resolve());
 const setAlwaysOnTopMock = vi.fn(() => Promise.resolve());
 const setSkipTaskbarMock = vi.fn(() => Promise.resolve());
 const setResizableMock = vi.fn(() => Promise.resolve());
+const setMaximizableMock = vi.fn(() => Promise.resolve());
+const setMinSizeMock = vi.fn(() => Promise.resolve());
+const setMaxSizeMock = vi.fn(() => Promise.resolve());
 const showMock = vi.fn(() => Promise.resolve());
 const hideMock = vi.fn(() => Promise.resolve());
 const unminimizeMock = vi.fn(() => Promise.resolve());
@@ -23,6 +26,9 @@ function createWindowMock(label: string) {
     setAlwaysOnTop: setAlwaysOnTopMock,
     setSkipTaskbar: setSkipTaskbarMock,
     setResizable: setResizableMock,
+    setMaximizable: setMaximizableMock,
+    setMinSize: setMinSizeMock,
+    setMaxSize: setMaxSizeMock,
     minimize: vi.fn(() => Promise.resolve()),
     maximize: vi.fn(() => Promise.resolve()),
     unmaximize: vi.fn(() => Promise.resolve()),
@@ -52,6 +58,13 @@ function createWindowMock(label: string) {
 
 export const windowMock = createWindowMock("main");
 export const panelWindowMock = createWindowMock("panel");
+export const checklistWindowMock = createWindowMock("checklist");
+
+const emitMock = vi.fn(() => Promise.resolve());
+const emitToMock = vi.fn(() => Promise.resolve());
+const listenMock = vi.fn((..._args: unknown[]) =>
+  Promise.resolve(() => {}),
+);
 
 class Window {
   static getByLabel(label: string) {
@@ -61,6 +74,9 @@ class Window {
     if (label === "panel") {
       return Promise.resolve(panelWindowMock);
     }
+    if (label === "checklist") {
+      return Promise.resolve(checklistWindowMock);
+    }
     return Promise.resolve(null);
   }
 }
@@ -68,6 +84,12 @@ class Window {
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
   isTauri: () => false,
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  emit: emitMock,
+  emitTo: emitToMock,
+  listen: listenMock,
 }));
 
 vi.mock("@tauri-apps/api/window", () => ({
@@ -119,10 +141,17 @@ vi.mock("@tauri-apps/api/window", () => ({
 
 export {
   invokeMock,
+  emitMock,
+  emitToMock,
+  listenMock,
   setPositionMock,
   setSizeMock,
   setFocusMock,
   setDecorationsMock,
+  setResizableMock,
+  setMaximizableMock,
+  setMinSizeMock,
+  setMaxSizeMock,
   showMock,
   hideMock,
 };

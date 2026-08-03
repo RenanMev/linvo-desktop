@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WorkspaceDetailPage } from "@/pages/settings/workspace-detail-page";
@@ -41,6 +41,10 @@ function renderPage() {
         <Route
           path="/settings/workspace/:workspaceId/rule-review"
           element={<div>Rule Review Route</div>}
+        />
+        <Route
+          path="/settings/workspace/:workspaceId/procedures"
+          element={<div>Procedures Route</div>}
         />
       </Routes>
     </MemoryRouter>,
@@ -96,7 +100,9 @@ describe("WorkspaceDetailPage rule review navigation", () => {
     });
 
     renderPage();
-    await user.click(await screen.findByRole("button", { name: "Abrir Rule Review" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Abrir Rule Review" }),
+    );
 
     expect(await screen.findByText("Rule Review Route")).toBeInTheDocument();
   });
@@ -119,6 +125,32 @@ describe("WorkspaceDetailPage rule review navigation", () => {
     renderPage();
 
     expect(await screen.findByText("Regras de negócio")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Abrir Rule Review" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Abrir Rule Review" }),
+    ).toBeNull();
+  });
+
+  it("shows Procedures link for MEMBER and navigates", async () => {
+    const user = userEvent.setup();
+    vi.mocked(useWorkspace).mockReturnValue({
+      workspaces: [memberWorkspace],
+      activeWorkspace: memberWorkspace,
+      isLoading: false,
+      error: null,
+      refresh: vi.fn(),
+      selectWorkspace: vi.fn(),
+      createWorkspace: vi.fn(),
+      renameWorkspace: vi.fn(),
+      deleteWorkspace: vi.fn(),
+      uploadImage: vi.fn(),
+      removeImage: vi.fn(),
+    });
+
+    renderPage();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Abrir Procedures" }),
+    );
+    expect(await screen.findByText("Procedures Route")).toBeInTheDocument();
   });
 });

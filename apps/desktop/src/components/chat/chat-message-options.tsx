@@ -22,18 +22,20 @@ export function ChatMessageOptions({
 }: ChatMessageOptionsProps) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className={cn(
-            "size-7 opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100",
-            className,
-          )}
-          title="Opções"
-        >
-          <MoreHorizontal />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={cn(
+              "size-7 opacity-0 transition-opacity group-hover:opacity-100 data-popup-open:opacity-100",
+              className,
+            )}
+            title="Opções"
+          />
+        }
+      >
+        <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align={align} side="top">
         <DropdownMenuItem onClick={onReply}>

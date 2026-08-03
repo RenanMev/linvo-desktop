@@ -5,6 +5,7 @@ import {
   configForSurfaceMode,
   surfaceModeForAuthPhase,
 } from "@/lib/auth/window-auth";
+import { ONBOARDING_SIZE } from "@/lib/window-mode";
 
 describe("configForSurfaceMode", () => {
   it("configures auth window as decorated and visible in taskbar", () => {
@@ -14,6 +15,7 @@ describe("configForSurfaceMode", () => {
     expect(config.decorations).toBe(false);
     expect(config.alwaysOnTop).toBe(false);
     expect(config.skipTaskbar).toBe(false);
+    expect(config.maximizable).toBe(false);
     expect(config.transparent).toBe(true);
   });
 
@@ -23,6 +25,19 @@ describe("configForSurfaceMode", () => {
     expect(config.decorations).toBe(false);
     expect(config.alwaysOnTop).toBe(true);
     expect(config.skipTaskbar).toBe(true);
+    expect(config.maximizable).toBe(false);
+    expect(config.transparent).toBe(true);
+  });
+
+  it("configures onboarding as a fixed centered surface", () => {
+    const config = configForSurfaceMode("onboarding");
+
+    expect(config.size).toEqual(ONBOARDING_SIZE);
+    expect(config.decorations).toBe(false);
+    expect(config.alwaysOnTop).toBe(false);
+    expect(config.skipTaskbar).toBe(false);
+    expect(config.resizable).toBe(false);
+    expect(config.maximizable).toBe(false);
     expect(config.transparent).toBe(true);
   });
 });
@@ -35,5 +50,9 @@ describe("surfaceModeForAuthPhase", () => {
 
   it("uses compact surface when floating", () => {
     expect(surfaceModeForAuthPhase("floating")).toBe("compact");
+  });
+
+  it("uses onboarding surface during onboarding", () => {
+    expect(surfaceModeForAuthPhase("onboarding")).toBe("onboarding");
   });
 });

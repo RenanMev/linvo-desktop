@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { beforeEach, describe, expect, it } from "vitest";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
@@ -62,6 +64,7 @@ describe("applyWindowBoundsWithFallback", () => {
     invokeMock.mockReset();
     setPositionMock.mockClear();
     setSizeMock.mockClear();
+    delete document.documentElement.dataset.reduceMotion;
   });
 
   it("skips fallback when animation completes", async () => {
@@ -71,7 +74,7 @@ describe("applyWindowBoundsWithFallback", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("animate_window_bounds", {
       to: { x: 24, y: 1016, width: 140, height: 40 },
-      duration_ms: 200,
+      durationMs: 200,
     });
     expect(setSizeMock).not.toHaveBeenCalled();
     expect(setPositionMock).not.toHaveBeenCalled();
@@ -91,6 +94,16 @@ describe("applyWindowBoundsWithFallback", () => {
 
     await applyWindowBoundsWithFallback(getCurrentWindow(), bounds);
 
+    expect(setSizeMock).toHaveBeenCalled();
+    expect(setPositionMock).toHaveBeenCalled();
+  });
+
+  it("applies bounds immediately when reduced motion is enabled", async () => {
+    document.documentElement.dataset.reduceMotion = "true";
+
+    await applyWindowBoundsWithFallback(getCurrentWindow(), bounds);
+
+    expect(invokeMock).not.toHaveBeenCalled();
     expect(setSizeMock).toHaveBeenCalled();
     expect(setPositionMock).toHaveBeenCalled();
   });

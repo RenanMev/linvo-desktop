@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 import type { BusinessRule, WorkspaceRole } from "@linvo/shared";
 import {
   ArrowLeft,
+  ArrowRight,
   Building2,
   Check,
   ClipboardCheck,
@@ -10,12 +11,14 @@ import {
   Plus,
   ScrollText,
   Trash2,
+  Video,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspace } from "@/context/workspace-context";
+import { useWorkspaceFileBlob } from "@/hooks/use-workspace-file-blob";
 import { AuthApiError } from "@/lib/auth/auth-api";
 import { cn } from "@/lib/utils";
 import * as workspaceApi from "@/lib/workspace/workspace-api";
@@ -78,8 +81,7 @@ export function WorkspaceDetailPage() {
     removeImage,
   } = useWorkspace();
 
-  const workspace =
-    workspaces.find((item) => item.id === workspaceId) ?? null;
+  const workspace = workspaces.find((item) => item.id === workspaceId) ?? null;
   const isActive = activeWorkspace?.id === workspace?.id;
   const isOwner = workspace?.role === "OWNER";
   const isLastWorkspace = workspaces.length <= 1;
@@ -226,9 +228,10 @@ export function WorkspaceDetailPage() {
     !isLastWorkspace &&
     confirmName === (workspace?.name ?? "");
 
-  const imageSrc = workspace
+  const imageUrl = workspace
     ? resolveWorkspaceImageUrl(workspace.imageUrl)
     : null;
+  const { blobUrl: imageSrc } = useWorkspaceFileBlob(imageUrl);
 
   if (!workspace) {
     return (
@@ -244,7 +247,7 @@ export function WorkspaceDetailPage() {
             <ArrowLeft className="size-3.5" />
             Voltar
           </Button>
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-10 text-center">
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-10 text-center">
             <Building2 className="size-5 text-muted-foreground/70" />
             <p className="text-xs font-medium">Workspace não encontrado</p>
             <p className="max-w-xs text-[11px] text-muted-foreground">
@@ -277,7 +280,7 @@ export function WorkspaceDetailPage() {
                 "grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl border text-sm font-bold",
                 isActive
                   ? "border-primary/30 bg-primary text-primary-foreground"
-                  : "border-border/60 bg-muted/40 text-foreground",
+                  : "border-hairline bg-muted/40 text-foreground",
               )}
             >
               {imageSrc ? (
@@ -329,60 +332,59 @@ export function WorkspaceDetailPage() {
             description="Nome e imagem usados na interface."
           />
 
-          <div className="space-y-3 rounded-xl border border-border/60 bg-muted/30 p-4">
-            {isOwner ? (
-              <div className="flex flex-wrap gap-2">
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={(event) =>
-                    void handleUploadImage(event.target.files?.[0] ?? null)
-                  }
-                />
+          <div className="rounded-xl border border-hairline bg-muted/30 p-4">
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(event) =>
+                void handleUploadImage(event.target.files?.[0] ?? null)
+              }
+            />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              {isOwner ? (
                 <Button
                   type="button"
                   size="sm"
                   variant="secondary"
                   disabled={busy}
+                  className="shrink-0"
                   onClick={() => imageInputRef.current?.click()}
                 >
                   <ImagePlus className="size-3.5" />
                   {workspace.imageUrl ? "Alterar foto" : "Adicionar foto"}
                 </Button>
-                {workspace.imageUrl ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={busy}
-                    onClick={() => void handleRemoveImage()}
-                  >
-                    Remover foto
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="flex gap-2">
+              ) : null}
               <Input
                 value={renameValue}
                 onChange={(event) => setRenameValue(event.target.value)}
                 placeholder="Nome do workspace"
-                className="h-8 text-xs"
+                className="h-8 min-w-0 flex-1 text-xs"
                 aria-label="Renomear workspace"
               />
               <Button
                 type="button"
                 size="sm"
-                variant="secondary"
                 disabled={busy || !renameDirty}
+                className="shrink-0"
                 onClick={() => void handleRename()}
               >
                 Salvar
               </Button>
             </div>
+            {isOwner && workspace.imageUrl ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                className="mt-2 h-7 px-2 text-[11px] text-muted-foreground"
+                onClick={() => void handleRemoveImage()}
+              >
+                Remover foto
+              </Button>
+            ) : null}
           </div>
         </section>
 
@@ -392,19 +394,57 @@ export function WorkspaceDetailPage() {
               title="Rule Review"
               description="Extraia candidatos de documentos e revise antes de promover."
             />
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() =>
-                navigate(`/settings/workspace/${workspace.id}/rule-review`)
-              }
-            >
-              <ClipboardCheck className="size-3.5" />
-              Abrir Rule Review
-            </Button>
+            <div className="rounded-xl border border-hairline bg-muted/30 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
+                  Envie documentos para o assistente sugerir novas regras. Cada
+                  candidato passa por revisão antes de entrar em vigor.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="shrink-0"
+                  onClick={() =>
+                    navigate(`/settings/workspace/${workspace.id}/rule-review`)
+                  }
+                >
+                  <ClipboardCheck className="size-3.5" />
+                  Abrir Rule Review
+                  <ArrowRight className="size-3.5" />
+                </Button>
+              </div>
+            </div>
           </section>
         ) : null}
+
+        <section className="space-y-3">
+          <SectionHeading
+            title="Procedures"
+            description="Grave a tela, revise o markdown gerado e publique procedimentos."
+          />
+          <div className="rounded-xl border border-hairline bg-muted/30 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
+                Capture um fluxo na tela, revise o procedimento e consulte
+                depois via /slug no chat.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="shrink-0"
+                onClick={() =>
+                  navigate(`/settings/workspace/${workspace.id}/procedures`)
+                }
+              >
+                <Video className="size-3.5" />
+                Abrir Procedures
+                <ArrowRight className="size-3.5" />
+              </Button>
+            </div>
+          </div>
+        </section>
 
         <section className="space-y-3">
           <SectionHeading
@@ -414,7 +454,7 @@ export function WorkspaceDetailPage() {
           />
 
           {rules.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-7 text-center">
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-7 text-center">
               <ScrollText className="size-5 text-muted-foreground/70" />
               <p className="text-xs font-medium">Nenhuma regra cadastrada</p>
               <p className="max-w-xs text-[11px] text-muted-foreground">
@@ -426,10 +466,10 @@ export function WorkspaceDetailPage() {
               {rules.map((rule, index) => (
                 <div
                   key={rule.id}
-                  className="rounded-xl border border-border/60 bg-muted/40 p-3"
+                  className="rounded-xl border border-hairline bg-muted/40 p-3"
                 >
                   <div className="flex items-start gap-3">
-                    <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-md bg-background text-[10px] font-medium tabular-nums text-muted-foreground ring-1 ring-border/60">
+                    <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-md bg-neutral-deep text-[10px] font-medium tabular-nums text-muted-foreground ring-1 ring-border/60">
                       {index + 1}
                     </span>
                     <div className="min-w-0 flex-1 space-y-1">
@@ -455,7 +495,7 @@ export function WorkspaceDetailPage() {
             </div>
           )}
 
-          <div className="space-y-2.5 rounded-xl border border-border/60 bg-muted/20 p-3">
+          <div className="space-y-2.5 rounded-xl border border-hairline bg-muted/20 p-3">
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Nova regra
             </p>
@@ -471,7 +511,7 @@ export function WorkspaceDetailPage() {
               placeholder="Descreva a regra de negócio..."
               rows={4}
               className={cn(
-                "min-h-24 w-full resize-y rounded-lg border border-border/60 bg-background px-3 py-2 text-xs leading-relaxed shadow-xs outline-none",
+                "min-h-24 w-full resize-y rounded-lg border border-hairline bg-neutral-deep px-3 py-2 text-xs leading-relaxed shadow-xs outline-none",
                 "placeholder:text-muted-foreground",
                 "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
               )}
@@ -505,7 +545,10 @@ export function WorkspaceDetailPage() {
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground">
-                    Digite <span className="font-medium text-foreground">{workspace.name}</span>{" "}
+                    Digite{" "}
+                    <span className="font-medium text-foreground">
+                      {workspace.name}
+                    </span>{" "}
                     para confirmar.
                   </p>
                   <div className="flex gap-2">

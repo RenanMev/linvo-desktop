@@ -31,16 +31,42 @@ describe("ChatMessageBubble", () => {
     expect(screen.getByText("Pergunta")).toBeInTheDocument();
   });
 
-  it("shows thinking text for empty streaming message", () => {
+  it("shows reasoning panel for empty streaming message", () => {
     const message: ChatMessage = {
       ...baseMessage,
       content: "",
       status: "streaming",
     };
 
+    const { container } = render(
+      <ChatMessageBubble message={message} onReply={vi.fn()} />,
+    );
+
+    expect(container.textContent).toMatch(/Analisando|Pensando/);
+  });
+
+  it("renders markdown for assistant content", () => {
+    const message: ChatMessage = {
+      ...baseMessage,
+      content: "**negrito** e `codigo`",
+    };
+
     render(<ChatMessageBubble message={message} onReply={vi.fn()} />);
 
-    expect(screen.getByText("Pensando...")).toBeInTheDocument();
+    expect(screen.getByText("negrito")).toBeInTheDocument();
+    expect(screen.getByText("codigo")).toBeInTheDocument();
+  });
+
+  it("shows skills inside reasoning panel when toolUses exist", () => {
+    const message: ChatMessage = {
+      ...baseMessage,
+      content: "Resposta com base",
+      toolUses: [{ name: "search_knowledge", label: "Base de conhecimento" }],
+    };
+
+    render(<ChatMessageBubble message={message} onReply={vi.fn()} />);
+
+    expect(screen.getByText(/1 skill/)).toBeInTheDocument();
   });
 
   it("shows error message when status is error", () => {

@@ -4,6 +4,7 @@ import * as authApi from "@/lib/auth/auth-api";
 import { refresh as refreshTokens } from "@/lib/auth/auth-api";
 import { authDebug } from "@/lib/auth/auth-debug";
 import { emitAuthSync } from "@/lib/auth-sync";
+import { clearStoredAppearance } from "@/lib/appearance/appearance-store";
 import {
   clearTokens,
   getTokens,
@@ -80,6 +81,7 @@ async function handleUnauthorized(reason: string) {
   authDebug("unauthorized.trigger", { reason });
   try {
     await clearTokens();
+    clearStoredAppearance();
     await emitAuthSync("unauthorized");
     await unauthorizedHandler?.();
   } finally {

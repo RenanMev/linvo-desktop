@@ -1,14 +1,10 @@
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { SettingsSelect } from "@/components/settings/settings-select";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
+import { requestOnboardingReview } from "@/lib/onboarding-review-sync";
+import { closePanel } from "@/lib/panel-window";
 
 const LANGUAGE_OPTIONS = [
   { value: "pt-BR", label: "Português (Brasil)" },
@@ -18,64 +14,15 @@ const LANGUAGE_OPTIONS = [
 
 type LanguageValue = (typeof LANGUAGE_OPTIONS)[number]["value"];
 
-function languageLabel(value: LanguageValue): string {
-  return LANGUAGE_OPTIONS.find((option) => option.value === value)?.label ?? value;
-}
-
-type SettingsSelectProps = {
-  label: string;
-  description: string;
-  value: LanguageValue;
-  onChange: (value: LanguageValue) => void;
-};
-
-function SettingsSelect({
-  label,
-  description,
-  value,
-  onChange,
-}: SettingsSelectProps) {
-  return (
-    <div className="rounded-xl border border-border/60 bg-muted/40 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-0.5">
-          <p className="text-xs font-medium">{label}</p>
-          <p className="text-[11px] text-muted-foreground">{description}</p>
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                "inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border/60 bg-background px-2.5 py-1.5 text-[11px] font-medium transition-colors",
-                "hover:bg-muted/60",
-              )}
-            >
-              {languageLabel(value)}
-              <ChevronDown className="size-3 text-muted-foreground" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-40">
-            {LANGUAGE_OPTIONS.map((option) => (
-              <DropdownMenuItem
-                key={option.value}
-                className="text-xs"
-                onClick={() => onChange(option.value)}
-              >
-                {option.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </div>
-  );
-}
-
 export function GeneralSettingsPage() {
   const [systemLanguage, setSystemLanguage] = useState<LanguageValue>("pt-BR");
   const [responseLanguage, setResponseLanguage] =
     useState<LanguageValue>("pt-BR");
+
+  async function handleReviewOnboarding() {
+    await requestOnboardingReview();
+    await closePanel();
+  }
 
   return (
     <ScrollArea className="h-full">
@@ -91,25 +38,37 @@ export function GeneralSettingsPage() {
             label="Idioma do sistema"
             description="Define o idioma da interface do Linvo."
             value={systemLanguage}
+            options={LANGUAGE_OPTIONS}
             onChange={setSystemLanguage}
           />
           <SettingsSelect
             label="Idioma padrão de resposta"
             description="Idioma preferido para as respostas do assistente."
             value={responseLanguage}
+            options={LANGUAGE_OPTIONS}
             onChange={setResponseLanguage}
           />
-          <div className="rounded-xl border border-border/60 bg-muted/40 p-3">
-            <p className="text-xs font-medium">Aparência</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              O tema segue a preferência do sistema operacional.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/60 bg-muted/40 p-3">
+          <div className="rounded-xl border border-hairline bg-muted/40 p-3">
             <p className="text-xs font-medium">Atalho global</p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
               Use Ctrl+Shift+L para mostrar ou ocultar a barra flutuante.
             </p>
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-hairline bg-muted/40 p-3">
+            <div>
+              <p className="text-xs font-medium">Onboarding</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Reveja a configuração inicial sem reiniciar o aplicativo.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void handleReviewOnboarding()}
+            >
+              Rever onboarding
+            </Button>
           </div>
         </div>
       </div>

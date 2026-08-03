@@ -1,6 +1,6 @@
 import type { UserPublic } from "@linvo/shared";
 
-export type AuthPhase = "checking" | "unauthenticated" | "floating";
+export type AuthPhase = "checking" | "unauthenticated" | "onboarding" | "floating";
 
 export type AuthUIState = {
   phase: AuthPhase;
@@ -17,6 +17,7 @@ export type AuthAction =
   | { type: "BOOT_SESSION_INVALID" }
   | { type: "LOGIN_SUCCESS"; user: UserPublic }
   | { type: "REGISTER_SUCCESS"; user: UserPublic }
+  | { type: "START_ONBOARDING"; user: UserPublic }
   | { type: "SET_ERROR"; error: string | null }
   | { type: "START_FLOATING" }
   | { type: "LOGOUT" }
@@ -53,6 +54,13 @@ export function authReducer(
     case "REGISTER_SUCCESS":
       return {
         phase: "floating",
+        user: action.user,
+        error: null,
+        sessionWarning: null,
+      };
+    case "START_ONBOARDING":
+      return {
+        phase: "onboarding",
         user: action.user,
         error: null,
         sessionWarning: null,
@@ -97,5 +105,5 @@ export function authReducer(
 }
 
 export function isAuthWindowPhase(phase: AuthPhase): boolean {
-  return phase === "unauthenticated" || phase === "checking";
+  return phase === "unauthenticated" || phase === "checking" || phase === "onboarding";
 }

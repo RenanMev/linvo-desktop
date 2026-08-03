@@ -1,12 +1,13 @@
 mod app;
 mod auth;
 mod chat_store;
+mod checklist;
 mod panel;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::WebviewWindow;
 
 #[cfg(not(windows))]
@@ -14,10 +15,21 @@ use tauri::{PhysicalPosition, PhysicalSize};
 
 static ANIMATION_GENERATION: AtomicU64 = AtomicU64::new(0);
 
-const FRAME_INTERVAL: Duration = Duration::from_micros(6944);
+// 60fps. A cada frame o WebView2 refaz o layout do DOM inteiro da janela
+// (SetWindowPos dispara resize do webview); a ~144fps isso não sustenta e
+// a animação trepida.
+const FRAME_INTERVAL: Duration = Duration::from_micros(16667);
 
 #[derive(Deserialize)]
 pub struct TargetBounds {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+}
+
+#[derive(Serialize)]
+pub struct WorkArea {
     x: i32,
     y: i32,
     width: u32,
@@ -88,6 +100,7 @@ fn run_animation(
 
     let start = Instant::now();
     let duration = Duration::from_millis(duration_ms.max(1));
+    let mut frame: u32 = 0;
 
     loop {
         if ANIMATION_GENERATION.load(Ordering::SeqCst) != generation {
@@ -108,23 +121,60 @@ fn run_animation(
             return Ok(true);
         }
 
-        std::thread::sleep(FRAME_INTERVAL);
+        // Dorme até o próximo múltiplo de FRAME_INTERVAL, não um intervalo fixo
+        // depois do trabalho: `SetWindowPos` é síncrono e força relayout do
+        // WebView2, então "trabalho + 16.6ms" dava um período de frame variável
+        // (~40fps irregular) — é isso que se vê como trepidação. Se um frame
+        // estourou o deadline, segue direto pro próximo em vez de acumular atraso.
+        frame += 1;
+        if let Some(remaining) =
+            (start + FRAME_INTERVAL * frame).checked_duration_since(Instant::now())
+        {
+            std::thread::sleep(remaining);
+        }
     }
+}
+
+/// Aplica bounds numa única chamada, sem animar.
+///
+/// O WebView2 refaz o layout do DOM inteiro a cada `SetWindowPos`, então animar
+/// o tamanho da janela frame a frame trepida por construção (é mais grave no
+/// Tauri que no Wry — tauri-apps/tauri#6322). Para transições, o caminho liso é
+/// redimensionar de uma vez e animar o conteúdo por transform no CSS.
+#[tauri::command]
+fn set_window_bounds(window: WebviewWindow, to: TargetBounds) -> Result<(), String> {
+    // Invalida animação em voo para ela não sobrescrever estes bounds.
+    ANIMATION_GENERATION.fetch_add(1, Ordering::SeqCst);
+    apply_bounds(&window, to.x, to.y, to.width, to.height)
+}
+
+#[tauri::command]
+fn monitor_work_area(window: WebviewWindow) -> Result<WorkArea, String> {
+    let monitor = window
+        .current_monitor()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "no monitor found".to_string())?;
+    let work_area = monitor.work_area();
+    Ok(WorkArea {
+        x: work_area.position.x,
+        y: work_area.position.y,
+        width: work_area.size.width,
+        height: work_area.size.height,
+    })
 }
 
 #[tauri::command]
 async fn animate_window_bounds(
     window: WebviewWindow,
     to: TargetBounds,
-    duration_ms: u64,
+    duration_ms: Option<u64>,
 ) -> Result<bool, String> {
+    let duration = duration_ms.unwrap_or(200);
     let generation = ANIMATION_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
 
-    tauri::async_runtime::spawn_blocking(move || {
-        run_animation(&window, &to, duration_ms, generation)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || run_animation(&window, &to, duration, generation))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -134,8 +184,17 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .setup(|app| {
+            use tauri::Manager;
+            if let Some(panel) = app.get_webview_window("panel") {
+                panel::init_native_blur(&panel);
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             animate_window_bounds,
+            set_window_bounds,
+            monitor_work_area,
             app::app_quit,
             auth::auth_set_tokens,
             auth::auth_get_tokens,
@@ -148,6 +207,10 @@ pub fn run() {
             panel::panel_open,
             panel::panel_close,
             panel::panel_is_open,
+            panel::panel_set_blur,
+            checklist::checklist_open,
+            checklist::checklist_close,
+            checklist::checklist_is_open,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -55,6 +55,16 @@ describe("authReducer", () => {
     expect(next.phase).toBe("floating");
   });
 
+  it("moves to onboarding when requested", () => {
+    const next = authReducer(initialAuthState, {
+      type: "START_ONBOARDING",
+      user: sampleUser,
+    });
+
+    expect(next.phase).toBe("onboarding");
+    expect(next.user?.id).toBe("u1");
+  });
+
   it("returns to unauthenticated on logout", () => {
     const loggedIn = authReducer(initialAuthState, {
       type: "LOGIN_SUCCESS",
@@ -76,6 +86,7 @@ describe("isAuthWindowPhase", () => {
   it("returns true for auth phases", () => {
     expect(isAuthWindowPhase("checking")).toBe(true);
     expect(isAuthWindowPhase("unauthenticated")).toBe(true);
+    expect(isAuthWindowPhase("onboarding")).toBe(true);
   });
 
   it("returns false for floating", () => {

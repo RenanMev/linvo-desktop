@@ -1,5 +1,5 @@
 import { LogOut, Settings, User } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 
 import {
   DropdownMenu,
@@ -33,17 +33,19 @@ export function AccountMenu({ session }: AccountMenuProps) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          title="Conta"
-          className={cn(
-            "flex size-7 items-center justify-center rounded-full bg-sidebar-primary text-xs font-semibold text-sidebar-primary-foreground",
-            "outline-none transition-opacity hover:opacity-90 focus-visible:ring-[3px] focus-visible:ring-ring/50",
-          )}
-        >
-          {initials(user.name)}
-        </button>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            title="Conta"
+            className={cn(
+              "flex size-7 items-center justify-center rounded-full bg-sidebar-primary text-xs font-semibold text-sidebar-primary-foreground",
+              "outline-none transition-opacity hover:opacity-90 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+            )}
+          />
+        }
+      >
+        {initials(user.name)}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="font-normal">

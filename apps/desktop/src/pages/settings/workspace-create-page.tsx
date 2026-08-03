@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { ArrowLeft, ImagePlus, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -73,7 +73,7 @@ export function WorkspaceCreatePage() {
           </div>
         ) : null}
 
-        <div className="space-y-4 rounded-xl border border-border/60 bg-muted/30 p-4">
+        <div className="space-y-4 rounded-xl border border-hairline bg-muted/30 p-4">
           <div className="space-y-1.5">
             <label
               htmlFor="workspace-name"
@@ -104,7 +104,7 @@ export function WorkspaceCreatePage() {
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                className="grid size-20 place-items-center overflow-hidden rounded-xl border border-dashed border-border/70 bg-muted/40 text-muted-foreground transition-colors hover:border-border hover:bg-muted/60"
+                className="grid size-20 place-items-center overflow-hidden rounded-xl border border-dashed border-hairline bg-muted/40 text-muted-foreground transition-colors hover:border-hairline-strong hover:bg-muted/60"
                 onClick={() => fileInputRef.current?.click()}
                 aria-label="Escolher foto do workspace"
               >

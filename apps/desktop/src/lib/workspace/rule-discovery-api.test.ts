@@ -8,9 +8,30 @@ const sessionDetail = {
   id: "session-1",
   workspaceId: "ws-1",
   status: "READY",
+  approvalMode: "QUESTION",
+  confidenceThreshold: 0.75,
   error: null,
   documents: [],
   candidates: [],
+  events: [],
+  createdAt: "2026-07-20T20:00:00.000Z",
+  updatedAt: "2026-07-20T20:00:00.000Z",
+};
+
+const candidateBase = {
+  id: "candidate-1",
+  sessionId: "session-1",
+  sourceDocumentId: "doc-1",
+  category: "BUSINESS_RULE",
+  title: "Regra",
+  content: "Conteúdo",
+  confidence: 0.9,
+  sourceExcerpt: null,
+  promoteToRule: true,
+  promoteToKnowledge: false,
+  promotionSource: null as string | null,
+  businessRuleId: null as string | null,
+  knowledgeDocumentId: null as string | null,
   createdAt: "2026-07-20T20:00:00.000Z",
   updatedAt: "2026-07-20T20:00:00.000Z",
 };
@@ -29,7 +50,10 @@ describe("rule-discovery-api", () => {
     );
 
     const file = new File(["texto"], "manual.txt", { type: "text/plain" });
-    const session = await ruleDiscoveryApi.createSession("ws-1", [file]);
+    const session = await ruleDiscoveryApi.createSession("ws-1", [file], {
+      approvalMode: "ALLOW",
+      confidenceThreshold: 0.8,
+    });
 
     expect(session.id).toBe("session-1");
     expect(fetchSpy).toHaveBeenCalledWith(
@@ -47,6 +71,8 @@ describe("rule-discovery-api", () => {
               id: "session-1",
               workspaceId: "ws-1",
               status: "READY",
+              approvalMode: "QUESTION",
+              confidenceThreshold: 0.75,
               documentCount: 1,
               candidateCount: 2,
               createdAt: "2026-07-20T20:00:00.000Z",
@@ -76,6 +102,51 @@ describe("rule-discovery-api", () => {
 
     const session = await ruleDiscoveryApi.getSession("ws-1", "session-1");
     expect(session.status).toBe("READY");
+    expect(session.events).toEqual([]);
+  });
+
+  it("updateSession patches approval settings", async () => {
+    vi.spyOn(http, "authorizedFetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          session: { ...sessionDetail, approvalMode: "ALLOW" },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    const session = await ruleDiscoveryApi.updateSession("ws-1", "session-1", {
+      approvalMode: "ALLOW",
+    });
+    expect(session.approvalMode).toBe("ALLOW");
+  });
+
+  it("cancelSession posts cancel endpoint", async () => {
+    vi.spyOn(http, "authorizedFetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          session: {
+            ...sessionDetail,
+            status: "CANCELLED",
+            error: "cancelado pelo usuário",
+          },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    const session = await ruleDiscoveryApi.cancelSession("ws-1", "session-1");
+    expect(session.status).toBe("CANCELLED");
+    expect(http.authorizedFetch).toHaveBeenCalledWith(
+      expect.stringContaining("/sessions/session-1/cancel"),
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   it("acceptCandidate posts body and parses response", async () => {
@@ -83,21 +154,10 @@ describe("rule-discovery-api", () => {
       new Response(
         JSON.stringify({
           candidate: {
-            id: "candidate-1",
-            sessionId: "session-1",
-            sourceDocumentId: "doc-1",
-            category: "BUSINESS_RULE",
-            title: "Regra",
-            content: "Conteúdo",
-            confidence: 0.9,
-            sourceExcerpt: null,
+            ...candidateBase,
             status: "ACCEPTED",
-            promoteToRule: true,
-            promoteToKnowledge: false,
+            promotionSource: "MANUAL",
             businessRuleId: "rule-1",
-            knowledgeDocumentId: null,
-            createdAt: "2026-07-20T20:00:00.000Z",
-            updatedAt: "2026-07-20T20:00:00.000Z",
           },
           businessRule: {
             id: "rule-1",
@@ -133,21 +193,10 @@ describe("rule-discovery-api", () => {
       new Response(
         JSON.stringify({
           candidate: {
-            id: "candidate-1",
-            sessionId: "session-1",
-            sourceDocumentId: "doc-1",
-            category: "BUSINESS_RULE",
-            title: "Regra",
-            content: "Conteúdo",
-            confidence: 0.9,
-            sourceExcerpt: null,
+            ...candidateBase,
             status: "REJECTED",
             promoteToRule: null,
             promoteToKnowledge: null,
-            businessRuleId: null,
-            knowledgeDocumentId: null,
-            createdAt: "2026-07-20T20:00:00.000Z",
-            updatedAt: "2026-07-20T20:00:00.000Z",
           },
         }),
         {
@@ -164,6 +213,33 @@ describe("rule-discovery-api", () => {
     );
 
     expect(candidate.status).toBe("REJECTED");
+  });
+
+  it("undoCandidate parses reverted candidate", async () => {
+    vi.spyOn(http, "authorizedFetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          candidate: {
+            ...candidateBase,
+            status: "REJECTED",
+            promotionSource: "AUTO",
+          },
+        }),
+        {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    const candidate = await ruleDiscoveryApi.undoCandidate(
+      "ws-1",
+      "session-1",
+      "candidate-1",
+    );
+
+    expect(candidate.status).toBe("REJECTED");
+    expect(candidate.promotionSource).toBe("AUTO");
   });
 
   it("throws AuthApiError when API returns error", async () => {

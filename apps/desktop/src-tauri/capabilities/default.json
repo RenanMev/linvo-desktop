@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main and panel windows",
-  "windows": ["main", "panel"],
+  "description": "Capability for the main, panel and checklist windows",
+  "windows": ["main", "panel", "checklist"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
@@ -26,6 +26,7 @@
     "core:window:allow-set-focus",
     "core:window:allow-set-decorations",
     "core:window:allow-set-resizable",
+    "core:window:allow-set-maximizable",
     "core:window:allow-destroy",
     "allow-auth-set-tokens",
     "allow-auth-get-tokens",
@@ -36,9 +37,15 @@
     "allow-chat-save-messages",
     "allow-chat-clear-cache",
     "allow-animate-window-bounds",
+    "allow-set-window-bounds",
+    "allow-monitor-work-area",
     "allow-panel-open",
     "allow-panel-close",
     "allow-panel-is-open",
+    "allow-panel-set-blur",
+    "allow-checklist-open",
+    "allow-checklist-close",
+    "allow-checklist-is-open",
     "allow-app-quit",
     "core:event:allow-emit",
     "core:event:allow-listen",
@@ -48,6 +55,7 @@
     "core:menu:default",
     "core:app:allow-default-window-icon",
     "opener:default",
-    "clipboard-manager:allow-read-text"
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text"
   ]
 }

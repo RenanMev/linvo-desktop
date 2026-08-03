@@ -38,6 +38,7 @@ export async function applyWindowSurfaceConfig(
   await win.setAlwaysOnTop(config.alwaysOnTop);
   await win.setSkipTaskbar(config.skipTaskbar);
   await win.setResizable(config.resizable);
+  await win.setMaximizable(config.maximizable);
   await win.setSize(new PhysicalSize(size.width, size.height));
 
   const monitor = await readMonitor();

@@ -22,8 +22,9 @@ import {
   User,
   type LucideIcon,
 } from "lucide-react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router";
 
+import { LinvoLogo } from "@/components/linvo-logo";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -35,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { useConversations } from "@/context/chat-conversations-context";
 import { useWorkspace } from "@/context/workspace-context";
 import type { PanelSession } from "@/hooks/use-panel-session";
+import { useWorkspaceFileBlob } from "@/hooks/use-workspace-file-blob";
 import { resolveWorkspaceImageUrl } from "@/lib/workspace/workspace-api";
 import { cn } from "@/lib/utils";
 
@@ -63,7 +65,7 @@ const settingsGroups: NavGroup[] = [
     id: "preferencias",
     label: "Preferências",
     items: [
-      { label: "Aparência", icon: Palette, soon: true },
+      { label: "Aparência", icon: Palette, to: "/settings/appearance" },
       { label: "Atalhos", icon: Keyboard, soon: true },
       { label: "Notificações", icon: Bell, soon: true },
     ],
@@ -98,9 +100,9 @@ const chatExploreItems: NavItem[] = [
   { label: "Biblioteca", icon: LibraryBig, soon: true },
 ];
 
-const sidebarSectionX = "px-2.5";
-const sidebarHeaderY = "py-2.5";
-const sidebarBlockBottom = "pb-2";
+const sidebarSectionX = "px-3";
+const sidebarHeaderY = "py-3";
+const sidebarBlockBottom = "pb-3";
 
 function formatConversationDate(isoDate: string): string {
   const date = new Date(isoDate);
@@ -134,14 +136,17 @@ function readCollapsedPreference(): boolean {
 }
 
 const navRowBase =
-  "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors";
+  "flex w-full items-center gap-2.5 rounded-full px-2.5 py-1.5 text-xs transition-all duration-150";
 const navRowIdle =
-  "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground";
+  "text-sidebar-foreground/70 [&_svg]:opacity-50 hover:bg-surface-hover hover:text-sidebar-foreground hover:[&_svg]:opacity-80";
 const navRowActive =
-  "bg-sidebar-accent font-medium text-sidebar-accent-foreground";
+  "nav-pill-active font-medium [&_svg]:opacity-100";
 
 const collapsedIconBase =
-  "inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-colors";
+  "inline-flex size-8 shrink-0 items-center justify-center rounded-full transition-all duration-150";
+const collapsedIconIdle =
+  "text-sidebar-foreground/70 [&_svg]:opacity-50 hover:bg-surface-hover hover:text-sidebar-foreground hover:[&_svg]:opacity-90";
+const navIcon = "size-4 shrink-0";
 
 function SidebarNavRow({
   item,
@@ -157,15 +162,15 @@ function SidebarNavRow({
       <div
         className={cn(
           navRowBase,
-          "cursor-default justify-between text-sidebar-foreground/45",
+          "cursor-default justify-between text-sidebar-foreground/35 [&_svg]:opacity-50",
         )}
         aria-disabled="true"
       >
-        <span className="flex items-center gap-2">
-          <Icon className="size-3.5 shrink-0" />
+        <span className="flex items-center gap-2.5">
+          <Icon className={navIcon} />
           {item.label}
         </span>
-        <span className="rounded-full bg-sidebar-accent/70 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
+        <span className="rounded-full border border-hairline px-1.5 py-0.5 font-technical text-[9px] font-medium tracking-wide text-muted-foreground">
           Em breve
         </span>
       </div>
@@ -181,7 +186,7 @@ function SidebarNavRow({
         cn(navRowBase, isActive ? navRowActive : navRowIdle)
       }
     >
-      <Icon className="size-3.5 shrink-0" />
+      <Icon className={navIcon} />
       {item.label}
     </NavLink>
   );
@@ -211,13 +216,11 @@ function CollapsedIconButton({
       onClick={onClick}
       className={cn(
         collapsedIconBase,
-        active
-          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
-        disabled && "cursor-default opacity-45 hover:bg-transparent",
+        active ? "nav-pill-active [&_svg]:opacity-100" : collapsedIconIdle,
+        disabled && "cursor-default opacity-35 hover:bg-transparent",
       )}
     >
-      <Icon className="size-3.5" />
+      <Icon className={navIcon} />
     </button>
   );
 }
@@ -251,13 +254,11 @@ function CollapsedSettingsNavItem({
       className={({ isActive }) =>
         cn(
           collapsedIconBase,
-          isActive
-            ? "bg-sidebar-accent text-sidebar-accent-foreground"
-            : "text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+          isActive ? "nav-pill-active [&_svg]:opacity-100" : collapsedIconIdle,
         )
       }
     >
-      <Icon className="size-3.5" />
+      <Icon className={navIcon} />
     </NavLink>
   );
 }
@@ -281,8 +282,11 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
     selectConversation,
   } = useConversations();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
-  const activeWorkspaceImageSrc = resolveWorkspaceImageUrl(
+  const activeWorkspaceImageUrl = resolveWorkspaceImageUrl(
     activeWorkspace?.imageUrl,
+  );
+  const { blobUrl: activeWorkspaceImageSrc } = useWorkspaceFileBlob(
+    activeWorkspaceImageUrl,
   );
 
   useEffect(() => {
@@ -330,7 +334,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
   return (
     <aside
       className={cn(
-        "relative flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-r border-border/60 bg-sidebar text-sidebar-foreground",
+        "relative flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-r border-hairline bg-surface-raise-1 text-sidebar-foreground",
         "transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width]",
         collapsed ? "w-14" : "w-60",
       )}
@@ -351,7 +355,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
               title={session.user.name}
               tabIndex={collapsedTabIndex}
               onClick={() => navigate("/settings/account")}
-              className="grid size-8 shrink-0 place-items-center rounded-full bg-sidebar-accent text-[10px] font-semibold text-sidebar-accent-foreground transition-opacity hover:opacity-90"
+              className="grid size-8 shrink-0 place-items-center rounded-full border border-hairline bg-surface-raise-2 font-technical text-[10px] font-semibold text-sidebar-accent-foreground transition-opacity hover:opacity-90"
             >
               {accountInitials(session.user.name)}
             </button>
@@ -361,7 +365,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
               tabIndex={collapsedTabIndex}
               onClick={toggleCollapsed}
             />
-            <div className="my-0.5 h-px w-6 shrink-0 bg-sidebar-border" />
+            <div className="my-0.5 h-px w-6 shrink-0 bg-surface-raise-2" />
             <CollapsedIconButton
               title="Voltar ao chat"
               icon={ArrowLeft}
@@ -377,7 +381,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                 />
               ))}
             </div>
-            <div className="my-0.5 h-px w-6 shrink-0 bg-sidebar-border" />
+            <div className="my-0.5 h-px w-6 shrink-0 bg-surface-raise-2" />
             <CollapsedIconButton
               title="Central de ajuda"
               icon={LifeBuoy}
@@ -392,9 +396,9 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
               title="Linvo"
               tabIndex={collapsedTabIndex}
               onClick={() => navigate("/chat")}
-              className="grid size-8 shrink-0 place-items-center rounded-full bg-sidebar-primary text-[10px] font-bold text-sidebar-primary-foreground transition-opacity hover:opacity-90"
+              className="grid size-8 shrink-0 place-items-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground transition-opacity hover:opacity-90"
             >
-              L
+              <LinvoLogo className="size-4 invert dark:invert-0" />
             </button>
             <CollapsedIconButton
               title="Expandir sidebar"
@@ -402,7 +406,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
               tabIndex={collapsedTabIndex}
               onClick={toggleCollapsed}
             />
-            <div className="my-0.5 h-px w-6 shrink-0 bg-sidebar-border" />
+            <div className="my-0.5 h-px w-6 shrink-0 bg-surface-raise-2" />
             <CollapsedIconButton
               title="Nova conversa"
               icon={MessageSquarePlus}
@@ -419,10 +423,10 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                     tabIndex={collapsedTabIndex}
                     onClick={() => selectConversation(conversation.id)}
                     className={cn(
-                      "flex size-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-semibold transition-colors",
+                      "flex size-8 shrink-0 items-center justify-center rounded-full font-technical text-[10px] font-semibold transition-all duration-150",
                       activeId === conversation.id
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                        : "text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+                        ? "nav-pill-active"
+                        : "text-muted-foreground hover:bg-surface-hover hover:text-sidebar-foreground",
                     )}
                   >
                     {conversation.title.trim().slice(0, 1).toUpperCase() ||
@@ -430,7 +434,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                   </button>
                 ))}
             </div>
-            <div className="my-0.5 h-px w-6 shrink-0 bg-sidebar-border" />
+            <div className="my-0.5 h-px w-6 shrink-0 bg-surface-raise-2" />
             {chatExploreItems.map((item) => (
               <CollapsedIconButton
                 key={item.label}
@@ -446,7 +450,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
 
       <div
         className={cn(
-          "absolute inset-0 flex min-h-0 flex-col overflow-hidden bg-sidebar transition-opacity duration-200",
+          "absolute inset-0 flex min-h-0 flex-col overflow-hidden transition-opacity duration-200",
           collapsed
             ? "pointer-events-none z-0 opacity-0"
             : "z-10 opacity-100",
@@ -463,7 +467,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
               )}
             >
               <div className="flex min-w-0 items-center gap-2">
-                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-sidebar-accent text-[10px] font-semibold text-sidebar-accent-foreground">
+                <span className="grid size-8 shrink-0 place-items-center rounded-full border border-hairline bg-surface-raise-2 font-technical text-[10px] font-semibold text-sidebar-accent-foreground">
                   {accountInitials(session.user.name)}
                 </span>
                 <div className="min-w-0">
@@ -493,7 +497,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                 onClick={() => navigate("/chat")}
                 className={cn(navRowBase, navRowIdle)}
               >
-                <ArrowLeft className="size-3.5 shrink-0" />
+                <ArrowLeft className={navIcon} />
                 Voltar ao chat
               </button>
             </div>
@@ -505,14 +509,14 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Buscar configurações"
-                  className="h-7 rounded-lg border-transparent bg-sidebar-accent/80 pl-7 text-xs shadow-none"
+                  className="h-8 rounded-full border-hairline bg-surface-raise-1 pl-7 text-xs"
                 />
               </div>
             </div>
 
             <nav
               className={cn(
-                "scrollbar-elegant scrollbar-sidebar min-h-0 flex-1 space-y-3 overflow-y-auto pb-2",
+                "scrollbar-elegant scrollbar-sidebar min-h-0 flex-1 space-y-5 overflow-y-auto pb-2",
                 sidebarSectionX,
               )}
               aria-label="Seções de configurações"
@@ -525,7 +529,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                 filteredSettingsGroups.map((group) => (
                   <div key={group.id} className="space-y-0.5">
                     {group.label ? (
-                      <p className="mb-0.5 px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <p className="mb-1.5 px-2.5 font-technical text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                         {group.label}
                       </p>
                     ) : null}
@@ -543,7 +547,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
 
             <div
               className={cn(
-                "border-t border-sidebar-border py-2",
+                "border-t border-hairline py-3",
                 sidebarSectionX,
               )}
             >
@@ -554,10 +558,10 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                 )}
               >
                 <span className="flex items-center gap-2">
-                  <LifeBuoy className="size-3.5 shrink-0" />
+                  <LifeBuoy className={navIcon} />
                   Central de ajuda
                 </span>
-                <span className="rounded-full bg-sidebar-accent/70 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
+                <span className="rounded-full border border-hairline px-1.5 py-0.5 font-technical text-[9px] font-medium tracking-wide text-muted-foreground">
                   Em breve
                 </span>
               </div>
@@ -573,28 +577,30 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
               )}
             >
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-sidebar-accent/60"
-                    title="Trocar workspace"
-                  >
-                    <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-sidebar-primary text-[10px] font-bold text-sidebar-primary-foreground">
-                      {activeWorkspaceImageSrc ? (
-                        <img
-                          src={activeWorkspaceImageSrc}
-                          alt=""
-                          className="size-full object-cover"
-                        />
-                      ) : (
-                        (activeWorkspace?.name ?? "L").slice(0, 1).toUpperCase()
-                      )}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-none">
-                      {activeWorkspace?.name ?? "Linvo"}
-                    </span>
-                    <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-                  </button>
+                <DropdownMenuTrigger
+                  render={
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-center gap-2.5 rounded-full px-1 py-1 text-left transition-colors hover:bg-surface-hover"
+                      title="Trocar workspace"
+                    />
+                  }
+                >
+                  <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-sidebar-primary text-[10px] font-bold text-sidebar-primary-foreground">
+                    {activeWorkspaceImageSrc ? (
+                      <img
+                        src={activeWorkspaceImageSrc}
+                        alt=""
+                        className="size-full object-cover"
+                      />
+                    ) : (
+                      (activeWorkspace?.name ?? "L").slice(0, 1).toUpperCase()
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-none">
+                    {activeWorkspace?.name ?? "Linvo"}
+                  </span>
+                  <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="min-w-48">
                   {workspaces.map((workspace) => (
@@ -636,10 +642,10 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                 type="button"
                 variant="secondary"
                 size="sm"
-                className="h-7 w-full justify-start gap-2 rounded-lg text-xs"
+                className="h-8 w-full justify-start gap-2.5 rounded-full text-xs"
                 onClick={() => void createConversation()}
               >
-                <MessageSquarePlus className="size-3.5" />
+                <MessageSquarePlus className="size-4 opacity-70" />
                 Nova conversa
               </Button>
             </div>
@@ -651,13 +657,13 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Buscar conversas"
-                  className="h-7 rounded-lg border-transparent bg-sidebar-accent/80 pl-7 text-xs shadow-none"
+                  className="h-8 rounded-full border-hairline bg-surface-raise-1 pl-7 text-xs"
                 />
               </div>
             </div>
 
             <div className={cn("flex min-h-0 flex-1 flex-col", sidebarSectionX)}>
-              <p className="mb-0.5 px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <p className="mb-1.5 px-2.5 font-technical text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                 Conversas
               </p>
               <nav
@@ -679,10 +685,10 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                     <div
                       key={conversation.id}
                       className={cn(
-                        "group relative flex items-stretch rounded-lg transition-colors",
+                        "group relative flex items-stretch rounded-xl transition-all duration-150",
                         activeId === conversation.id
-                          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+                          ? "nav-pill-active font-medium"
+                          : "text-sidebar-foreground/70 hover:bg-surface-hover hover:text-sidebar-foreground",
                       )}
                     >
                       <button
@@ -693,7 +699,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                         <span className="truncate pr-6">
                           {conversation.title}
                         </span>
-                        <span className="text-[11px] text-muted-foreground">
+                        <span className="font-technical text-[10px] tracking-wide opacity-55">
                           {formatConversationDate(conversation.updatedAt)}
                         </span>
                       </button>
@@ -701,7 +707,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
                         type="button"
                         title="Apagar conversa"
                         aria-label={`Apagar conversa ${conversation.title}`}
-                        className="absolute right-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-sidebar-accent hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
+                        className="absolute right-1.5 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full opacity-0 transition-opacity hover:bg-current/10 hover:text-destructive group-hover:opacity-60 hover:opacity-100 focus-visible:opacity-100"
                         onClick={() => {
                           if (
                             !window.confirm(
@@ -723,7 +729,7 @@ export function PanelSidebar({ session }: PanelSidebarProps) {
 
             <div
               className={cn(
-                "space-y-0.5 border-t border-sidebar-border py-2",
+                "space-y-0.5 border-t border-hairline py-3",
                 sidebarSectionX,
               )}
             >

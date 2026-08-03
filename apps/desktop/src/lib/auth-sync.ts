@@ -43,10 +43,11 @@ export async function emitTokenSync(tokens: StoredTokens): Promise<void> {
 
 export async function listenAuthSync(
   handler: (payload: AuthSyncPayload) => void,
+  options: { includeSelf?: boolean } = {},
 ): Promise<() => void> {
   const self = (await getCurrentWindow()).label;
   const unlisten = await listen<AuthSyncPayload>(AUTH_SYNC_EVENT, (event) => {
-    if (event.payload.source === self) {
+    if (!options.includeSelf && event.payload.source === self) {
       return;
     }
     authDebug("sync.receive", {

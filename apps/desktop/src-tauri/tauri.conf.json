@@ -17,6 +17,7 @@
         "width": 880,
         "height": 600,
         "resizable": true,
+        "maximizable": false,
         "decorations": false,
         "transparent": true,
         "shadow": false,
@@ -31,12 +32,28 @@
         "height": 800,
         "visible": false,
         "resizable": true,
+        "maximizable": true,
         "decorations": false,
         "transparent": true,
         "shadow": false,
         "alwaysOnTop": false,
         "center": true,
         "skipTaskbar": false
+      },
+      {
+        "title": "Checklist",
+        "label": "checklist",
+        "width": 288,
+        "height": 420,
+        "visible": false,
+        "resizable": false,
+        "maximizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "center": true,
+        "skipTaskbar": true
       }
     ],
     "security": {

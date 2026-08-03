@@ -5,14 +5,16 @@ import {
   Route,
   Routes,
   useNavigate,
-} from "react-router-dom";
+} from "react-router";
 
 import { PanelShell } from "@/components/panel/panel-shell";
 import { AccountSettingsPage } from "@/pages/settings/account-settings-page";
+import { AppearancePage } from "@/pages/settings/appearance-page";
 import { GeneralSettingsPage } from "@/pages/settings/general-settings-page";
 import { WorkspaceCreatePage } from "@/pages/settings/workspace-create-page";
 import { WorkspaceDetailPage } from "@/pages/settings/workspace-detail-page";
 import { RuleReviewPage } from "@/pages/settings/rule-review-page";
+import { ProcedurePage } from "@/pages/settings/procedure-page";
 import { WorkspaceSettingsPage } from "@/pages/settings/workspace-settings-page";
 import { ChatPage } from "@/pages/chat-page";
 import { usePanelSession } from "@/hooks/use-panel-session";
@@ -20,7 +22,14 @@ import { listenPanelNavigate } from "@/lib/panel-window";
 
 function PanelRoutes() {
   const navigate = useNavigate();
-  const { user, isLoading, sessionReady, sessionError, sessionWarning, logout } = usePanelSession();
+  const {
+    user,
+    isLoading,
+    sessionReady,
+    sessionError,
+    sessionWarning,
+    logout,
+  } = usePanelSession();
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -38,7 +47,7 @@ function PanelRoutes() {
 
   if (isLoading || !user) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-background px-6 text-center text-sm text-muted-foreground">
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-premium bg-neutral-deep px-6 text-center text-sm text-muted-foreground">
         {isLoading ? (
           <>
             <span className="size-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
@@ -55,7 +64,15 @@ function PanelRoutes() {
 
   return (
     <Routes>
-      <Route element={<PanelShell session={session} sessionReady={sessionReady} sessionError={sessionError} />}>
+      <Route
+        element={
+          <PanelShell
+            session={session}
+            sessionReady={sessionReady}
+            sessionError={sessionError}
+          />
+        }
+      >
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:conversationId" element={<ChatPage />} />
         <Route
@@ -67,10 +84,8 @@ function PanelRoutes() {
           element={<Navigate to="/settings/general" replace />}
         />
         <Route path="/settings/general" element={<GeneralSettingsPage />} />
-        <Route
-          path="/settings/workspace"
-          element={<WorkspaceSettingsPage />}
-        />
+        <Route path="/settings/appearance" element={<AppearancePage />} />
+        <Route path="/settings/workspace" element={<WorkspaceSettingsPage />} />
         <Route
           path="/settings/workspace/new"
           element={<WorkspaceCreatePage />}
@@ -82,6 +97,10 @@ function PanelRoutes() {
         <Route
           path="/settings/workspace/:workspaceId/rule-review"
           element={<RuleReviewPage />}
+        />
+        <Route
+          path="/settings/workspace/:workspaceId/procedures"
+          element={<ProcedurePage />}
         />
         <Route
           path="/settings/account"

@@ -1,18 +1,32 @@
 import { Settings } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 
 import { Button } from "@/components/ui/button";
 
 type ChatToolbarProps = {
   title: string;
+  model?: string | null;
+  isResponding?: boolean;
 };
 
-export function ChatToolbar({ title }: ChatToolbarProps) {
+export function ChatToolbar({
+  title,
+  model,
+  isResponding = false,
+}: ChatToolbarProps) {
   const navigate = useNavigate();
 
   return (
-    <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
-      <p className="min-w-0 truncate text-sm font-medium">{title}</p>
+    <div className="flex shrink-0 items-center justify-between gap-3 border-b border-hairline px-5 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium tracking-tight">{title}</p>
+        {model ? (
+          <p className="truncate font-technical text-[10px] tracking-wide text-muted-foreground">
+            {model}
+            {isResponding ? " · em uso" : ""}
+          </p>
+        ) : null}
+      </div>
       <Button
         type="button"
         variant="outline"

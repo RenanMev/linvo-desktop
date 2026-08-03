@@ -15,8 +15,18 @@ import {
   type AuthPhase,
 } from "@/lib/auth/auth-state";
 import { enterLoggedInDesktop } from "@/lib/auth/enter-logged-in-desktop";
+import { applyOnboardingWindowSurface } from "@/lib/auth/onboarding-window-surface";
+import { clearStoredAppearance } from "@/lib/appearance/appearance-store";
 import { clearChatLocalCache } from "@/lib/chat/chat-local-store";
 import { clearStoredWorkspaceId } from "@/lib/workspace/workspace-store";
+import {
+  clearOnboardingCompleted,
+  hasCompletedOnboarding,
+  isOnboardingForced,
+  markOnboardingCompleted,
+} from "@/lib/onboarding/onboarding-store";
+import { clearOnboardingProgress } from "@/lib/onboarding/onboarding-progress-store";
+import { listenOnboardingReview } from "@/lib/onboarding-review-sync";
 import { setUnauthorizedHandler, refreshStoredTokens } from "@/lib/auth/http";
 import { clearTokens, getTokens, setTokens, applySyncedTokens } from "@/lib/auth/token-store";
 import { applyWindowSurface } from "@/lib/auth/apply-window-surface";
@@ -43,15 +53,24 @@ async function enterSession(user: UserPublic): Promise<void> {
   await enterLoggedInDesktop(user);
 }
 
+export function shouldShowOnboarding(user: UserPublic): boolean {
+  return isOnboardingForced() || !hasCompletedOnboarding(user.id);
+}
+
 export function useAuth() {
   const [state, dispatch] = useReducer(authReducer, initialAuthState);
   const bootstrappedRef = useRef(false);
 
   const syncWindow = useCallback(async (phase: AuthPhase) => {
+    if (phase === "onboarding") {
+      await applyOnboardingWindowSurface();
+      return;
+    }
     await applyWindowSurface(surfaceModeForAuthPhase(phase));
   }, []);
 
   const handleUnauthorized = useCallback(() => {
+    clearStoredAppearance();
     void (async () => {
       await notifyDesktopEvent("Sessão expirada. Faça login novamente.");
       await closePanel();
@@ -85,15 +104,23 @@ export function useAuth() {
 
       try {
         const user = await meRequest(stored.accessToken);
-        dispatch({ type: "BOOT_SUCCESS", user });
-        await enterSession(user);
+        if (shouldShowOnboarding(user)) {
+          dispatch({ type: "START_ONBOARDING", user });
+        } else {
+          dispatch({ type: "BOOT_SUCCESS", user });
+          await enterSession(user);
+        }
       } catch (error) {
         if (error instanceof AuthApiError && error.status === 401) {
           try {
             const tokens = await refreshStoredTokens();
             const user = await meRequest(tokens.accessToken);
-            dispatch({ type: "BOOT_SUCCESS", user });
-            await enterSession(user);
+            if (shouldShowOnboarding(user)) {
+              dispatch({ type: "START_ONBOARDING", user });
+            } else {
+              dispatch({ type: "BOOT_SUCCESS", user });
+              await enterSession(user);
+            }
             return;
           } catch (refreshError) {
             if (refreshError instanceof AuthNetworkError) {
@@ -102,6 +129,8 @@ export function useAuth() {
               return;
             }
             await clearTokens();
+            clearStoredAppearance();
+            await emitAuthSync("unauthorized");
             dispatch({ type: "BOOT_SESSION_INVALID" });
             return;
           }
@@ -113,6 +142,8 @@ export function useAuth() {
           return;
         }
         await clearTokens();
+        clearStoredAppearance();
+        await emitAuthSync("unauthorized");
         dispatch({ type: "BOOT_SESSION_INVALID" });
       }
     })();
@@ -143,6 +174,10 @@ export function useAuth() {
     let unlisten: (() => void) | undefined;
 
     void listenAuthSync((payload) => {
+      if (payload.type === "logout" && state.user) {
+        clearOnboardingProgress(state.user.id);
+      }
+      clearStoredAppearance();
       void closePanel();
       dispatch({
         type: payload.type === "logout" ? "LOGOUT" : "UNAUTHORIZED",
@@ -154,15 +189,43 @@ export function useAuth() {
     return () => {
       unlisten?.();
     };
-  }, []);
+  }, [state.user]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
+    void listenOnboardingReview(() => {
+      if (!state.user || state.phase === "onboarding") {
+        return;
+      }
+      clearOnboardingCompleted(state.user.id);
+      dispatch({ type: "START_ONBOARDING", user: state.user });
+    }).then((dispose) => {
+      if (cancelled) {
+        dispose();
+        return;
+      }
+      unlisten = dispose;
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [state.phase, state.user]);
 
   const login = useCallback(async (input: LoginInput) => {
     dispatch({ type: "SET_ERROR", error: null });
     try {
       const result = await loginRequest(input);
       await persistSession(result.accessToken, result.refreshToken);
-      dispatch({ type: "LOGIN_SUCCESS", user: result.user });
-      await enterSession(result.user);
+      if (shouldShowOnboarding(result.user)) {
+        dispatch({ type: "START_ONBOARDING", user: result.user });
+      } else {
+        dispatch({ type: "LOGIN_SUCCESS", user: result.user });
+        await enterSession(result.user);
+      }
     } catch (error) {
       const message =
         error instanceof AuthApiError || error instanceof AuthNetworkError
@@ -178,8 +241,12 @@ export function useAuth() {
     try {
       const result = await registerRequest(input);
       await persistSession(result.accessToken, result.refreshToken);
-      dispatch({ type: "REGISTER_SUCCESS", user: result.user });
-      await enterSession(result.user);
+      if (shouldShowOnboarding(result.user)) {
+        dispatch({ type: "START_ONBOARDING", user: result.user });
+      } else {
+        dispatch({ type: "REGISTER_SUCCESS", user: result.user });
+        await enterSession(result.user);
+      }
     } catch (error) {
       const message =
         error instanceof AuthApiError || error instanceof AuthNetworkError
@@ -191,17 +258,34 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(async () => {
+    if (state.user) {
+      clearOnboardingProgress(state.user.id);
+    }
     const stored = await getTokens();
     if (stored) {
       await logoutRequest(stored.refreshToken);
     }
     await clearTokens();
+    clearStoredAppearance();
     await clearChatLocalCache();
     clearStoredWorkspaceId();
     await emitAuthSync("logout");
     await closePanel();
     dispatch({ type: "LOGOUT" });
-  }, []);
+  }, [state.user]);
+
+  const completeOnboarding = useCallback(
+    async (route = "/chat") => {
+      if (!state.user) {
+        return;
+      }
+      markOnboardingCompleted(state.user.id);
+      clearOnboardingProgress(state.user.id);
+      dispatch({ type: "START_FLOATING" });
+      await enterLoggedInDesktop(state.user, route);
+    },
+    [state.user],
+  );
 
   return {
     phase: state.phase,
@@ -213,5 +297,6 @@ export function useAuth() {
     login,
     register,
     logout,
+    completeOnboarding,
   };
 }

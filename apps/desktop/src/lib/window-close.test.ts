@@ -9,6 +9,12 @@ describe("resolveCloseAction", () => {
     ).toBe("close-panel");
   });
 
+  it("closes checklist window", () => {
+    expect(
+      resolveCloseAction({ windowLabel: "checklist", authPhase: "floating" }),
+    ).toBe("close-checklist");
+  });
+
   it("hides main window in auth phases", () => {
     expect(
       resolveCloseAction({ windowLabel: "main", authPhase: "checking" }),
