@@ -32,7 +32,10 @@ describe("useWorkspaceFileBlob", () => {
   });
 
   it("fetches with authorization and exposes an object URL", async () => {
-    const response = new Response(new Blob(["image"]), { status: 200 });
+    // O body vai como string: um Blob do jsdom dentro de Response é tratado de
+    // formas diferentes por versão do undici (vira "[object Blob]" no Node 24 e
+    // estoura em stream() no Node 22).
+    const response = new Response("image", { status: 200 });
     vi.mocked(authorizedFetch).mockResolvedValue(response);
 
     const { result } = renderHook(() =>
@@ -46,7 +49,10 @@ describe("useWorkspaceFileBlob", () => {
       "http://localhost:3001/api/workspaces/ws-1/file",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
-    expect(createObjectURLMock).toHaveBeenCalledWith(expect.any(Blob));
+    // response.blob() devolve o Blob nativo do undici, que não é instância do
+    // Blob do jsdom — por isso o conteúdo é verificado no lugar do tipo.
+    const [blobArg] = createObjectURLMock.mock.calls[0]! as unknown as [Blob];
+    expect(await blobArg.text()).toBe("image");
     expect(result.current.error).toBeNull();
   });
 
@@ -65,7 +71,7 @@ describe("useWorkspaceFileBlob", () => {
 
   it("revokes the object URL on cleanup", async () => {
     vi.mocked(authorizedFetch).mockResolvedValue(
-      new Response(new Blob(["image"]), { status: 200 }),
+      new Response("image", { status: 200 }),
     );
 
     const { result, unmount } = renderHook(() =>
