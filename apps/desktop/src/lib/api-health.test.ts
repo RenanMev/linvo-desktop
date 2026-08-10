@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { checkApiHealth } from "@/lib/api-health";
 
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+
 describe("checkApiHealth", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -13,7 +15,7 @@ describe("checkApiHealth", () => {
 
     await expect(checkApiHealth()).resolves.toEqual({ ok: true });
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:3001/api/health",
+      `${API_URL}/api/health`,
       expect.objectContaining({ method: "GET" }),
     );
   });

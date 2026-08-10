@@ -13,6 +13,9 @@ export default defineConfig({
   test: {
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
+    env: {
+      VITE_API_URL: "http://localhost:3001",
+    },
     // Um worker por core satura a memória da máquina quando a suíte do
     // linvo-api roda em paralelo, e a contenção de CPU faz testes com timing
     // (BarApp) estourarem timeout. Com 4 forks o pico cai e a suíte estabiliza.

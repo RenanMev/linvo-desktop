@@ -8,6 +8,10 @@ vi.mock("@/lib/auth/http", () => ({
   authorizedFetch: vi.fn(),
 }));
 
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+const protectedFileUrl = `${API_URL}/api/workspaces/ws-1/file`;
+const missingFileUrl = `${API_URL}/api/workspaces/ws-1/missing`;
+
 const createObjectURLMock = vi.fn(() => "blob:workspace-image");
 const revokeObjectURLMock = vi.fn();
 
@@ -32,25 +36,18 @@ describe("useWorkspaceFileBlob", () => {
   });
 
   it("fetches with authorization and exposes an object URL", async () => {
-    // O body vai como string: um Blob do jsdom dentro de Response é tratado de
-    // formas diferentes por versão do undici (vira "[object Blob]" no Node 24 e
-    // estoura em stream() no Node 22).
     const response = new Response("image", { status: 200 });
     vi.mocked(authorizedFetch).mockResolvedValue(response);
 
-    const { result } = renderHook(() =>
-      useWorkspaceFileBlob("http://localhost:3001/api/workspaces/ws-1/file"),
-    );
+    const { result } = renderHook(() => useWorkspaceFileBlob(protectedFileUrl));
 
     await waitFor(() =>
       expect(result.current.blobUrl).toBe("blob:workspace-image"),
     );
     expect(authorizedFetch).toHaveBeenCalledWith(
-      "http://localhost:3001/api/workspaces/ws-1/file",
+      protectedFileUrl,
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
-    // response.blob() devolve o Blob nativo do undici, que não é instância do
-    // Blob do jsdom — por isso o conteúdo é verificado no lugar do tipo.
     const [blobArg] = createObjectURLMock.mock.calls[0]! as unknown as [Blob];
     expect(await blobArg.text()).toBe("image");
     expect(result.current.error).toBeNull();
@@ -75,7 +72,7 @@ describe("useWorkspaceFileBlob", () => {
     );
 
     const { result, unmount } = renderHook(() =>
-      useWorkspaceFileBlob("http://localhost:3001/api/workspaces/ws-1/file"),
+      useWorkspaceFileBlob(protectedFileUrl),
     );
     await waitFor(() => expect(result.current.blobUrl).not.toBeNull());
 
@@ -89,9 +86,7 @@ describe("useWorkspaceFileBlob", () => {
       new Response(null, { status: 404 }),
     );
 
-    const { result } = renderHook(() =>
-      useWorkspaceFileBlob("http://localhost:3001/api/workspaces/ws-1/missing"),
-    );
+    const { result } = renderHook(() => useWorkspaceFileBlob(missingFileUrl));
 
     await waitFor(() => expect(result.current.error).not.toBeNull());
     expect(result.current.blobUrl).toBeNull();
