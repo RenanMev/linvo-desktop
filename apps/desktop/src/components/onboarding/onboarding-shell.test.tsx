@@ -129,10 +129,6 @@ describe("OnboardingShell", () => {
     mocks.controller.busy = false;
     mocks.controller.workspaceName = "";
     mocks.controller.activeWorkspaceId = null;
-    Object.defineProperty(window, "innerWidth", {
-      configurable: true,
-      value: 960,
-    });
   });
 
   it("uses Enter for the primary action but not inside a textarea", () => {
@@ -191,37 +187,32 @@ describe("OnboardingShell", () => {
     }
   });
 
-  it("collapses the preview below the responsive threshold", () => {
-    Object.defineProperty(window, "innerWidth", {
-      configurable: true,
-      value: 800,
-    });
+  it("shows the position in the flow for the current step", () => {
+    mocks.controller.stepId = "appearance";
     renderShell();
 
-    expect(screen.queryByTestId("workspace-preview")).toBeNull();
+    expect(screen.getByText("Etapa 5 de 7")).toBeInTheDocument();
   });
 
-  it("keeps tab order from the rail to content and then titlebar actions", () => {
+  it("goes back from any step after the first", () => {
     mocks.controller.stepId = "workspace";
-    mocks.controller.steps = [
-      { id: "welcome", status: "completed" },
-      { id: "workspace", status: "current" },
-      { id: "context", status: "pending" },
-      { id: "knowledge", status: "pending" },
-      { id: "appearance", status: "pending" },
-      { id: "bar_tour", status: "pending" },
-      { id: "first_question", status: "pending" },
-    ];
+    const { rerender } = renderShell();
+
+    fireEvent.click(screen.getByRole("button", { name: "Voltar" }));
+    expect(mocks.controller.back).toHaveBeenCalledTimes(1);
+
+    mocks.controller.stepId = "welcome";
+    rerender(<OnboardingShell user={user} onComplete={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Voltar" })).toBeNull();
+  });
+
+  it("keeps tab order from content to the titlebar actions", () => {
+    mocks.controller.stepId = "workspace";
     renderShell();
 
-    const railItem = screen.getByRole("button", { name: /Boas-vindas/ });
     const contentField = screen.getByLabelText("Nome do workspace");
     const titlebarAction = screen.getByTitle("Minimizar");
 
-    expect(
-      railItem.compareDocumentPosition(contentField) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
     expect(
       contentField.compareDocumentPosition(titlebarAction) &
         Node.DOCUMENT_POSITION_FOLLOWING,

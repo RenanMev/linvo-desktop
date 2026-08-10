@@ -6,9 +6,9 @@ export const CHECKLIST_SIZE: Size = { width: 288, height: 420 };
 export const QUICK_MENU_SIZE: Size = { width: 380, height: 520 };
 export const PANEL_SIZE: Size = { width: 1200, height: 800 };
 
-/** Janela do onboarding: rail + conteúdo + preview. Não redimensionável. */
-export const ONBOARDING_SIZE: Size = { width: 960, height: 640 };
-export const ONBOARDING_MIN_SIZE: Size = { width: 760, height: 520 };
+/** Janela do onboarding: uma etapa por tela, coluna única. Não redimensionável. */
+export const ONBOARDING_SIZE: Size = { width: 620, height: 680 };
+export const ONBOARDING_MIN_SIZE: Size = { width: 520, height: 560 };
 
 /** Espessura do handle no eixo perpendicular à borda (≤16px por spec FBP-08). */
 export const EDGE_HANDLE_THICKNESS = 12;

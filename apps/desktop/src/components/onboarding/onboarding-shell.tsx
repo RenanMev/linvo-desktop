@@ -1,8 +1,7 @@
 import type { KeyboardEvent } from "react";
 import type { UserPublic } from "@linvo/shared";
 
-import { OnboardingPreview } from "@/components/onboarding/onboarding-preview";
-import { OnboardingRail } from "@/components/onboarding/onboarding-rail";
+import { OnboardingProgress } from "@/components/onboarding/onboarding-progress";
 import { OnboardingTitlebar } from "@/components/onboarding/onboarding-titlebar";
 import { AppearanceStep } from "@/components/onboarding/steps/appearance-step";
 import { BarTourStep } from "@/components/onboarding/steps/bar-tour-step";
@@ -24,12 +23,12 @@ export function OnboardingShell({
   onComplete,
 }: OnboardingShellProps) {
   const flow = useOnboardingFlow({ userId: user.id, onComplete });
-  const showPreview =
-    typeof window === "undefined" || window.innerWidth >= 860;
   const workspaceLabel =
     flow.activeWorkspace?.name || flow.workspaceName || "Seu workspace";
   const workspaceCanContinue =
     Boolean(flow.activeWorkspaceId) || flow.workspaceName.trim().length >= 2;
+  const canGoBack = flow.stepId !== "welcome";
+  const onBack = canGoBack ? flow.back : undefined;
 
   function runPrimaryAction() {
     if (flow.busy) {
@@ -92,16 +91,19 @@ export function OnboardingShell({
       aria-busy={flow.busy}
       className="window-shell flex h-full w-full flex-col overflow-hidden rounded-premium bg-neutral-deep text-foreground"
     >
-      <div className="order-2 flex min-h-0 flex-1">
-        <OnboardingRail
+      {/*
+       * Uma etapa por tela: coluna única e centrada, com o progresso no topo.
+       * A barra de janela é a última no DOM (e a primeira na tela via `order`)
+       * para que o Tab comece no conteúdo, não nos botões da janela.
+       */}
+      <div className="order-2 flex min-h-0 flex-1 flex-col items-center px-8 pt-3 pb-8">
+        <OnboardingProgress
           steps={flow.steps}
           currentStepId={flow.stepId}
-          processingIds={flow.processingStepIds}
-          onSelect={flow.goTo}
           forced={isOnboardingForced()}
         />
 
-        <main className="min-w-0 flex-1 p-6">
+        <div className="mt-8 flex min-h-0 w-full max-w-[29rem] flex-1 flex-col">
           {flow.stepId === "welcome" ? (
             <WelcomeStep busy={flow.busy} onContinue={flow.next} />
           ) : null}
@@ -117,6 +119,7 @@ export function OnboardingShell({
               onWorkspaceNameChange={flow.setWorkspaceName}
               onImageChange={flow.setImageFile}
               onContinue={() => void flow.confirmWorkspace()}
+              onBack={onBack}
             />
           ) : null}
           {flow.stepId === "context" ? (
@@ -129,6 +132,7 @@ export function OnboardingShell({
               onRemoveRule={flow.removeRule}
               onConfirm={() => void flow.confirmContext()}
               onSkip={flow.skip}
+              onBack={onBack}
             />
           ) : null}
           {flow.stepId === "knowledge" ? (
@@ -139,41 +143,40 @@ export function OnboardingShell({
               error={flow.ruleDiscovery.error}
               knowledgeIntent={flow.knowledgeIntent}
               onConfirmFiles={flow.confirmKnowledge}
-              onSelectProcedures={() =>
-                flow.setKnowledgeIntent("procedures")
-              }
+              onSelectProcedures={() => flow.setKnowledgeIntent("procedures")}
               onContinue={flow.next}
               onSkip={() => {
                 flow.setKnowledgeIntent(null);
                 flow.skip();
               }}
+              onBack={onBack}
             />
           ) : null}
           {flow.stepId === "appearance" ? (
-            <AppearanceStep busy={flow.busy} onContinue={flow.next} />
+            <AppearanceStep
+              busy={flow.busy}
+              onContinue={flow.next}
+              onBack={onBack}
+            />
           ) : null}
           {flow.stepId === "bar_tour" ? (
-            <BarTourStep busy={flow.busy} onContinue={flow.next} />
+            <BarTourStep
+              busy={flow.busy}
+              onContinue={flow.next}
+              onBack={onBack}
+            />
           ) : null}
           {flow.stepId === "first_question" ? (
             <FirstQuestionStep
               workspaceName={workspaceLabel}
               busy={flow.busy}
               finish={flow.finish}
+              onBack={onBack}
             />
           ) : null}
-        </main>
-
-        {showPreview ? (
-          <aside className="w-72 shrink-0 border-l border-hairline bg-surface-raise-1/40">
-            <OnboardingPreview
-              stepId={flow.stepId}
-              workspaceName={workspaceLabel}
-              imagePreviewUrl={flow.imagePreviewUrl}
-            />
-          </aside>
-        ) : null}
+        </div>
       </div>
+
       <div className="order-1 shrink-0">
         <OnboardingTitlebar user={user} />
       </div>

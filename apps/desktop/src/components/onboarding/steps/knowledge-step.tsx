@@ -9,6 +9,12 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+import {
+  StepActions,
+  StepHeader,
+  StepLink,
+  StepPrimary,
+} from "@/components/onboarding/step-shell";
 import { Button } from "@/components/ui/button";
 import { formatBytes } from "@/lib/documents/format-bytes";
 import type { OnboardingKnowledgeIntent } from "@/lib/onboarding/onboarding-routing";
@@ -36,6 +42,7 @@ type KnowledgeStepProps = {
   onSelectProcedures: () => void;
   onContinue: () => void;
   onSkip: () => void;
+  onBack?: () => void;
 };
 
 export function KnowledgeStep({
@@ -48,6 +55,7 @@ export function KnowledgeStep({
   onSelectProcedures,
   onContinue,
   onSkip,
+  onBack,
 }: KnowledgeStepProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -111,30 +119,25 @@ export function KnowledgeStep({
 
   return (
     <section className="flex h-full min-h-0 flex-col">
-      <div className="mb-4 space-y-1.5">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">
-          Traga conhecimento para o workspace
-        </h1>
-        <p className="text-sm text-text-secondary">
-          Envie documentos para extrair regras reais ou marque Procedures para
-          explorar depois.
-        </p>
-      </div>
+      <StepHeader
+        title="Traga conhecimento para o workspace"
+        description="Envie documentos para extrair regras reais ou marque Procedures para explorar depois."
+      />
 
-      <div className="scrollbar-elegant min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+      <div className="scrollbar-elegant -mr-2 min-h-0 flex-1 space-y-3 overflow-y-auto pr-2">
         <label
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault();
             addFiles(Array.from(event.dataTransfer.files));
           }}
-          className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-hairline-strong bg-surface-raise-1 px-4 py-5 text-center outline-none transition-colors hover:bg-surface-hover focus-within:ring-2 focus-within:ring-ring/50"
+          className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border-dashed px-4 py-7 text-center outline-none transition-colors hover:bg-surface-hover focus-within:ring-2 focus-within:ring-ring/40"
         >
-          <UploadCloud className="size-5 text-text-secondary" />
-          <span className="text-sm font-medium">
+          <UploadCloud className="size-5 text-text-tertiary" />
+          <span className="text-[13px] font-medium">
             Selecione ou arraste documentos
           </span>
-          <span className="text-xs text-text-secondary">
+          <span className="text-[11px] text-text-tertiary">
             PDF, TXT ou XLSX · até 4 arquivos · 5 MB cada
           </span>
           <input
@@ -150,7 +153,7 @@ export function KnowledgeStep({
         </label>
 
         {fileError ? (
-          <p role="alert" className="text-xs text-destructive">
+          <p role="alert" className="text-[11px] text-destructive">
             {fileError}
           </p>
         ) : null}
@@ -168,7 +171,7 @@ export function KnowledgeStep({
                 >
                   <Icon className="size-4 shrink-0 text-text-secondary" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-medium">
+                    <span className="block truncate text-[13px] font-medium">
                       {file.name}
                     </span>
                     <span className="font-technical text-[10px] text-text-tertiary">
@@ -211,31 +214,29 @@ export function KnowledgeStep({
         {session ? (
           <div
             role="status"
-            className="rounded-xl border border-hairline bg-surface-raise-1 p-3"
+            className="flex items-center justify-between gap-3 rounded-xl border border-hairline bg-surface-raise-1 px-3 py-2.5"
           >
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-medium">
-                  {isPolling ? "Extraindo conhecimento..." : "Processamento"}
-                </p>
-                <p className="mt-1 text-[11px] text-text-secondary">
-                  {documentCount}{" "}
-                  {documentCount === 1 ? "documento" : "documentos"} ·{" "}
-                  {candidateCount}{" "}
-                  {candidateCount === 1 ? "candidato" : "candidatos"}
-                </p>
-              </div>
-              {isPolling ? (
-                <Loader2 className="size-4 animate-spin text-text-secondary" />
-              ) : null}
+            <div>
+              <p className="text-[13px] font-medium">
+                {isPolling ? "Extraindo conhecimento..." : "Processamento"}
+              </p>
+              <p className="mt-0.5 text-[11px] text-text-tertiary">
+                {documentCount}{" "}
+                {documentCount === 1 ? "documento" : "documentos"} ·{" "}
+                {candidateCount}{" "}
+                {candidateCount === 1 ? "candidato" : "candidatos"}
+              </p>
             </div>
+            {isPolling ? (
+              <Loader2 className="size-4 shrink-0 animate-spin text-text-secondary" />
+            ) : null}
           </div>
         ) : null}
 
         {error ? (
           <p
             role="alert"
-            className="rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+            className="rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2.5 text-[13px] text-destructive"
           >
             {error}
           </p>
@@ -246,18 +247,16 @@ export function KnowledgeStep({
           aria-pressed={knowledgeIntent === "procedures"}
           onClick={onSelectProcedures}
           className={cn(
-            "flex w-full items-start gap-3 rounded-xl border p-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
+            "flex w-full items-start gap-3 rounded-xl border p-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
             knowledgeIntent === "procedures"
-              ? "border-hairline-strong bg-surface-raise-2"
+              ? "border-accent-active/45 bg-surface-raise-2"
               : "border-hairline bg-surface-raise-1 hover:bg-surface-hover",
           )}
         >
-          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-surface-raise-2">
-            <Video className="size-4 text-text-secondary" />
-          </span>
+          <Video className="mt-0.5 size-4 shrink-0 text-text-secondary" />
           <span>
-            <span className="block text-sm font-medium">Procedures</span>
-            <span className="mt-0.5 block text-xs leading-relaxed text-text-secondary">
+            <span className="block text-[13px] font-medium">Procedures</span>
+            <span className="mt-0.5 block text-[11px] leading-relaxed text-text-secondary">
               Grave sua tela depois para transformar um processo em procedimento
               consultável.
             </span>
@@ -265,14 +264,24 @@ export function KnowledgeStep({
         </button>
       </div>
 
-      <div className="mt-4 flex items-center justify-between border-t border-hairline pt-4">
-        <Button type="button" variant="ghost" disabled={busy} onClick={onSkip}>
-          Pular por agora
-        </Button>
-        <Button type="button" disabled={busy} onClick={onContinue}>
+      <StepActions
+        links={
+          <>
+            {onBack ? (
+              <StepLink disabled={busy} onClick={onBack}>
+                Voltar
+              </StepLink>
+            ) : null}
+            <StepLink disabled={busy} onClick={onSkip}>
+              Pular por agora
+            </StepLink>
+          </>
+        }
+      >
+        <StepPrimary disabled={busy} onClick={onContinue}>
           Continuar
-        </Button>
-      </div>
+        </StepPrimary>
+      </StepActions>
     </section>
   );
 }
