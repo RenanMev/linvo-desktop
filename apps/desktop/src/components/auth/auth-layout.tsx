@@ -35,10 +35,12 @@ export function AuthLayout({
         />
         <div className="relative mx-auto w-full max-w-[22rem]">
           <div className="mb-8 space-y-1.5">
-            <h1 className="font-editorial text-[1.9rem] font-medium tracking-tight">
+            <h1 className="font-editorial text-[1.9rem] font-medium tracking-tight text-balance">
               {title}
             </h1>
-            <p className="text-sm text-muted-foreground">{description}</p>
+            <p className="text-sm text-muted-foreground text-balance">
+              {description}
+            </p>
           </div>
           {children}
           {footer && (

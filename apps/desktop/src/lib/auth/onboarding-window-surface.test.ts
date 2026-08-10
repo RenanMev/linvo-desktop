@@ -37,16 +37,16 @@ describe("resolveOnboardingWindowSize", () => {
     expect(
       resolveOnboardingWindowSize({
         position: { x: 0, y: 0 },
-        size: { width: 820, height: 580 },
+        size: { width: 580, height: 600 },
       }),
-    ).toEqual({ width: 820, height: 580 });
+    ).toEqual({ width: 580, height: 600 });
   });
 
   it("never returns a size below the minimum", () => {
     expect(
       resolveOnboardingWindowSize({
         position: { x: 0, y: 0 },
-        size: { width: 700, height: 480 },
+        size: { width: 480, height: 440 },
       }),
     ).toEqual(ONBOARDING_MIN_SIZE);
   });
@@ -67,7 +67,7 @@ describe("applyOnboardingWindowSurface", () => {
   it("applies the onboarding surface with the resolved size", async () => {
     mocks.readWorkArea.mockResolvedValue({
       position: { x: 0, y: 0 },
-      size: { width: 820, height: 580 },
+      size: { width: 580, height: 600 },
     });
 
     await applyOnboardingWindowSurface();
@@ -75,7 +75,7 @@ describe("applyOnboardingWindowSurface", () => {
     expect(mocks.applyWindowSurfaceConfig).toHaveBeenCalledWith(
       expect.objectContaining({
         mode: "onboarding",
-        size: { width: 820, height: 580 },
+        size: { width: 580, height: 600 },
         resizable: false,
         maximizable: false,
       }),
@@ -86,14 +86,14 @@ describe("applyOnboardingWindowSurface", () => {
     vi.mocked(windowMock.scaleFactor).mockResolvedValue(1.5);
     mocks.readWorkArea.mockResolvedValue({
       position: { x: 150, y: 90 },
-      size: { width: 1200, height: 780 },
+      size: { width: 840, height: 900 },
     });
 
     await applyOnboardingWindowSurface();
 
     expect(mocks.applyWindowSurfaceConfig).toHaveBeenCalledWith(
       expect.objectContaining({
-        size: { width: 800, height: 520 },
+        size: { width: 560, height: 600 },
       }),
     );
   });

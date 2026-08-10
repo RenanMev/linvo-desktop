@@ -2,6 +2,12 @@ import type { Workspace } from "@linvo/shared";
 import { Camera, Check, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 
+import {
+  StepActions,
+  StepHeader,
+  StepLink,
+  StepPrimary,
+} from "@/components/onboarding/step-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -24,6 +30,7 @@ type WorkspaceStepProps = {
   onWorkspaceNameChange: (value: string) => void;
   onImageChange: (file: File | null) => void;
   onContinue: () => void;
+  onBack?: () => void;
 };
 
 export function WorkspaceStep({
@@ -37,6 +44,7 @@ export function WorkspaceStep({
   onWorkspaceNameChange,
   onImageChange,
   onContinue,
+  onBack,
 }: WorkspaceStepProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -57,67 +65,60 @@ export function WorkspaceStep({
 
   return (
     <section className="flex h-full min-h-0 flex-col">
-      <div className="mb-5 space-y-1.5">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">
-          Escolha seu workspace
-        </h1>
-        <p className="text-sm text-text-secondary">
-          Ele reúne as regras, documentos e conversas que dão contexto ao
-          assistente.
-        </p>
-      </div>
+      <StepHeader
+        title="Escolha seu workspace"
+        description="Ele reúne as regras, documentos e conversas que dão contexto ao assistente."
+      />
 
-      <div className="scrollbar-elegant min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
+      <div className="scrollbar-elegant -mr-2 min-h-0 flex-1 space-y-5 overflow-y-auto pr-2">
         {workspaces.length > 0 ? (
           <fieldset className="space-y-2">
-            <legend className="text-xs font-medium text-text-secondary">
+            <legend className="mb-2 text-[11px] text-text-tertiary">
               Workspaces existentes
             </legend>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {workspaces.map((workspace) => {
-                const active = activeWorkspaceId === workspace.id;
-                const imageUrl = resolveWorkspaceImageUrl(workspace.imageUrl);
-                return (
-                  <button
-                    key={workspace.id}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => onSelectWorkspace(workspace.id)}
-                    className={cn(
-                      "flex min-w-0 items-center gap-2 rounded-xl border px-3 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
-                      active
-                        ? "border-hairline-strong bg-surface-raise-2"
-                        : "border-hairline bg-surface-raise-1 hover:bg-surface-hover",
+            {workspaces.map((workspace) => {
+              const active = activeWorkspaceId === workspace.id;
+              const imageUrl = resolveWorkspaceImageUrl(workspace.imageUrl);
+              return (
+                <button
+                  key={workspace.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => onSelectWorkspace(workspace.id)}
+                  className={cn(
+                    "flex w-full min-w-0 items-center gap-3 rounded-xl border px-3 py-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
+                    active
+                      ? "border-accent-active/45 bg-surface-raise-2"
+                      : "border-hairline bg-surface-raise-1 hover:bg-surface-hover",
+                  )}
+                >
+                  <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-raise-2 font-display text-[11px] font-semibold">
+                    {imageUrl ? (
+                      <img
+                        src={imageUrl}
+                        alt=""
+                        className="size-full object-cover"
+                      />
+                    ) : (
+                      workspace.name.trim().slice(0, 1).toUpperCase()
                     )}
-                  >
-                    <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-raise-2 font-display text-xs font-semibold">
-                      {imageUrl ? (
-                        <img
-                          src={imageUrl}
-                          alt=""
-                          className="size-full object-cover"
-                        />
-                      ) : (
-                        workspace.name.trim().slice(0, 1).toUpperCase()
-                      )}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-xs font-medium">
-                      {workspace.name}
-                    </span>
-                    {active ? (
-                      <Check className="size-3.5 shrink-0 text-success" />
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+                    {workspace.name}
+                  </span>
+                  {active ? (
+                    <Check className="size-3.5 shrink-0 text-success" />
+                  ) : null}
+                </button>
+              );
+            })}
           </fieldset>
         ) : null}
 
         <div className="space-y-2">
           <label
             htmlFor="onboarding-workspace-name"
-            className="text-xs font-medium text-text-secondary"
+            className="block text-[11px] text-text-tertiary"
           >
             {workspaces.length > 0 ? "Ou crie um novo" : "Nome do workspace"}
           </label>
@@ -135,7 +136,7 @@ export function WorkspaceStep({
           {nameInvalid ? (
             <p
               id="onboarding-workspace-name-error"
-              className="text-xs text-destructive"
+              className="text-[11px] text-destructive"
             >
               Informe um nome com pelo menos 2 caracteres ou escolha um
               workspace.
@@ -143,12 +144,12 @@ export function WorkspaceStep({
           ) : null}
         </div>
 
-        <div className="flex items-center gap-3 rounded-xl border border-hairline bg-surface-raise-1 p-3">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             aria-label="Escolher imagem do workspace"
             onClick={() => inputRef.current?.click()}
-            className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl border border-dashed border-hairline-strong bg-surface-raise-2 text-text-secondary outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-dashed border-border-dashed bg-surface-raise-1 text-text-tertiary outline-none transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             {imagePreviewUrl ? (
               <img
@@ -169,12 +170,11 @@ export function WorkspaceStep({
             onChange={(event) => handleImage(event.target.files?.[0] ?? null)}
           />
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium">Imagem do workspace</p>
-            <p className="mt-0.5 text-[11px] text-text-secondary">
-              JPEG, PNG ou WebP · opcional
+            <p className="text-[12px] text-text-secondary">
+              Imagem do workspace · opcional
             </p>
             {fileError ? (
-              <p role="alert" className="mt-1 text-xs text-destructive">
+              <p role="alert" className="mt-0.5 text-[11px] text-destructive">
                 {fileError}
               </p>
             ) : null}
@@ -198,22 +198,26 @@ export function WorkspaceStep({
         {error ? (
           <p
             role="alert"
-            className="rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+            className="rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2.5 text-[13px] text-destructive"
           >
             {error}
           </p>
         ) : null}
       </div>
 
-      <div className="mt-5 flex justify-end border-t border-hairline pt-4">
-        <Button
-          type="button"
-          disabled={busy || nameInvalid}
-          onClick={onContinue}
-        >
+      <StepActions
+        links={
+          onBack ? (
+            <StepLink disabled={busy} onClick={onBack}>
+              Voltar
+            </StepLink>
+          ) : undefined
+        }
+      >
+        <StepPrimary disabled={busy || nameInvalid} onClick={onContinue}>
           {busy ? "Salvando..." : "Continuar"}
-        </Button>
-      </div>
+        </StepPrimary>
+      </StepActions>
     </section>
   );
 }
