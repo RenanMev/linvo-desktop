@@ -10,44 +10,52 @@ type DesktopUpdateBannerProps = {
 export function DesktopUpdateBanner({ update }: DesktopUpdateBannerProps) {
   const softVisible =
     !update.blocking &&
-    (update.status === "available" || update.status === "updating") &&
-    update.release;
+    (update.status === "available" ||
+      update.status === "updating" ||
+      update.status === "error");
 
-  if (!softVisible || !update.release) {
+  if (!softVisible) {
     return null;
   }
 
   const { release, applyUpdate, dismiss, openDownload, error, status } = update;
   const updating = status === "updating";
+  const checkFailed = status === "error" && !release;
 
   return (
     <div className="flex items-start gap-3 border-b border-hairline bg-surface-raise-1 px-4 py-2.5">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-foreground">
-          Nova versão {release.latestVersion} disponível
+          {checkFailed
+            ? "Não foi possível verificar atualizações"
+            : `Nova versão ${release?.latestVersion ?? ""} disponível`}
         </p>
-        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-          {release.releaseNotes}
-        </p>
+        {release?.releaseNotes ? (
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+            {release.releaseNotes}
+          </p>
+        ) : null}
         {error ? (
           <p className="mt-1 text-xs text-destructive">{error}</p>
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        <Button
-          type="button"
-          size="sm"
-          disabled={updating}
-          onClick={() => void applyUpdate()}
-        >
-          {updating ? (
-            <RefreshCw className="size-3.5 animate-spin" />
-          ) : (
-            <Download className="size-3.5" />
-          )}
-          {updating ? "Atualizando..." : "Atualizar"}
-        </Button>
-        {error ? (
+        {release ? (
+          <Button
+            type="button"
+            size="sm"
+            disabled={updating}
+            onClick={() => void applyUpdate()}
+          >
+            {updating ? (
+              <RefreshCw className="size-3.5 animate-spin" />
+            ) : (
+              <Download className="size-3.5" />
+            )}
+            {updating ? "Atualizando..." : "Atualizar"}
+          </Button>
+        ) : null}
+        {error && release ? (
           <Button
             type="button"
             size="sm"
