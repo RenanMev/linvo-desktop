@@ -9,9 +9,11 @@ export const workspaceSchema = z.object({
   name: z.string(),
   role: workspaceRoleSchema,
   imageUrl: z.string().nullable(),
+  hidden: z.boolean().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+
 
 export const createWorkspaceInputSchema = z.object({
   name: z.string().trim().min(1, "informe o nome do workspace"),

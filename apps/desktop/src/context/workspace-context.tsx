@@ -31,7 +31,8 @@ type WorkspaceContextValue = {
   activeWorkspace: Workspace | null;
   isLoading: boolean;
   error: string | null;
-  refresh: () => Promise<void>;
+  refresh: (options?: { includeHidden?: boolean }) => Promise<void>;
+  applyRedeemedWorkspace: (workspace: Workspace) => Promise<void>;
   selectWorkspace: (
     workspaceId: string,
     options?: SelectWorkspaceOptions,
@@ -65,29 +66,63 @@ export function WorkspaceProvider({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    setError(null);
-    try {
-      const list = await workspaceApi.listWorkspaces();
-      setWorkspaces(list);
+  const refresh = useCallback(
+    async (options?: { includeHidden?: boolean }) => {
+      setError(null);
+      try {
+        const list = await workspaceApi.listWorkspaces(options);
+        setWorkspaces(list);
 
-      const stored = getStoredWorkspaceId();
-      const preferred =
-        list.find((item) => item.id === stored)?.id ?? list[0]?.id ?? null;
+        const stored = getStoredWorkspaceId();
+        const preferred =
+          list.find((item) => item.id === stored)?.id ?? list[0]?.id ?? null;
 
-      if (preferred) {
-        setStoredWorkspaceId(preferred);
+        if (preferred) {
+          setStoredWorkspaceId(preferred);
+        }
+        setActiveWorkspaceId(preferred);
+        if (preferred) {
+          await refreshList();
+        }
+      } catch {
+        setError("Não foi possível carregar os workspaces");
+      } finally {
+        setIsLoading(false);
       }
-      setActiveWorkspaceId(preferred);
-      if (preferred) {
-        await refreshList();
+    },
+    [refreshList],
+  );
+
+  const applyRedeemedWorkspace = useCallback(
+    async (workspace: Workspace) => {
+      setStoredWorkspaceId(workspace.id);
+      setActiveWorkspaceId(workspace.id);
+      try {
+        const list = await workspaceApi.listWorkspaces();
+        const exists = list.some((item) => item.id === workspace.id);
+        setWorkspaces(
+          exists
+            ? list.map((item) =>
+                item.id === workspace.id ? { ...item, ...workspace } : item,
+              )
+            : [...list, workspace],
+        );
+      } catch {
+        setWorkspaces((prev) => {
+          const exists = prev.some((item) => item.id === workspace.id);
+          if (exists) {
+            return prev.map((item) =>
+              item.id === workspace.id ? workspace : item,
+            );
+          }
+          return [...prev, workspace];
+        });
       }
-    } catch {
-      setError("Não foi possível carregar os workspaces");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [refreshList]);
+      await clearChatLocalCache();
+      await refreshList();
+    },
+    [refreshList],
+  );
 
   useEffect(() => {
     if (!enabled) {
@@ -216,6 +251,7 @@ export function WorkspaceProvider({
       isLoading,
       error,
       refresh,
+      applyRedeemedWorkspace,
       selectWorkspace,
       createWorkspace,
       renameWorkspace,
@@ -229,6 +265,7 @@ export function WorkspaceProvider({
       isLoading,
       error,
       refresh,
+      applyRedeemedWorkspace,
       selectWorkspace,
       createWorkspace,
       renameWorkspace,

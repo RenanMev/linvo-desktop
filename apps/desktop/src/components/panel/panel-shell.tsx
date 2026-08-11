@@ -9,6 +9,10 @@ import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
 import { useWindowMaximized } from "@/hooks/use-window-maximized";
 import { cn } from "@/lib/utils";
 
+export type PanelOutletContext = {
+  session: PanelSession;
+};
+
 type PanelShellProps = {
   session: PanelSession;
   sessionReady: boolean;
@@ -46,7 +50,7 @@ export function PanelShell({ session, sessionReady, sessionError }: PanelShellPr
           <div className="flex min-h-0 flex-1">
             <PanelSidebar session={session} collapsed={collapsed} />
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-              <Outlet />
+              <Outlet context={{ session } satisfies PanelOutletContext} />
             </div>
           </div>
         </div>

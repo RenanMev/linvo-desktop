@@ -15,6 +15,7 @@ import { WorkspaceCreatePage } from "@/pages/settings/workspace-create-page";
 import { WorkspaceDetailPage } from "@/pages/settings/workspace-detail-page";
 import { RuleReviewPage } from "@/pages/settings/rule-review-page";
 import { ProcedurePage } from "@/pages/settings/procedure-page";
+import { JoinWorkspacePage } from "@/pages/settings/join-workspace-page";
 import { WorkspaceSettingsPage } from "@/pages/settings/workspace-settings-page";
 import { ChatPage } from "@/pages/chat-page";
 import { DocumentsPage } from "@/pages/documents-page";
@@ -91,6 +92,10 @@ function PanelRoutes() {
         <Route
           path="/settings/workspace/new"
           element={<WorkspaceCreatePage />}
+        />
+        <Route
+          path="/settings/workspace/join"
+          element={<JoinWorkspacePage />}
         />
         <Route
           path="/settings/workspace/:workspaceId"

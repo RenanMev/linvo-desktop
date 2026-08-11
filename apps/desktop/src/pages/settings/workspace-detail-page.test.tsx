@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter, Outlet, Route, Routes } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WorkspaceDetailPage } from "@/pages/settings/workspace-detail-page";
@@ -28,27 +28,60 @@ vi.mock("@/lib/workspace/workspace-api", () => ({
   resolveWorkspaceImageUrl: vi.fn(() => null),
 }));
 
+vi.mock("@/pages/settings/workspace-people-section", () => ({
+  WorkspacePeopleSection: () => null,
+}));
+
 import { useWorkspace } from "@/context/workspace-context";
+
+const session = {
+  user: {
+    id: "user-1",
+    name: "Renan",
+    email: "renan@example.com",
+    createdAt: "2026-01-01T00:00:00.000Z",
+  },
+  logout: vi.fn(),
+};
 
 function renderPage() {
   return render(
     <MemoryRouter initialEntries={["/settings/workspace/ws-1"]}>
       <Routes>
-        <Route
-          path="/settings/workspace/:workspaceId"
-          element={<WorkspaceDetailPage />}
-        />
-        <Route
-          path="/settings/workspace/:workspaceId/rule-review"
-          element={<div>Rule Review Route</div>}
-        />
-        <Route
-          path="/settings/workspace/:workspaceId/procedures"
-          element={<div>Procedures Route</div>}
-        />
+        <Route element={<Outlet context={{ session }} />}>
+          <Route
+            path="/settings/workspace/:workspaceId"
+            element={<WorkspaceDetailPage />}
+          />
+          <Route
+            path="/settings/workspace/:workspaceId/rule-review"
+            element={<div>Rule Review Route</div>}
+          />
+          <Route
+            path="/settings/workspace/:workspaceId/procedures"
+            element={<div>Procedures Route</div>}
+          />
+        </Route>
       </Routes>
     </MemoryRouter>,
   );
+}
+
+function mockWorkspace(workspace: typeof ownerWorkspace) {
+  vi.mocked(useWorkspace).mockReturnValue({
+    workspaces: [workspace],
+    activeWorkspace: workspace,
+    isLoading: false,
+    error: null,
+    refresh: vi.fn(),
+    applyRedeemedWorkspace: vi.fn(),
+    selectWorkspace: vi.fn(),
+    createWorkspace: vi.fn(),
+    renameWorkspace: vi.fn(),
+    deleteWorkspace: vi.fn(),
+    uploadImage: vi.fn(),
+    removeImage: vi.fn(),
+  });
 }
 
 describe("WorkspaceDetailPage rule review navigation", () => {
@@ -62,20 +95,7 @@ describe("WorkspaceDetailPage rule review navigation", () => {
   });
 
   it("shows Rule Review link for OWNER", async () => {
-    vi.mocked(useWorkspace).mockReturnValue({
-      workspaces: [ownerWorkspace],
-      activeWorkspace: ownerWorkspace,
-      isLoading: false,
-      error: null,
-      refresh: vi.fn(),
-      selectWorkspace: vi.fn(),
-      createWorkspace: vi.fn(),
-      renameWorkspace: vi.fn(),
-      deleteWorkspace: vi.fn(),
-      uploadImage: vi.fn(),
-      removeImage: vi.fn(),
-    });
-
+    mockWorkspace(ownerWorkspace);
     renderPage();
 
     expect(
@@ -85,20 +105,7 @@ describe("WorkspaceDetailPage rule review navigation", () => {
 
   it("navigates to rule review route for OWNER", async () => {
     const user = userEvent.setup();
-    vi.mocked(useWorkspace).mockReturnValue({
-      workspaces: [ownerWorkspace],
-      activeWorkspace: ownerWorkspace,
-      isLoading: false,
-      error: null,
-      refresh: vi.fn(),
-      selectWorkspace: vi.fn(),
-      createWorkspace: vi.fn(),
-      renameWorkspace: vi.fn(),
-      deleteWorkspace: vi.fn(),
-      uploadImage: vi.fn(),
-      removeImage: vi.fn(),
-    });
-
+    mockWorkspace(ownerWorkspace);
     renderPage();
     await user.click(
       await screen.findByRole("button", { name: "Abrir Rule Review" }),
@@ -108,20 +115,7 @@ describe("WorkspaceDetailPage rule review navigation", () => {
   });
 
   it("hides Rule Review link for MEMBER", async () => {
-    vi.mocked(useWorkspace).mockReturnValue({
-      workspaces: [memberWorkspace],
-      activeWorkspace: memberWorkspace,
-      isLoading: false,
-      error: null,
-      refresh: vi.fn(),
-      selectWorkspace: vi.fn(),
-      createWorkspace: vi.fn(),
-      renameWorkspace: vi.fn(),
-      deleteWorkspace: vi.fn(),
-      uploadImage: vi.fn(),
-      removeImage: vi.fn(),
-    });
-
+    mockWorkspace(memberWorkspace);
     renderPage();
 
     expect(await screen.findByText("Regras de negócio")).toBeInTheDocument();
@@ -132,20 +126,7 @@ describe("WorkspaceDetailPage rule review navigation", () => {
 
   it("shows Procedures link for MEMBER and navigates", async () => {
     const user = userEvent.setup();
-    vi.mocked(useWorkspace).mockReturnValue({
-      workspaces: [memberWorkspace],
-      activeWorkspace: memberWorkspace,
-      isLoading: false,
-      error: null,
-      refresh: vi.fn(),
-      selectWorkspace: vi.fn(),
-      createWorkspace: vi.fn(),
-      renameWorkspace: vi.fn(),
-      deleteWorkspace: vi.fn(),
-      uploadImage: vi.fn(),
-      removeImage: vi.fn(),
-    });
-
+    mockWorkspace(memberWorkspace);
     renderPage();
 
     await user.click(
