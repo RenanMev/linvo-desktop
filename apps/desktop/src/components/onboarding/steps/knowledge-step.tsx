@@ -25,10 +25,22 @@ const ACCEPTED_MIME_TYPES = new Set(ACCEPTED_TYPES.split(","));
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const MAX_FILES = 4;
 
+// Espelha o fallback por extensão do backend: alguns navegadores não resolvem
+// o mime de docx/xlsx e mandam um tipo genérico.
+const GENERIC_MIME_TYPES = new Set([
+  "",
+  "application/octet-stream",
+  "binary/octet-stream",
+]);
+const EXTENSION_FALLBACKS = [".xlsx", ".docx"];
+
 function acceptsFile(file: File): boolean {
   return (
     ACCEPTED_MIME_TYPES.has(file.type) ||
-    (file.type === "" && file.name.toLowerCase().endsWith(".xlsx"))
+    (GENERIC_MIME_TYPES.has(file.type) &&
+      EXTENSION_FALLBACKS.some((extension) =>
+        file.name.toLowerCase().endsWith(extension),
+      ))
   );
 }
 
@@ -138,7 +150,7 @@ export function KnowledgeStep({
             Selecione ou arraste documentos
           </span>
           <span className="text-[11px] text-text-tertiary">
-            PDF, TXT ou XLSX · até 4 arquivos · 5 MB cada
+            PDF, TXT, DOCX ou XLSX · até 4 arquivos · 5 MB cada
           </span>
           <input
             type="file"

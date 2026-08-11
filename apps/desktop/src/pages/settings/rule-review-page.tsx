@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 import * as ruleDiscoveryApi from "@/lib/workspace/rule-discovery-api";
 
 export const ACCEPTED_TYPES =
-  "text/plain,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  "text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 function sessionStatusLabel(
   status: RuleDiscoverySessionDetail["status"],
@@ -691,7 +691,7 @@ export function RuleReviewPage() {
                 {busy ? "Enviando…" : "Enviar arquivos"}
               </Button>
               <p className="font-technical text-[11px] text-muted-foreground">
-                TXT, PDF ou XLSX · até 4 arquivos · 5 MB cada
+                TXT, PDF, DOCX ou XLSX · até 4 arquivos · 5 MB cada
               </p>
             </div>
           </div>
