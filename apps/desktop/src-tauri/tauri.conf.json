@@ -63,6 +63,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -70,5 +71,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEYyNDk0OTlFRjgzOEZEQTgKUldTby9UajRua2xKOHFFQ0ZNZVhtcTZFZkppUU55eG9VSm5uQUpVdHhnSUxGdWtYMkJDZU5XVGUK",
+      "endpoints": [
+        "https://github.com/RenanMev/linvo-desktop/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

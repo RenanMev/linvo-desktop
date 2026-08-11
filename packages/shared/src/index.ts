@@ -1,6 +1,7 @@
 export * from "./appearance";
 export * from "./auth";
 export * from "./chat";
+export * from "./desktop-release";
 export * from "./document";
 export * from "./health";
 export * from "./procedure";

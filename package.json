@@ -19,7 +19,8 @@
     "test": "turbo run test",
     "desktop": "pnpm --filter @linvo/desktop",
     "tauri": "pnpm --filter @linvo/desktop tauri",
-    "shared": "pnpm --filter @linvo/shared"
+    "shared": "pnpm --filter @linvo/shared",
+    "bump": "node scripts/bump-version.mjs"
   },
   "devDependencies": {
     "turbo": "^2.5.0"

@@ -26,6 +26,8 @@ keyring = "3"
 tauri-plugin-notification = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 window-vibrancy = "0.5"
 
 [target.'cfg(windows)'.dependencies]
