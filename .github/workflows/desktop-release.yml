@@ -41,6 +41,25 @@ jobs:
             exit 1
           fi
 
+          root_version="$(node -p "require('./package.json').version")"
+          desktop_version="$(node -p "require('./apps/desktop/package.json').version")"
+          cargo_version="$(grep -m1 '^version' apps/desktop/src-tauri/Cargo.toml | sed -E 's/version = "(.*)"/\1/')"
+
+          for pair in "root:$root_version" "desktop:$desktop_version" "cargo:$cargo_version"; do
+            name="${pair%%:*}"
+            value="${pair#*:}"
+            if [ "$value" != "$version" ]; then
+              echo "Version mismatch: $name has '$value', tauri.conf.json has '$version'. Run 'pnpm bump ${version}' and commit." >&2
+              exit 1
+            fi
+          done
+
+          pubkey="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').plugins.updater.pubkey")"
+          if [ "$pubkey" = "REPLACE_WITH_PUBLIC_KEY_FROM_pnpm_tauri_signer_generate" ]; then
+            echo "tauri.conf.json still has the placeholder updater pubkey. Run 'pnpm tauri signer generate' and paste the public key in." >&2
+            exit 1
+          fi
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -75,7 +94,7 @@ jobs:
             rust_targets: ""
           - name: macOS
             platform: macos-latest
-            args: --target universal-apple-darwin --bundles dmg
+            args: --target universal-apple-darwin --bundles app,dmg
             rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
 
     env:
@@ -114,6 +133,8 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: apps/desktop
           tauriScript: pnpm tauri
@@ -127,6 +148,12 @@ jobs:
             - macOS: `.dmg` universal (Apple Silicon + Intel)
 
             No Mac sem assinatura Apple, na primeira abertura use clique direito → Abrir.
+
+            Depois do release, atualize na linvo-api:
+            - DESKTOP_LATEST_VERSION
+            - DESKTOP_MIN_SUPPORTED_VERSION (se for update obrigatório)
+            - DESKTOP_RELEASE_NOTES
+            - DESKTOP_PUBLISHED_AT
           generateReleaseNotes: true
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false

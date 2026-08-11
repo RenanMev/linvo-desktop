@@ -86,6 +86,19 @@ vi.mock("@tauri-apps/api/core", () => ({
   isTauri: () => false,
 }));
 
+vi.mock("@tauri-apps/api/app", () => ({
+  getVersion: vi.fn(() => Promise.resolve("0.1.1")),
+  defaultWindowIcon: vi.fn(() => Promise.resolve(null)),
+}));
+
+vi.mock("@tauri-apps/plugin-updater", () => ({
+  check: vi.fn(() => Promise.resolve(null)),
+}));
+
+vi.mock("@tauri-apps/plugin-process", () => ({
+  relaunch: vi.fn(() => Promise.resolve()),
+}));
+
 vi.mock("@tauri-apps/api/event", () => ({
   emit: emitMock,
   emitTo: emitToMock,
