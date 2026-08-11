@@ -78,6 +78,7 @@ export function ChatPanel({
         />
       </div>
       <ChatInput
+        key={conversationKey ?? "draft"}
         onSend={onSend}
         isResponding={isResponding}
         replyTarget={replyTarget}
