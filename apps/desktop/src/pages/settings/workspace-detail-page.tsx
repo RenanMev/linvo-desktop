@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useOutletContext, useParams } from "react-router";
 import type { BusinessRule, WorkspaceRole } from "@linvo/shared";
 import {
   ArrowLeft,
@@ -14,6 +14,7 @@ import {
   Video,
 } from "lucide-react";
 
+import type { PanelOutletContext } from "@/components/panel/panel-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -23,6 +24,7 @@ import { AuthApiError } from "@/lib/auth/auth-api";
 import { cn } from "@/lib/utils";
 import * as workspaceApi from "@/lib/workspace/workspace-api";
 import { resolveWorkspaceImageUrl } from "@/lib/workspace/workspace-api";
+import { WorkspacePeopleSection } from "@/pages/settings/workspace-people-section";
 
 function workspaceInitial(name: string): string {
   const trimmed = name.trim();
@@ -71,6 +73,7 @@ function SectionHeading({
 export function WorkspaceDetailPage() {
   const navigate = useNavigate();
   const { workspaceId } = useParams<{ workspaceId: string }>();
+  const { session } = useOutletContext<PanelOutletContext>();
   const {
     workspaces,
     activeWorkspace,
@@ -324,6 +327,14 @@ export function WorkspaceDetailPage() {
           <div className="rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2.5">
             <p className="text-xs text-destructive">{error}</p>
           </div>
+        ) : null}
+
+        {session.user ? (
+          <WorkspacePeopleSection
+            workspaceId={workspace.id}
+            isOwner={isOwner}
+            currentUserId={session.user.id}
+          />
         ) : null}
 
         <section className="space-y-3">

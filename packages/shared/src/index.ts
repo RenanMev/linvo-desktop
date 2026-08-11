@@ -7,3 +7,5 @@ export * from "./procedure";
 export * from "./rule-discovery";
 export * from "./time";
 export * from "./workspace";
+export * from "./workspace-invite";
+

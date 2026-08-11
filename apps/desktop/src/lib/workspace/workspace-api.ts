@@ -85,8 +85,13 @@ async function request(
   return response.json();
 }
 
-export async function listWorkspaces(): Promise<Workspace[]> {
-  const data = (await request("/api/workspaces")) as { workspaces: unknown[] };
+export async function listWorkspaces(options?: {
+  includeHidden?: boolean;
+}): Promise<Workspace[]> {
+  const query = options?.includeHidden ? "?includeHidden=true" : "";
+  const data = (await request(`/api/workspaces${query}`)) as {
+    workspaces: unknown[];
+  };
   return data.workspaces.map((item) => workspaceSchema.parse(item));
 }
 

@@ -85,6 +85,7 @@ describe("ProcedurePage list", () => {
       isLoading: false,
       error: null,
       refresh: vi.fn(),
+      applyRedeemedWorkspace: vi.fn(),
       selectWorkspace: vi.fn(),
       createWorkspace: vi.fn(),
       renameWorkspace: vi.fn(),

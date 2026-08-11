@@ -1,13 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import type { Workspace, WorkspaceRole } from "@linvo/shared";
-import { Building2, Check, Plus, Settings } from "lucide-react";
+import { Building2, Check, KeyRound, Plus, Settings } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspace } from "@/context/workspace-context";
 import { useWorkspaceFileBlob } from "@/hooks/use-workspace-file-blob";
-import { resolveWorkspaceImageUrl } from "@/lib/workspace/workspace-api";
+import { inviteCopy } from "@/lib/workspace/invite-copy";
+import {
+  listWorkspaces,
+  resolveWorkspaceImageUrl,
+} from "@/lib/workspace/workspace-api";
 import { cn } from "@/lib/utils";
 
 function workspaceInitial(name: string): string {
@@ -43,6 +47,7 @@ function WorkspaceCard({
 }) {
   const imageUrl = resolveWorkspaceImageUrl(workspace.imageUrl);
   const { blobUrl: imageSrc } = useWorkspaceFileBlob(imageUrl);
+  const isPersonal = workspace.hidden === true;
 
   return (
     <div
@@ -98,7 +103,7 @@ function WorkspaceCard({
       <div className="min-w-0 space-y-1">
         <p className="truncate text-xs font-medium">{workspace.name}</p>
         <p className="truncate text-[10px] text-muted-foreground">
-          {roleLabel(workspace.role)}
+          {isPersonal ? inviteCopy.personalWorkspace : roleLabel(workspace.role)}
           {active ? (
             <>
               {" · "}
@@ -131,15 +136,34 @@ function WorkspaceCard({
 
 export function WorkspaceSettingsPage() {
   const navigate = useNavigate();
-  const {
-    workspaces,
-    activeWorkspace,
-    isLoading,
-    error,
-    selectWorkspace,
-  } = useWorkspace();
+  const { activeWorkspace, selectWorkspace } = useWorkspace();
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listWorkspaces({ includeHidden: true })
+      .then((list) => {
+        if (!cancelled) {
+          setWorkspaces(list);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLocalError("Não foi possível carregar os workspaces");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const activeCount = activeWorkspace ? 1 : 0;
 
@@ -171,11 +195,23 @@ export function WorkspaceSettingsPage() {
           </div>
         </div>
 
-        {error || localError ? (
+        {localError ? (
           <div className="rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2.5">
-            <p className="text-xs text-destructive">{localError ?? error}</p>
+            <p className="text-xs text-destructive">{localError}</p>
           </div>
         ) : null}
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => navigate("/settings/workspace/join")}
+          >
+            <KeyRound className="size-3.5" />
+            {inviteCopy.joinTitle}
+          </Button>
+        </div>
 
         {isLoading ? (
           <p className="text-xs text-muted-foreground">Carregando...</p>
