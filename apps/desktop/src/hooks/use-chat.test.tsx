@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useChat } from "@/hooks/use-chat";
 import * as chatApi from "@/lib/chat/chat-api";
+import * as attachmentApi from "@/lib/chat/chat-attachments-api";
 import * as chatStore from "@/lib/chat/chat-local-store";
 import type { ChatMessage } from "@/lib/chat/types";
 
@@ -19,6 +20,10 @@ vi.mock("@/lib/chat/chat-local-store", () => ({
   hydrateChatLocalStore: vi.fn(),
   loadCachedConversationMessagesFromStore: vi.fn(),
   saveCachedConversationMessages: vi.fn(),
+}));
+
+vi.mock("@/lib/chat/chat-attachments-api", () => ({
+  uploadChatAttachment: vi.fn(),
 }));
 
 vi.mock("@/lib/procedure/procedure-api", () => ({
@@ -61,6 +66,7 @@ function cachedMessage(id: string, content: string): ChatMessage {
 describe("useChat stream ownership", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    URL.createObjectURL = vi.fn(() => "blob:optimistic");
     vi.mocked(chatStore.hydrateChatLocalStore).mockResolvedValue();
     vi.mocked(
       chatStore.loadCachedConversationMessagesFromStore,
@@ -221,6 +227,7 @@ describe("useChat stream ownership", () => {
 
     await waitFor(() => {
       expect(chatApi.listMessages).toHaveBeenCalledWith("conv-a");
+      expect(result.current.isLoadingHistory).toBe(false);
     });
 
     let sending!: Promise<void>;
@@ -248,6 +255,107 @@ describe("useChat stream ownership", () => {
       );
     expect(pollutedCacheWrite).toBe(false);
     expect(result.current.messages).toEqual([messageB]);
+  });
+
+  it("uploads an attachment before sending its id to the stream", async () => {
+    const onAccepted = vi.fn();
+    const file = new File(["image"], "context.png", { type: "image/png" });
+    vi.mocked(attachmentApi.uploadChatAttachment).mockResolvedValue({
+      id: "att-1",
+      kind: "image",
+      mimeType: "image/png",
+      filename: "context.png",
+      sizeBytes: file.size,
+      width: 800,
+      height: 600,
+    });
+    vi.mocked(chatApi.streamChatResponse).mockImplementation((options) =>
+      (async function* () {
+        expect(options.attachmentIds).toEqual(["att-1"]);
+        expect(options.content).toBe("");
+        yield "imagem analisada";
+      })(),
+    );
+    const { result } = renderHook(() =>
+      useChat({ conversationId: "conv-a" }),
+    );
+    await waitFor(() => {
+      expect(chatApi.listMessages).toHaveBeenCalledWith("conv-a");
+      expect(result.current.isLoadingHistory).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.sendMessage("", {
+        attachment: {
+          file,
+          width: 800,
+          height: 600,
+          previewUrl: "blob:composer",
+        },
+        onAccepted,
+      });
+    });
+
+    expect(attachmentApi.uploadChatAttachment).toHaveBeenCalledWith(
+      "conv-a",
+      file,
+      {
+        filename: "context.png",
+        source: "display_capture",
+      },
+    );
+    expect(onAccepted).toHaveBeenCalledOnce();
+    expect(result.current.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "user",
+          content: "",
+          attachments: [
+            expect.objectContaining({
+              id: "att-1",
+              url: "blob:optimistic",
+            }),
+          ],
+        }),
+        expect.objectContaining({
+          role: "assistant",
+          content: "imagem analisada",
+          status: "done",
+        }),
+      ]),
+    );
+  });
+
+  it("keeps the composer unaccepted when attachment upload fails", async () => {
+    const onAccepted = vi.fn();
+    const file = new File(["image"], "context.png", { type: "image/png" });
+    vi.mocked(attachmentApi.uploadChatAttachment).mockRejectedValue(
+      new Error("upload falhou"),
+    );
+    const { result } = renderHook(() =>
+      useChat({ conversationId: "conv-a" }),
+    );
+    await waitFor(() => {
+      expect(chatApi.listMessages).toHaveBeenCalledWith("conv-a");
+    });
+
+    await act(async () => {
+      await result.current.sendMessage("analise", {
+        attachment: {
+          file,
+          width: 800,
+          height: 600,
+          previewUrl: "blob:composer",
+        },
+        onAccepted,
+      });
+    });
+
+    expect(onAccepted).not.toHaveBeenCalled();
+    expect(chatApi.streamChatResponse).not.toHaveBeenCalled();
+    expect(result.current.messages).toEqual([]);
+    expect(result.current.error).toBe("upload falhou");
+    expect(result.current.isResponding).toBe(false);
   });
 });
 

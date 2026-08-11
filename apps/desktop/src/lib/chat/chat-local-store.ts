@@ -175,10 +175,22 @@ async function migrateLegacyLocalStorageToDisk(): Promise<void> {
 }
 
 export function sanitizeMessagesForCache(messages: ChatMessage[]): ChatMessage[] {
-  return messages.filter(
-    (message) =>
-      message.status !== "streaming" && message.status !== "awaiting_tool",
-  );
+  return messages
+    .filter(
+      (message) =>
+        message.status !== "streaming" && message.status !== "awaiting_tool",
+    )
+    .map((message) => ({
+      ...message,
+      attachments: message.attachments?.map((attachment) => {
+        if (!attachment.url?.startsWith("blob:")) {
+          return attachment;
+        }
+        const persistentAttachment = { ...attachment };
+        delete persistentAttachment.url;
+        return persistentAttachment;
+      }),
+    }));
 }
 
 export async function hydrateChatLocalStore(): Promise<void> {

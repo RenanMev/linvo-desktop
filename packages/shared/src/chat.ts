@@ -43,6 +43,29 @@ export const messageArtifactSchema = z.object({
   pageCount: z.number().int().positive().optional(),
 });
 
+export const messageAttachmentKindSchema = z.literal("image");
+
+export const messageAttachmentMimeTypeSchema = z.enum([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+]);
+
+export const messageAttachmentSchema = z.object({
+  id: z.string(),
+  kind: messageAttachmentKindSchema,
+  mimeType: messageAttachmentMimeTypeSchema,
+  filename: z.string(),
+  sizeBytes: z.number().int().nonnegative(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  url: z.string().url().optional(),
+});
+
+export const chatAttachmentUploadResponseSchema = z.object({
+  attachment: messageAttachmentSchema,
+});
+
 export const reasoningChunkSchema = z.object({
   text: z.string(),
 });
@@ -54,6 +77,9 @@ export const chatErrorCodeSchema = z.enum([
   "aborted",
   "busy",
   "internal",
+  "model_not_multimodal",
+  "attachment_invalid",
+  "attachment_too_large",
 ]);
 
 export const chatErrorEventSchema = z.object({
@@ -142,6 +168,7 @@ export const messageSchema = z.object({
   toolUses: z.array(messageToolUseSchema).optional(),
   activities: z.array(messageActivitySchema).optional(),
   artifacts: z.array(messageArtifactSchema).optional(),
+  attachments: z.array(messageAttachmentSchema).optional(),
   reasoning: z.string().optional(),
   model: z.string().optional(),
 });
@@ -152,13 +179,20 @@ export const messageListSchema = z.object({
 
 export const forceToolSchema = z.enum(["web_search", "search_knowledge"]);
 
-export const sendMessageInputSchema = z.object({
-  content: z.string().trim().min(1, "informe uma mensagem"),
-  replyToMessageId: z.string().optional(),
-  deskState: deskStateSchema.optional(),
-  model: z.string().trim().min(1).optional(),
-  forceTool: forceToolSchema.optional(),
-});
+export const sendMessageInputSchema = z
+  .object({
+    content: z.string().trim().default(""),
+    replyToMessageId: z.string().optional(),
+    deskState: deskStateSchema.optional(),
+    model: z.string().trim().min(1).optional(),
+    forceTool: forceToolSchema.optional(),
+    attachmentIds: z.array(z.string().min(1)).max(4).optional(),
+  })
+  .refine(
+    (value) =>
+      value.content.length > 0 || (value.attachmentIds?.length ?? 0) > 0,
+    { message: "informe uma mensagem ou um anexo" },
+  );
 
 export const regenerateMessageInputSchema = z.object({
   model: z.string().trim().min(1).optional(),
@@ -174,6 +208,14 @@ export type MessageActivityKind = z.infer<typeof messageActivityKindSchema>;
 export type MessageActivity = z.infer<typeof messageActivitySchema>;
 export type MessageArtifactKind = z.infer<typeof messageArtifactKindSchema>;
 export type MessageArtifact = z.infer<typeof messageArtifactSchema>;
+export type MessageAttachmentKind = z.infer<typeof messageAttachmentKindSchema>;
+export type MessageAttachmentMimeType = z.infer<
+  typeof messageAttachmentMimeTypeSchema
+>;
+export type MessageAttachment = z.infer<typeof messageAttachmentSchema>;
+export type ChatAttachmentUploadResponse = z.infer<
+  typeof chatAttachmentUploadResponseSchema
+>;
 export type ReasoningChunk = z.infer<typeof reasoningChunkSchema>;
 export type ChatErrorCode = z.infer<typeof chatErrorCodeSchema>;
 export type ChatErrorEvent = z.infer<typeof chatErrorEventSchema>;

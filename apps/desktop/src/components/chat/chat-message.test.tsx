@@ -31,6 +31,28 @@ describe("ChatMessageBubble", () => {
     expect(screen.getByText("Pergunta")).toBeInTheDocument();
   });
 
+  it("renders user attachment image", () => {
+    const message: ChatMessage = {
+      ...baseMessage,
+      role: "user",
+      content: "o que é isso?",
+      attachments: [
+        {
+          id: "att_1",
+          kind: "image",
+          mimeType: "image/png",
+          filename: "context.png",
+          sizeBytes: 10,
+          url: "blob:http://localhost/fake",
+        },
+      ],
+    };
+
+    render(<ChatMessageBubble message={message} onReply={vi.fn()} />);
+
+    expect(screen.getByAltText("context.png")).toBeInTheDocument();
+  });
+
   it("shows reasoning panel for empty streaming message", () => {
     const message: ChatMessage = {
       ...baseMessage,

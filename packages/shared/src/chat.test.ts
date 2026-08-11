@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  chatAttachmentUploadResponseSchema,
   chatErrorCodeSchema,
   chatErrorEventSchema,
   getToolLabel,
   messageActivitySchema,
   messageArtifactSchema,
+  messageAttachmentSchema,
   messageSchema,
   messageToolUseSchema,
   reasoningChunkSchema,
@@ -158,6 +160,92 @@ describe("sendMessageInputSchema deskState", () => {
         forceTool: "bash",
       }),
     ).toThrow();
+  });
+
+  it("accepts attachmentIds with empty content", () => {
+    const parsed = sendMessageInputSchema.parse({
+      content: "",
+      attachmentIds: ["att_1"],
+    });
+    expect(parsed.attachmentIds).toEqual(["att_1"]);
+    expect(parsed.content).toBe("");
+  });
+
+  it("rejects empty content without attachments", () => {
+    expect(() => sendMessageInputSchema.parse({ content: "   " })).toThrow();
+  });
+
+  it("rejects more than four attachments", () => {
+    expect(() =>
+      sendMessageInputSchema.parse({
+        content: "",
+        attachmentIds: ["a", "b", "c", "d", "e"],
+      }),
+    ).toThrow();
+  });
+});
+
+describe("messageAttachmentSchema", () => {
+  it("validates image attachment metadata", () => {
+    const parsed = messageAttachmentSchema.parse({
+      id: "att_1",
+      kind: "image",
+      mimeType: "image/png",
+      filename: "context.png",
+      sizeBytes: 1200,
+      width: 800,
+      height: 600,
+    });
+    expect(parsed.kind).toBe("image");
+  });
+
+  it("rejects unsupported image mime types", () => {
+    expect(() =>
+      messageAttachmentSchema.parse({
+        id: "att_1",
+        kind: "image",
+        mimeType: "image/gif",
+        filename: "context.gif",
+        sizeBytes: 1200,
+      }),
+    ).toThrow();
+  });
+});
+
+describe("messageSchema attachments", () => {
+  it("round-trips optional attachments", () => {
+    const message = messageSchema.parse({
+      id: "m1",
+      role: "user",
+      content: "",
+      status: "done",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      attachments: [
+        {
+          id: "att_1",
+          kind: "image",
+          mimeType: "image/png",
+          filename: "context.png",
+          sizeBytes: 1200,
+        },
+      ],
+    });
+    expect(message.attachments).toHaveLength(1);
+  });
+});
+
+describe("chatAttachmentUploadResponseSchema", () => {
+  it("parses upload response", () => {
+    const parsed = chatAttachmentUploadResponseSchema.parse({
+      attachment: {
+        id: "att_1",
+        kind: "image",
+        mimeType: "image/jpeg",
+        filename: "a.jpg",
+        sizeBytes: 10,
+      },
+    });
+    expect(parsed.attachment.id).toBe("att_1");
   });
 });
 

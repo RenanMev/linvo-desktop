@@ -1,6 +1,7 @@
 import { Bot, RefreshCw, User } from "lucide-react";
 
 import { ChatArtifactCard } from "@/components/chat/chat-artifact-card";
+import { ChatAttachmentImage } from "@/components/chat/chat-attachment-image";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { ChatMessageOptions } from "@/components/chat/chat-message-options";
 import { ChatReasoningPanel } from "@/components/chat/chat-reasoning-panel";
@@ -22,6 +23,7 @@ type ChatMessageBubbleProps = {
   onApproveTool?: () => void;
   onDenyTool?: () => void;
   toolActionDisabled?: boolean;
+  conversationId?: string | null;
 };
 
 export function ChatMessageBubble({
@@ -34,6 +36,7 @@ export function ChatMessageBubble({
   onApproveTool,
   onDenyTool,
   toolActionDisabled = false,
+  conversationId = null,
 }: ChatMessageBubbleProps) {
   const isUser = message.role === "user";
   const canReply = canReplyToMessage(message);
@@ -46,6 +49,7 @@ export function ChatMessageBubble({
     onApproveTool != null &&
     onDenyTool != null;
   const hasTools = !isUser && (message.toolUses?.length ?? 0) > 0;
+  const hasAttachments = (message.attachments?.length ?? 0) > 0;
   const hasReasoningPanel =
     !isUser &&
     ((message.activities?.length ?? 0) > 0 ||
@@ -121,6 +125,20 @@ export function ChatMessageBubble({
                   isStreaming={isStreaming}
                 />
               )}
+
+              {hasAttachments ? (
+                <div
+                  className={cn("flex flex-col gap-2", message.content && "mb-2")}
+                >
+                  {message.attachments?.map((attachment) => (
+                    <ChatAttachmentImage
+                      key={attachment.id}
+                      attachment={attachment}
+                      conversationId={conversationId}
+                    />
+                  ))}
+                </div>
+              ) : null}
 
               {message.content ? (
                 isUser ? (

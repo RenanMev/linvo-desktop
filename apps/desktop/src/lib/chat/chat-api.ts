@@ -265,6 +265,7 @@ export type StreamChatOptions = {
   deskState?: DeskState;
   model?: string;
   forceTool?: ForceTool;
+  attachmentIds?: string[];
   signal?: AbortSignal;
 } & StreamHandlers;
 
@@ -278,6 +279,7 @@ export async function* streamChatResponse(
     deskState,
     model,
     forceTool,
+    attachmentIds,
     signal,
     ...handlers
   } = options;
@@ -301,6 +303,7 @@ export async function* streamChatResponse(
           deskState,
           model,
           ...(forceTool ? { forceTool } : {}),
+          ...(attachmentIds?.length ? { attachmentIds } : {}),
         }),
         signal,
       },

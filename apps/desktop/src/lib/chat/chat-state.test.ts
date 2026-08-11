@@ -204,7 +204,30 @@ describe("canSendMessage", () => {
     expect(canSendMessage("   ", false)).toBe(false);
   });
 
+  it("allows empty content when an attachment is present", () => {
+    expect(canSendMessage("   ", false, { hasAttachment: true })).toBe(true);
+  });
+
   it("blocks while responding", () => {
     expect(canSendMessage("oi", true)).toBe(false);
+  });
+});
+
+describe("createReplyRef with attachments", () => {
+  it("allows reply for attachment-only user messages", () => {
+    const message = createUserMessage("u1", "", 1, undefined, [
+      {
+        id: "att_1",
+        kind: "image",
+        mimeType: "image/png",
+        filename: "context.png",
+        sizeBytes: 10,
+      },
+    ]);
+    expect(createReplyRef(message)).toEqual({
+      id: "u1",
+      role: "user",
+      content: "Contexto visual",
+    });
   });
 });
