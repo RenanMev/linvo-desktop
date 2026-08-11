@@ -9,6 +9,7 @@ export const workspaceSchema = z.object({
   name: z.string(),
   role: workspaceRoleSchema,
   imageUrl: z.string().nullable(),
+  hidden: z.boolean().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
