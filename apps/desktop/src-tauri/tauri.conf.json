@@ -74,7 +74,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEYyNDk0OTlFRjgzOEZEQTgKUldTby9UajRua2xKOHFFQ0ZNZVhtcTZFZkppUU55eG9VSm5uQUpVdHhnSUxGdWtYMkJDZU5XVGUK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE3RjY0RTlFRkU2MDA1NUUKUldSZUJXRCtuazcycCtzWnYzRTFTYWQ3aEpqMXc4dDBRZFhFN0t3UHpqMEFaZFladnRqd0UwMG4K",
       "endpoints": [
         "https://github.com/RenanMev/linvo-desktop/releases/latest/download/latest.json"
       ]
