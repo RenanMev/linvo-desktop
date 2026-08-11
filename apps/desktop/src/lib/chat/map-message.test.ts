@@ -111,4 +111,37 @@ describe("map-message", () => {
       },
     ]);
   });
+
+  it("maps image attachments on user messages", () => {
+    const mapped = mapApiMessageToChat({
+      id: "msg-4",
+      role: "user",
+      content: "",
+      status: "done",
+      createdAt: "2026-01-01T12:00:00.000Z",
+      attachments: [
+        {
+          id: "att_1",
+          kind: "image",
+          mimeType: "image/png",
+          filename: "context.png",
+          sizeBytes: 1200,
+          width: 800,
+          height: 600,
+        },
+      ],
+    });
+
+    expect(mapped.attachments).toEqual([
+      {
+        id: "att_1",
+        kind: "image",
+        mimeType: "image/png",
+        filename: "context.png",
+        sizeBytes: 1200,
+        width: 800,
+        height: 600,
+      },
+    ]);
+  });
 });

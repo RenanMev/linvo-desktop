@@ -15,6 +15,7 @@ type ChatMessageListProps = {
   onApproveTool?: () => void;
   onDenyTool?: () => void;
   toolActionDisabled?: boolean;
+  conversationId?: string | null;
 };
 
 const SCROLL_STICK_THRESHOLD_PX = 80;
@@ -30,6 +31,7 @@ export function ChatMessageList({
   onApproveTool,
   onDenyTool,
   toolActionDisabled = false,
+  conversationId = null,
 }: ChatMessageListProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
@@ -106,6 +108,7 @@ export function ChatMessageList({
             onApproveTool={onApproveTool}
             onDenyTool={onDenyTool}
             toolActionDisabled={toolActionDisabled}
+            conversationId={conversationId}
           />
         ))}
       </div>

@@ -38,6 +38,50 @@ describe("chat-local-store", () => {
     expect(sanitizeMessagesForCache(sampleMessages)).toEqual([sampleMessages[0]]);
   });
 
+  it("removes ephemeral blob URLs while preserving server URLs", () => {
+    const messages: ChatMessage[] = [
+      {
+        ...sampleMessages[0]!,
+        attachments: [
+          {
+            id: "local",
+            kind: "image",
+            mimeType: "image/png",
+            filename: "local.png",
+            sizeBytes: 10,
+            url: "blob:local-preview",
+          },
+          {
+            id: "server",
+            kind: "image",
+            mimeType: "image/webp",
+            filename: "server.webp",
+            sizeBytes: 20,
+            url: "https://cdn.example.com/server.webp",
+          },
+        ],
+      },
+    ];
+
+    expect(sanitizeMessagesForCache(messages)[0]?.attachments).toEqual([
+      {
+        id: "local",
+        kind: "image",
+        mimeType: "image/png",
+        filename: "local.png",
+        sizeBytes: 10,
+      },
+      {
+        id: "server",
+        kind: "image",
+        mimeType: "image/webp",
+        filename: "server.webp",
+        sizeBytes: 20,
+        url: "https://cdn.example.com/server.webp",
+      },
+    ]);
+  });
+
   it("round-trips conversation messages", async () => {
     saveCachedConversationMessages("conv-1", sampleMessages);
 

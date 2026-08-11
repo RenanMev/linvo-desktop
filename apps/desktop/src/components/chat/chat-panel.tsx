@@ -74,9 +74,11 @@ export function ChatPanel({
           onApproveTool={onApproveTool}
           onDenyTool={onDenyTool}
           toolActionDisabled={isResponding}
+          conversationId={conversationKey}
         />
       </div>
       <ChatInput
+        key={conversationKey ?? "draft"}
         onSend={onSend}
         isResponding={isResponding}
         replyTarget={replyTarget}

@@ -15,13 +15,16 @@ import {
   appendToolUse,
   canSendMessage,
   createAssistantPlaceholder,
+  createLocalImageAttachment,
   createReplyRef,
   createUserMessage,
   finalizeMessage,
+  mergeAttachmentPreviewUrls,
   setMessageModel,
   appendArtifact,
   upsertActivity,
 } from "@/lib/chat/chat-state";
+import { uploadChatAttachment } from "@/lib/chat/chat-attachments-api";
 import {
   decideProcedureOpenRequest,
   isCreateProcedureToolRequest,
@@ -30,7 +33,11 @@ import {
 } from "@/lib/chat/procedure-tool-request";
 import { readClipboardText } from "@/lib/clipboard";
 import { mapApiMessageToChat, mapApiMessagesToChat } from "@/lib/chat/map-message";
-import type { ChatMessage, ChatReplyRef } from "@/lib/chat/types";
+import type {
+  ChatMessage,
+  ChatReplyRef,
+  ChatSendAttachment,
+} from "@/lib/chat/types";
 import * as procedureApi from "@/lib/procedure/procedure-api";
 
 type UseChatOptions = {
@@ -517,10 +524,15 @@ export function useChat({
   const sendMessage = useCallback(
     async (
       rawContent: string,
-      options?: { forceTool?: ForceTool; onAccepted?: () => void },
+      options?: {
+        forceTool?: ForceTool;
+        attachment?: ChatSendAttachment;
+        onAccepted?: () => void;
+      },
     ) => {
       if (pendingToolRequest) return;
-      if (!canSendMessage(rawContent, isResponding)) return;
+      const hasAttachment = Boolean(options?.attachment);
+      if (!canSendMessage(rawContent, isResponding, { hasAttachment })) return;
 
       let activeConversationId = conversationId;
 
@@ -541,34 +553,68 @@ export function useChat({
 
       const activeReply = replyTarget ?? undefined;
       const forceTool = options?.forceTool;
+      const sendAttachment = options?.attachment;
       const optimisticUserId = crypto.randomUUID();
       const optimisticAssistantId = crypto.randomUUID();
       const now = Date.now();
-
       const controller = beginRun(activeConversationId);
-
-      updateMessagesForRun(
-        activeConversationId,
-        controller,
-        (current) => [
-          ...current,
-          createUserMessage(optimisticUserId, rawContent, now, activeReply),
-          createAssistantPlaceholder(optimisticAssistantId, now + 1),
-        ],
-      );
-      setReplyTarget(null);
       setIsResponding(true);
       setError(null);
       setPendingToolRequest(null);
       chainOpenedSlugsRef.current = new Set();
-      options?.onAccepted?.();
 
       let assistantId: string = optimisticAssistantId;
       assistantIdRef.current = assistantId;
       let pausedForTool = false;
       let autoOpenRequest: ToolRequest | null = null;
+      let attachmentIds: string[] | undefined;
+      let localAttachments: ChatMessage["attachments"];
+      let optimisticMessagesAdded = false;
 
       try {
+        if (sendAttachment) {
+          const uploaded = await uploadChatAttachment(
+            activeConversationId,
+            sendAttachment.file,
+            {
+              filename: sendAttachment.file.name,
+              source: "display_capture",
+            },
+          );
+          if (!isCurrentRun(activeConversationId, controller)) {
+            return;
+          }
+          attachmentIds = [uploaded.id];
+          localAttachments = [
+            createLocalImageAttachment({
+              id: uploaded.id,
+              file: sendAttachment.file,
+              width: uploaded.width ?? sendAttachment.width,
+              height: uploaded.height ?? sendAttachment.height,
+              previewUrl: URL.createObjectURL(sendAttachment.file),
+            }),
+          ];
+        }
+
+        updateMessagesForRun(
+          activeConversationId,
+          controller,
+          (current) => [
+            ...current,
+            createUserMessage(
+              optimisticUserId,
+              rawContent,
+              now,
+              activeReply,
+              localAttachments,
+            ),
+            createAssistantPlaceholder(optimisticAssistantId, now + 1),
+          ],
+        );
+        optimisticMessagesAdded = true;
+        setReplyTarget(null);
+        options?.onAccepted?.();
+
         for await (const chunk of chatApi.streamChatResponse({
           conversationId: activeConversationId,
           content: rawContent,
@@ -576,6 +622,7 @@ export function useChat({
           deskState: deskStateRef.current,
           model: modelRef.current ?? undefined,
           forceTool,
+          attachmentIds,
           signal: controller.signal,
           onUserMessage: (message) => {
             if (!isCurrentRun(activeConversationId, controller)) {
@@ -585,7 +632,14 @@ export function useChat({
             setMessages((prev) => {
               const next = prev.map((item) =>
                 item.id === optimisticUserId
-                  ? { ...mapped, replyTo: activeReply }
+                  ? {
+                      ...mapped,
+                      replyTo: activeReply,
+                      attachments: mergeAttachmentPreviewUrls(
+                        mapped.attachments,
+                        localAttachments,
+                      ),
+                    }
                   : item,
               );
               if (isCurrentRun(activeConversationId, controller)) {
@@ -598,6 +652,15 @@ export function useChat({
               onConversationTitleChange(
                 activeConversationId,
                 message.content.trim().slice(0, 50),
+              );
+            } else if (
+              onConversationTitleChange &&
+              !message.content.trim() &&
+              (message.attachments?.length ?? 0) > 0
+            ) {
+              onConversationTitleChange(
+                activeConversationId,
+                "Contexto visual",
               );
             }
           },
@@ -724,12 +787,14 @@ export function useChat({
         if (!isCurrentRun(activeConversationId, controller)) {
           return;
         }
-        updateMessagesForRun(activeConversationId, controller, (current) =>
-          finalizeMessage(current, assistantId, "error"),
-        );
-          setError(
-            formatChatError(caught, "Não foi possível obter resposta do assistente"),
+        if (optimisticMessagesAdded) {
+          updateMessagesForRun(activeConversationId, controller, (current) =>
+            finalizeMessage(current, assistantId, "error"),
           );
+        }
+        setError(
+          formatChatError(caught, "Não foi possível obter resposta do assistente"),
+        );
       } finally {
         finishRun(activeConversationId, controller);
       }

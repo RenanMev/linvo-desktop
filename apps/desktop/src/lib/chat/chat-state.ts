@@ -1,4 +1,9 @@
-import type { ChatMessage, ChatReplyRef, ChatRole } from "@/lib/chat/types";
+import type {
+  ChatAttachment,
+  ChatMessage,
+  ChatReplyRef,
+  ChatRole,
+} from "@/lib/chat/types";
 
 export function replyAuthorLabel(role: ChatRole): string {
   switch (role) {
@@ -20,12 +25,15 @@ export function truncateReplyContent(content: string, maxLength = 120): string {
 }
 
 export function createReplyRef(message: ChatMessage): ChatReplyRef | undefined {
-  if (message.status !== "done" || !message.content.trim()) return undefined;
+  if (message.status !== "done") return undefined;
+  const trimmed = message.content.trim();
+  const hasAttachments = (message.attachments?.length ?? 0) > 0;
+  if (!trimmed && !hasAttachments) return undefined;
 
   return {
     id: message.id,
     role: message.role,
-    content: message.content.trim(),
+    content: trimmed || "Contexto visual",
   };
 }
 
@@ -38,6 +46,7 @@ export function createUserMessage(
   content: string,
   createdAt: number,
   replyTo?: ChatReplyRef,
+  attachments?: ChatAttachment[],
 ): ChatMessage {
   return {
     id,
@@ -46,6 +55,7 @@ export function createUserMessage(
     createdAt,
     status: "done",
     replyTo,
+    ...(attachments?.length ? { attachments } : {}),
   };
 }
 
@@ -99,8 +109,6 @@ export function appendArtifact(
   return messages.map((message) => {
     if (message.id !== id) return message;
     const artifacts = message.artifacts ?? [];
-    // O mesmo turno pode ser retomado depois de uma pausa e reemitir o card já
-    // recebido; o id do documento é único, então serve de chave.
     if (artifacts.some((item) => item.id === artifact.id)) return message;
     return { ...message, artifacts: [...artifacts, artifact] };
   });
@@ -146,6 +154,53 @@ export function setMessageModel(
   );
 }
 
-export function canSendMessage(content: string, isResponding: boolean): boolean {
-  return content.trim().length > 0 && !isResponding;
+export function canSendMessage(
+  content: string,
+  isResponding: boolean,
+  options?: { hasAttachment?: boolean },
+): boolean {
+  if (isResponding) return false;
+  return content.trim().length > 0 || Boolean(options?.hasAttachment);
+}
+
+export function mergeAttachmentPreviewUrls(
+  serverAttachments: ChatAttachment[] | undefined,
+  localAttachments: ChatAttachment[] | undefined,
+): ChatAttachment[] | undefined {
+  if (!serverAttachments?.length) {
+    return localAttachments;
+  }
+  if (!localAttachments?.length) {
+    return serverAttachments;
+  }
+  return serverAttachments.map((attachment, index) => ({
+    ...attachment,
+    url: attachment.url ?? localAttachments[index]?.url,
+  }));
+}
+
+export function createLocalImageAttachment(input: {
+  id?: string;
+  file: File;
+  width: number;
+  height: number;
+  previewUrl: string;
+}): ChatAttachment {
+  const mimeType =
+    input.file.type === "image/jpeg" ||
+    input.file.type === "image/webp" ||
+    input.file.type === "image/png"
+      ? input.file.type
+      : "image/png";
+
+  return {
+    id: input.id ?? crypto.randomUUID(),
+    kind: "image",
+    mimeType,
+    filename: input.file.name,
+    sizeBytes: input.file.size,
+    width: input.width,
+    height: input.height,
+    url: input.previewUrl,
+  };
 }

@@ -12,19 +12,20 @@ import {
   type LlmModelOption,
   type Procedure,
 } from "@linvo/shared";
-import { ArrowUp, Paperclip, X } from "lucide-react";
+import { ArrowUp, Paperclip, SquareDashedMousePointer, X } from "lucide-react";
 
 import { ChatModelPicker } from "@/components/chat/chat-model-picker";
 import { ChatReplyPreview } from "@/components/chat/chat-reply-preview";
 import { ChatToolsMenu } from "@/components/chat/chat-tools-menu";
 import { Button } from "@/components/ui/button";
+import { useDisplaySnapshot } from "@/hooks/use-display-snapshot";
 import { canSendMessage } from "@/lib/chat/chat-state";
 import {
   fetchLlmModels,
   loadSelectedModel,
   saveSelectedModel,
 } from "@/lib/chat/llm-models";
-import type { ChatReplyRef } from "@/lib/chat/types";
+import type { ChatReplyRef, ChatSendAttachment } from "@/lib/chat/types";
 import * as procedureApi from "@/lib/procedure/procedure-api";
 import {
   extractSlashSlug,
@@ -33,8 +34,11 @@ import {
 } from "@/lib/procedure/slash-procedure";
 import { cn } from "@/lib/utils";
 
+export type { ChatSendAttachment };
+
 export type ChatSendOptions = {
   forceTool?: ForceTool;
+  attachment?: ChatSendAttachment;
   onAccepted?: () => void;
 };
 
@@ -70,8 +74,18 @@ export function ChatInput({
   const [models, setModels] = useState<LlmModelOption[]>([]);
   const [modelId, setModelId] = useState(selectedModel ?? "");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const {
+    pending,
+    isCapturing,
+    error: captureError,
+    capture,
+    clear: clearPending,
+    clearError: clearCaptureError,
+  } = useDisplaySnapshot();
 
-  const canSend = canSendMessage(value, isResponding) && !disabled;
+  const hasAttachment = pending?.status === "ready";
+  const canSend =
+    canSendMessage(value, isResponding, { hasAttachment }) && !disabled;
   const slashQuery = parseSlashQuery(value);
   const slashOpen =
     slashQuery !== null &&
@@ -191,30 +205,41 @@ export function ChatInput({
     if (!canSend) return;
     const submittedValue = value;
     const submittedForceTool = forceTool;
+    const submittedPending = pending?.status === "ready" ? pending : null;
 
-    onSend(
-      submittedValue,
-      {
-        ...(submittedForceTool
-          ? { forceTool: submittedForceTool }
-          : {}),
-        onAccepted: () => {
-          setValue((current) =>
-            current === submittedValue ? "" : current,
-          );
-          setForceTool((current) =>
-            current === submittedForceTool ? null : current,
-          );
-          setSlashError(null);
-          if (
-            textareaRef.current &&
-            textareaRef.current.value === submittedValue
-          ) {
-            textareaRef.current.style.height = "auto";
+    onSend(submittedValue, {
+      ...(submittedForceTool ? { forceTool: submittedForceTool } : {}),
+      ...(submittedPending
+        ? {
+            attachment: {
+              file: submittedPending.file,
+              width: submittedPending.width,
+              height: submittedPending.height,
+              previewUrl: submittedPending.previewUrl,
+              ...(submittedPending.sourceLabel
+                ? { sourceLabel: submittedPending.sourceLabel }
+                : {}),
+            },
           }
-        },
+        : {}),
+      onAccepted: () => {
+        setValue((current) => (current === submittedValue ? "" : current));
+        setForceTool((current) =>
+          current === submittedForceTool ? null : current,
+        );
+        if (submittedPending) {
+          clearPending();
+        }
+        setSlashError(null);
+        clearCaptureError();
+        if (
+          textareaRef.current &&
+          textareaRef.current.value === submittedValue
+        ) {
+          textareaRef.current.style.height = "auto";
+        }
       },
-    );
+    });
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -269,7 +294,7 @@ export function ChatInput({
     textareaRef.current?.focus();
   }, [replyTarget]);
 
-  const controlsDisabled = disabled || isResponding || resolving;
+  const controlsDisabled = disabled || isResponding || resolving || isCapturing;
 
   return (
     <div className="mx-auto w-full max-w-3xl shrink-0 px-6 pb-5 pt-2">
@@ -312,20 +337,46 @@ export function ChatInput({
             disabled && "opacity-50",
           )}
         >
-          {forceTool ? (
-            <div className="flex items-center gap-1 px-1 pt-1">
-              <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-surface-raise-2 px-2 py-0.5 text-xs text-foreground/80">
-                {getToolLabel(forceTool)}
-                <button
-                  type="button"
-                  className="rounded-md p-0.5 hover:bg-surface-hover"
-                  title="Remover ferramenta"
-                  disabled={controlsDisabled}
-                  onClick={() => setForceTool(null)}
-                >
-                  <X className="size-3" />
-                </button>
-              </span>
+          {forceTool || pending ? (
+            <div className="flex flex-wrap items-center gap-1 px-1 pt-1">
+              {forceTool ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-surface-raise-2 px-2 py-0.5 text-xs text-foreground/80">
+                  {getToolLabel(forceTool)}
+                  <button
+                    type="button"
+                    className="rounded-md p-0.5 hover:bg-surface-hover"
+                    title="Remover ferramenta"
+                    disabled={controlsDisabled}
+                    onClick={() => setForceTool(null)}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ) : null}
+              {pending ? (
+                <span className="inline-flex items-center gap-2 rounded-lg border border-hairline bg-surface-raise-2 py-1 pr-1.5 pl-1 text-xs text-foreground/80">
+                  <img
+                    src={pending.previewUrl}
+                    alt=""
+                    className="size-10 rounded-md object-cover"
+                  />
+                  <span className="max-w-36 truncate">
+                    {pending.sourceLabel ?? "Contexto visual"}
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded-md p-0.5 hover:bg-surface-hover"
+                    title="Remover contexto"
+                    disabled={controlsDisabled}
+                    onClick={() => {
+                      clearPending();
+                      clearCaptureError();
+                    }}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ) : null}
             </div>
           ) : null}
           <textarea
@@ -351,6 +402,18 @@ export function ChatInput({
                 className="text-muted-foreground"
               >
                 <Paperclip />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={controlsDisabled}
+                title="Selecionar janela ou tela"
+                aria-label="Selecionar contexto"
+                className="text-muted-foreground"
+                onClick={() => void capture()}
+              >
+                <SquareDashedMousePointer />
               </Button>
               <ChatToolsMenu
                 value={forceTool}
@@ -380,6 +443,10 @@ export function ChatInput({
       {slashError ? (
         <p className="mt-2 text-center text-xs text-destructive" role="alert">
           {slashError}
+        </p>
+      ) : captureError ? (
+        <p className="mt-2 text-center text-xs text-destructive" role="alert">
+          {captureError}
         </p>
       ) : (
         <p className="mt-2.5 text-center font-technical text-[10px] tracking-wide text-muted-foreground/70">

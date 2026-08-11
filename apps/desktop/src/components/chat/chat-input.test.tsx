@@ -100,4 +100,19 @@ describe("ChatInput", () => {
       screen.getByPlaceholderText("Escreva sua resposta..."),
     ).toBeInTheDocument();
   });
+
+  it("renders the select context button", () => {
+    render(
+      <ChatInput
+        onSend={vi.fn()}
+        isResponding={false}
+        replyTarget={null}
+        onCancelReply={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Selecionar contexto" }),
+    ).toBeInTheDocument();
+  });
 });
