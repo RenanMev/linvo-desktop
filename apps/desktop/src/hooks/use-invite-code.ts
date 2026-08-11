@@ -94,8 +94,13 @@ export function useInviteCode(workspaceId: string | undefined) {
         if (!options?.keepPlaintext) {
           setPlaintext(null);
         }
-        setUiState(atCapacity ? "at-capacity" : "empty");
         setCountdown("0:00");
+        setUiState((prev) => {
+          if (prev === "expired") {
+            return "expired";
+          }
+          return atCapacity ? "at-capacity" : "empty";
+        });
         return;
       }
 

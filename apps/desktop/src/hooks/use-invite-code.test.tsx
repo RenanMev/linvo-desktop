@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useInviteCode } from "@/hooks/use-invite-code";
@@ -12,6 +12,12 @@ vi.mock("@/lib/workspace/invite-api", () => ({
   generateInviteCode: (...args: unknown[]) => generateInviteCode(...args),
   revokeInviteCode: (...args: unknown[]) => revokeInviteCode(...args),
 }));
+
+async function flushAsync() {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+}
 
 describe("useInviteCode", () => {
   beforeEach(() => {
@@ -40,18 +46,13 @@ describe("useInviteCode", () => {
       .mockResolvedValueOnce(null);
 
     const { result } = renderHook(() => useInviteCode("ws-1"));
-
-    await waitFor(() => {
-      expect(result.current.uiState).toBe("active-without-value");
-    });
+    await flushAsync();
+    expect(result.current.uiState).toBe("active-without-value");
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2000);
     });
-
-    await waitFor(() => {
-      expect(result.current.uiState).toBe("expired");
-    });
+    expect(result.current.uiState).toBe("expired");
   });
 
   it("shows redeemed state when polling returns redeemedAt", async () => {
@@ -75,10 +76,8 @@ describe("useInviteCode", () => {
 
     const onRedeemed = vi.fn();
     const { result } = renderHook(() => useInviteCode("ws-1"));
-
-    await waitFor(() => {
-      expect(result.current.uiState).toBe("active-without-value");
-    });
+    await flushAsync();
+    expect(result.current.uiState).toBe("active-without-value");
 
     act(() => {
       result.current.setOnRedeemed(onRedeemed);
@@ -88,10 +87,8 @@ describe("useInviteCode", () => {
       await vi.advanceTimersByTimeAsync(3000);
     });
 
-    await waitFor(() => {
-      expect(result.current.uiState).toBe("redeemed");
-      expect(result.current.redeemerName).toBe("João Pereira");
-    });
+    expect(result.current.uiState).toBe("redeemed");
+    expect(result.current.redeemerName).toBe("João Pereira");
     expect(onRedeemed).toHaveBeenCalled();
   });
 
@@ -106,16 +103,14 @@ describe("useInviteCode", () => {
     });
 
     const first = renderHook(() => useInviteCode("ws-1"));
-    await waitFor(() => {
-      expect(first.result.current.uiState).toBe("active-without-value");
-    });
+    await flushAsync();
+    expect(first.result.current.uiState).toBe("active-without-value");
     first.unmount();
 
     const second = renderHook(() => useInviteCode("ws-1"));
-    await waitFor(() => {
-      expect(second.result.current.uiState).toBe("active-without-value");
-      expect(second.result.current.plaintextCode).toBeNull();
-    });
+    await flushAsync();
+    expect(second.result.current.uiState).toBe("active-without-value");
+    expect(second.result.current.plaintextCode).toBeNull();
   });
 
   it("ignores network errors during polling without changing state", async () => {
@@ -131,9 +126,8 @@ describe("useInviteCode", () => {
       .mockRejectedValueOnce(new Error("network"));
 
     const { result } = renderHook(() => useInviteCode("ws-1"));
-    await waitFor(() => {
-      expect(result.current.uiState).toBe("active-without-value");
-    });
+    await flushAsync();
+    expect(result.current.uiState).toBe("active-without-value");
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(3000);
