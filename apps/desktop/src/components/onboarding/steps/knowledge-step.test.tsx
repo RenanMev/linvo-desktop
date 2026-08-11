@@ -57,6 +57,23 @@ describe("KnowledgeStep", () => {
     );
   });
 
+  it("accepts docx sent with a generic mime type", () => {
+    const docx = new File(["docx"], "manual.docx", {
+      type: "application/octet-stream",
+    });
+    const unknown = new File(["bin"], "dump.bin", {
+      type: "application/octet-stream",
+    });
+    renderStep();
+
+    fireEvent.change(screen.getByLabelText("Documentos de conhecimento"), {
+      target: { files: [docx, unknown] },
+    });
+
+    expect(screen.getByText("manual.docx")).toBeInTheDocument();
+    expect(screen.queryByText("dump.bin")).toBeNull();
+  });
+
   it("rejects empty and oversized files before upload", () => {
     const empty = new File([], "vazio.pdf", { type: "application/pdf" });
     const oversized = new File(
