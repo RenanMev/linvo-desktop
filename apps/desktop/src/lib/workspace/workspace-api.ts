@@ -3,10 +3,13 @@ import {
   createBusinessRuleInputSchema,
   createWorkspaceInputSchema,
   deleteWorkspaceInputSchema,
+  transferWorkspaceOwnershipInputSchema,
   updateBusinessRuleInputSchema,
   updateWorkspaceInputSchema,
   workspaceSchema,
+  workspaceStateSchema,
   type BusinessRule,
+  type WorkspaceState,
   type CreateBusinessRuleInput,
   type CreateWorkspaceInput,
   type DeleteWorkspaceInput,
@@ -123,6 +126,31 @@ export async function activateWorkspace(id: string): Promise<Workspace> {
     method: "POST",
   })) as { workspace: unknown };
   return workspaceSchema.parse(data.workspace);
+}
+
+/**
+ * Versões dos recursos do workspace. É o único request do polling: barato o
+ * bastante para rodar em intervalo curto, e o cliente só recarrega de fato o
+ * que mudou de valor.
+ */
+export async function getWorkspaceState(id: string): Promise<WorkspaceState> {
+  const data = await request(`/api/workspaces/${id}/state`);
+  return workspaceStateSchema.parse(data);
+}
+
+export async function leaveWorkspace(id: string): Promise<void> {
+  await request(`/api/workspaces/${id}/leave`, { method: "POST" });
+}
+
+export async function transferWorkspaceOwnership(
+  id: string,
+  userId: string,
+): Promise<void> {
+  const input = transferWorkspaceOwnershipInputSchema.parse({ userId });
+  await request(`/api/workspaces/${id}/transfer-ownership`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export async function deleteWorkspace(

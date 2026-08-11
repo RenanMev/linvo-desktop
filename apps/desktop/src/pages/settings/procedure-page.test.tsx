@@ -1,3 +1,5 @@
+import { resolvePermissions } from "@linvo/shared";
+import type { WorkspacePermission } from "@linvo/shared";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -9,6 +11,7 @@ const mockWorkspace = {
   id: "ws-1",
   name: "Workspace Teste",
   role: "MEMBER" as const,
+  permissions: resolvePermissions("MEMBER"),
   imageUrl: null,
   createdAt: "2026-07-21T12:00:00.000Z",
   updatedAt: "2026-07-21T12:00:00.000Z",
@@ -84,6 +87,7 @@ describe("ProcedurePage list", () => {
       activeWorkspace: mockWorkspace,
       isLoading: false,
       error: null,
+      can: (permission: WorkspacePermission) => mockWorkspace.permissions.includes(permission),
       refresh: vi.fn(),
       applyRedeemedWorkspace: vi.fn(),
       selectWorkspace: vi.fn(),

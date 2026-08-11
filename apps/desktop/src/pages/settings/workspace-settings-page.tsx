@@ -23,6 +23,8 @@ function roleLabel(role: WorkspaceRole): string {
   switch (role) {
     case "OWNER":
       return "Proprietário";
+    case "ADMIN":
+      return "Administrador";
     case "MEMBER":
       return "Membro";
     default: {

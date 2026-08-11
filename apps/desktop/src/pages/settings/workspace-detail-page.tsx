@@ -1,6 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router";
-import type { BusinessRule, WorkspaceRole } from "@linvo/shared";
+import type {
+  BusinessRule,
+  WorkspacePermission,
+  WorkspaceRole,
+} from "@linvo/shared";
 import {
   ArrowLeft,
   ArrowRight,
@@ -35,6 +39,8 @@ function roleLabel(role: WorkspaceRole): string {
   switch (role) {
     case "OWNER":
       return "Proprietário";
+    case "ADMIN":
+      return "Administrador";
     case "MEMBER":
       return "Membro";
     default: {
@@ -77,6 +83,7 @@ export function WorkspaceDetailPage() {
   const {
     workspaces,
     activeWorkspace,
+    refresh,
     renameWorkspace,
     deleteWorkspace,
     selectWorkspace,
@@ -88,6 +95,18 @@ export function WorkspaceDetailPage() {
   const isActive = activeWorkspace?.id === workspace?.id;
   const isOwner = workspace?.role === "OWNER";
   const isLastWorkspace = workspaces.length <= 1;
+
+  // Deliberadamente não usa o `can` do contexto: aquele responde pelo workspace
+  // ativo, e esta tela edita o workspace da rota, que pode ser outro.
+  const can = useCallback(
+    (permission: WorkspacePermission) =>
+      workspace?.permissions.includes(permission) ?? false,
+    [workspace],
+  );
+
+  const canUpdate = can("workspace:update");
+  const canWriteRules = can("rules:write");
+  const canDeleteRules = can("rules:delete");
 
   const [renameValue, setRenameValue] = useState(workspace?.name ?? "");
   const [confirmName, setConfirmName] = useState("");
@@ -202,7 +221,7 @@ export function WorkspaceDetailPage() {
   }
 
   async function handleDeleteWorkspace() {
-    if (!workspace || !isOwner) return;
+    if (!workspace || !can("workspace:delete")) return;
     if (confirmName !== workspace.name) return;
     setBusy(true);
     setError(null);
@@ -227,7 +246,7 @@ export function WorkspaceDetailPage() {
 
   const canDelete =
     Boolean(workspace) &&
-    isOwner &&
+    can("workspace:delete") &&
     !isLastWorkspace &&
     confirmName === (workspace?.name ?? "");
 
@@ -333,7 +352,12 @@ export function WorkspaceDetailPage() {
           <WorkspacePeopleSection
             workspaceId={workspace.id}
             isOwner={isOwner}
+            canManage={can("members:manage")}
             currentUserId={session.user.id}
+            // As permissões do próprio usuário podem ter mudado junto — sem
+            // recarregar a lista de workspaces, esta tela continuaria
+            // renderizando os controles pelo estado antigo.
+            onMembershipChanged={() => void refresh({ includeHidden: true })}
           />
         ) : null}
 
@@ -354,7 +378,7 @@ export function WorkspaceDetailPage() {
               }
             />
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              {isOwner ? (
+              {canUpdate ? (
                 <Button
                   type="button"
                   size="sm"
@@ -373,18 +397,22 @@ export function WorkspaceDetailPage() {
                 placeholder="Nome do workspace"
                 className="h-8 min-w-0 flex-1 text-xs"
                 aria-label="Renomear workspace"
+                readOnly={!canUpdate}
+                disabled={!canUpdate}
               />
-              <Button
-                type="button"
-                size="sm"
-                disabled={busy || !renameDirty}
-                className="shrink-0"
-                onClick={() => void handleRename()}
-              >
-                Salvar
-              </Button>
+              {canUpdate ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={busy || !renameDirty}
+                  className="shrink-0"
+                  onClick={() => void handleRename()}
+                >
+                  Salvar
+                </Button>
+              ) : null}
             </div>
-            {isOwner && workspace.imageUrl ? (
+            {canUpdate && workspace.imageUrl ? (
               <Button
                 type="button"
                 size="sm"
@@ -399,7 +427,7 @@ export function WorkspaceDetailPage() {
           </div>
         </section>
 
-        {isOwner ? (
+        {can("discovery:manage") ? (
           <section className="space-y-3">
             <SectionHeading
               title="Rule Review"
@@ -489,59 +517,63 @@ export function WorkspaceDetailPage() {
                         {rule.content}
                       </p>
                     </div>
-                    <Button
-                      type="button"
-                      size="icon-xs"
-                      variant="ghost"
-                      disabled={busy}
-                      aria-label={`Remover regra ${rule.title}`}
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => void handleDeleteRule(rule.id)}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
+                    {canDeleteRules ? (
+                      <Button
+                        type="button"
+                        size="icon-xs"
+                        variant="ghost"
+                        disabled={busy}
+                        aria-label={`Remover regra ${rule.title}`}
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => void handleDeleteRule(rule.id)}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               ))}
             </div>
           )}
 
-          <div className="space-y-2.5 rounded-xl border border-hairline bg-muted/20 p-3">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Nova regra
-            </p>
-            <Input
-              value={ruleTitle}
-              onChange={(event) => setRuleTitle(event.target.value)}
-              placeholder="Título da regra"
-              className="h-8 text-xs"
-            />
-            <textarea
-              value={ruleContent}
-              onChange={(event) => setRuleContent(event.target.value)}
-              placeholder="Descreva a regra de negócio..."
-              rows={4}
-              className={cn(
-                "min-h-24 w-full resize-y rounded-lg border border-hairline bg-neutral-deep px-3 py-2 text-xs leading-relaxed shadow-xs outline-none",
-                "placeholder:text-muted-foreground",
-                "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
-              )}
-            />
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                size="sm"
-                disabled={busy || !ruleTitle.trim() || !ruleContent.trim()}
-                onClick={() => void handleCreateRule()}
-              >
-                <Plus className="size-3.5" />
-                Adicionar regra
-              </Button>
+          {canWriteRules ? (
+            <div className="space-y-2.5 rounded-xl border border-hairline bg-muted/20 p-3">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Nova regra
+              </p>
+              <Input
+                value={ruleTitle}
+                onChange={(event) => setRuleTitle(event.target.value)}
+                placeholder="Título da regra"
+                className="h-8 text-xs"
+              />
+              <textarea
+                value={ruleContent}
+                onChange={(event) => setRuleContent(event.target.value)}
+                placeholder="Descreva a regra de negócio..."
+                rows={4}
+                className={cn(
+                  "min-h-24 w-full resize-y rounded-lg border border-hairline bg-neutral-deep px-3 py-2 text-xs leading-relaxed shadow-xs outline-none",
+                  "placeholder:text-muted-foreground",
+                  "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                )}
+              />
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={busy || !ruleTitle.trim() || !ruleContent.trim()}
+                  onClick={() => void handleCreateRule()}
+                >
+                  <Plus className="size-3.5" />
+                  Adicionar regra
+                </Button>
+              </div>
             </div>
-          </div>
+          ) : null}
         </section>
 
-        {isOwner ? (
+        {can("workspace:delete") ? (
           <section className="space-y-3">
             <SectionHeading
               title="Zona de perigo"

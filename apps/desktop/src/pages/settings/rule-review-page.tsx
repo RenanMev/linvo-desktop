@@ -194,7 +194,9 @@ export function RuleReviewPage() {
   const { workspaces } = useWorkspace();
 
   const workspace = workspaces.find((item) => item.id === workspaceId) ?? null;
-  const isOwner = workspace?.role === "OWNER";
+  // Rule Review deixou de ser exclusivo do dono: quem tem discovery:manage
+  // entra, seja pelo papel de ADMIN ou por concessão individual.
+  const canManageDiscovery = workspace?.permissions.includes("discovery:manage") ?? false;
 
   const [sessions, setSessions] = useState<RuleDiscoverySessionSummary[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
@@ -213,10 +215,10 @@ export function RuleReviewPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refreshSessions = useCallback(async () => {
-    if (!workspace || !isOwner) return;
+    if (!workspace || !canManageDiscovery) return;
     const list = await ruleDiscoveryApi.listSessions(workspace.id);
     setSessions(list);
-  }, [workspace, isOwner]);
+  }, [workspace, canManageDiscovery]);
 
   const refreshSessionDetail = useCallback(async () => {
     if (!workspace || !selectedSessionId) return null;
@@ -240,14 +242,14 @@ export function RuleReviewPage() {
   }, [workspace, selectedSessionId]);
 
   useEffect(() => {
-    if (!workspace || !isOwner) {
+    if (!workspace || !canManageDiscovery) {
       setSessions([]);
       return;
     }
     void refreshSessions().catch(() =>
       setError("Não foi possível carregar as sessões"),
     );
-  }, [workspace, isOwner, refreshSessions]);
+  }, [workspace, canManageDiscovery, refreshSessions]);
 
   useEffect(() => {
     if (!selectedSessionId) {
@@ -483,7 +485,7 @@ export function RuleReviewPage() {
     );
   }
 
-  if (!isOwner) {
+  if (!canManageDiscovery) {
     return (
       <ScrollArea className="h-full">
         <div className="mx-auto max-w-2xl space-y-4 px-6 py-6">

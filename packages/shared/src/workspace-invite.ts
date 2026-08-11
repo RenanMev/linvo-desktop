@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-import { workspaceRoleSchema, workspaceSchema } from "./workspace";
+import { workspacePermissionSchema, workspaceRoleSchema } from "./permission";
+import { workspaceSchema } from "./workspace";
 
 export const INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const INVITE_CODE_LENGTH = 8;
@@ -66,6 +67,12 @@ export const workspaceMemberSchema = z.object({
   name: z.string(),
   email: z.string(),
   role: workspaceRoleSchema,
+  // grants/revokes são os overrides crus, para a tela de administração poder
+  // renderizar o que foi explicitamente ligado ou desligado; permissions é o
+  // resultado já resolvido, para não duplicar a fórmula no cliente.
+  grants: z.array(workspacePermissionSchema),
+  revokes: z.array(workspacePermissionSchema),
+  permissions: z.array(workspacePermissionSchema),
   joinedAt: z.string(),
 });
 

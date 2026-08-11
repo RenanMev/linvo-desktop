@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useNavigate } from "react-router";
-import type { Workspace } from "@linvo/shared";
+import type { Workspace, WorkspacePermission } from "@linvo/shared";
 
 import { useConversations } from "@/context/chat-conversations-context";
 import { clearChatLocalCache } from "@/lib/chat/chat-local-store";
@@ -31,6 +31,12 @@ type WorkspaceContextValue = {
   activeWorkspace: Workspace | null;
   isLoading: boolean;
   error: string | null;
+  /**
+   * Permissão efetiva no workspace ativo. A resolução é feita no servidor e
+   * chega pronta em `workspace.permissions` — o cliente só consulta, para a UI
+   * não divergir do que a API vai de fato autorizar.
+   */
+  can: (permission: WorkspacePermission) => boolean;
   refresh: (options?: { includeHidden?: boolean }) => Promise<void>;
   applyRedeemedWorkspace: (workspace: Workspace) => Promise<void>;
   selectWorkspace: (
@@ -244,12 +250,19 @@ export function WorkspaceProvider({
     [workspaces, activeWorkspaceId],
   );
 
+  const can = useCallback(
+    (permission: WorkspacePermission) =>
+      activeWorkspace?.permissions.includes(permission) ?? false,
+    [activeWorkspace],
+  );
+
   const value = useMemo(
     () => ({
       workspaces,
       activeWorkspace,
       isLoading,
       error,
+      can,
       refresh,
       applyRedeemedWorkspace,
       selectWorkspace,
@@ -264,6 +277,7 @@ export function WorkspaceProvider({
       activeWorkspace,
       isLoading,
       error,
+      can,
       refresh,
       applyRedeemedWorkspace,
       selectWorkspace,
