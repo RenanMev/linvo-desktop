@@ -1,6 +1,6 @@
 {
   "name": "linvo-desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": false,
   "description": "Cliente desktop Tauri + React do Linvo",
   "license": "MIT",
@@ -8,7 +8,7 @@
     "type": "git",
     "url": "https://github.com/RenanMev/linvo-desktop.git"
   },
-  "packageManager": "pnpm@11.12.0",
+  "packageManager": "pnpm@11.21.0",
   "engines": {
     "node": ">=22.22.0"
   },
