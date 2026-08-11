@@ -67,7 +67,9 @@ function renderPage() {
   );
 }
 
-function mockWorkspace(workspace: typeof ownerWorkspace) {
+function mockWorkspace(
+  workspace: typeof ownerWorkspace | typeof memberWorkspace,
+) {
   vi.mocked(useWorkspace).mockReturnValue({
     workspaces: [workspace],
     activeWorkspace: workspace,
