@@ -1,5 +1,8 @@
 import {
   listWorkspaceMembersResponseSchema,
+  updateWorkspaceMemberInputSchema,
+  workspaceMemberSchema,
+  type UpdateWorkspaceMemberInput,
   type WorkspaceMember,
 } from "@linvo/shared";
 
@@ -57,6 +60,19 @@ export async function listMembers(
 ): Promise<WorkspaceMember[]> {
   const data = await request(`/api/workspaces/${workspaceId}/members`);
   return listWorkspaceMembersResponseSchema.parse(data).members;
+}
+
+export async function updateMember(
+  workspaceId: string,
+  userId: string,
+  input: UpdateWorkspaceMemberInput,
+): Promise<WorkspaceMember> {
+  const parsed = updateWorkspaceMemberInputSchema.parse(input);
+  const data = (await request(
+    `/api/workspaces/${workspaceId}/members/${userId}`,
+    { method: "PATCH", body: JSON.stringify(parsed) },
+  )) as { member: unknown };
+  return workspaceMemberSchema.parse(data.member);
 }
 
 export async function removeMember(

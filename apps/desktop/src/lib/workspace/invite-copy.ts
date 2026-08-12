@@ -27,6 +27,7 @@ export const inviteCopy = {
     `Remover ${name}? Ele perde acesso a este workspace.`,
   removed: (name: string) => `${name} foi removido.`,
   roleOwner: "Dono",
+  roleAdmin: "Administrador",
   roleMember: "Membro",
   personalWorkspace: "Espaço pessoal",
   memberCount: (n: number) => `${n} de 10 pessoas`,

@@ -1,3 +1,4 @@
+import { resolvePermissions } from "@linvo/shared";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -18,6 +19,7 @@ const workspace = {
   id: "ws-1",
   name: "Atendimento",
   role: "OWNER" as const,
+  permissions: resolvePermissions("OWNER"),
   imageUrl: null,
   createdAt: "2026-07-29T00:00:00.000Z",
   updatedAt: "2026-07-29T00:00:00.000Z",

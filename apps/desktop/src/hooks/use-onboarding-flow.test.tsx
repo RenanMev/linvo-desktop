@@ -1,3 +1,4 @@
+import { resolvePermissions } from "@linvo/shared";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -39,6 +40,7 @@ function makeWorkspace(id: string, name: string) {
     id,
     name,
     role: "OWNER" as const,
+    permissions: resolvePermissions("OWNER"),
     imageUrl: null,
     createdAt: "2026-07-29T00:00:00.000Z",
     updatedAt: "2026-07-29T00:00:00.000Z",

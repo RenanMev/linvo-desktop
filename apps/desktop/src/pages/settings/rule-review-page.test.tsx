@@ -1,3 +1,5 @@
+import { resolvePermissions } from "@linvo/shared";
+import type { WorkspacePermission } from "@linvo/shared";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -9,6 +11,7 @@ const mockWorkspace = {
   id: "ws-1",
   name: "Workspace Teste",
   role: "OWNER" as const,
+  permissions: resolvePermissions("OWNER"),
   imageUrl: null,
   createdAt: "2026-07-20T20:00:00.000Z",
   updatedAt: "2026-07-20T20:00:00.000Z",
@@ -17,6 +20,7 @@ const mockWorkspace = {
 const mockMemberWorkspace = {
   ...mockWorkspace,
   role: "MEMBER" as const,
+  permissions: resolvePermissions("MEMBER"),
 };
 
 const pendingCandidate = {
@@ -142,12 +146,14 @@ describe("RuleReviewPage", () => {
       activeWorkspace: mockWorkspace,
       isLoading: false,
       error: null,
+      can: (permission: WorkspacePermission) => mockWorkspace.permissions.includes(permission),
       refresh: vi.fn(),
       applyRedeemedWorkspace: vi.fn(),
       selectWorkspace: vi.fn(),
       createWorkspace: vi.fn(),
       renameWorkspace: vi.fn(),
       deleteWorkspace: vi.fn(),
+      leaveWorkspace: vi.fn(),
       uploadImage: vi.fn(),
       removeImage: vi.fn(),
     });
@@ -209,12 +215,14 @@ describe("RuleReviewPage", () => {
       activeWorkspace: mockMemberWorkspace,
       isLoading: false,
       error: null,
+      can: (permission: WorkspacePermission) => mockWorkspace.permissions.includes(permission),
       refresh: vi.fn(),
       applyRedeemedWorkspace: vi.fn(),
       selectWorkspace: vi.fn(),
       createWorkspace: vi.fn(),
       renameWorkspace: vi.fn(),
       deleteWorkspace: vi.fn(),
+      leaveWorkspace: vi.fn(),
       uploadImage: vi.fn(),
       removeImage: vi.fn(),
     });

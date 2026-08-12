@@ -4,6 +4,7 @@ export * from "./chat";
 export * from "./desktop-release";
 export * from "./document";
 export * from "./health";
+export * from "./permission";
 export * from "./procedure";
 export * from "./rule-discovery";
 export * from "./time";
