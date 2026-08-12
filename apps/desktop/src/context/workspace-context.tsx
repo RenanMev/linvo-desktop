@@ -50,6 +50,7 @@ type WorkspaceContextValue = {
   ) => Promise<Workspace>;
   renameWorkspace: (workspaceId: string, name: string) => Promise<Workspace>;
   deleteWorkspace: (workspaceId: string, name: string) => Promise<void>;
+  leaveWorkspace: (workspaceId: string) => Promise<void>;
   uploadImage: (workspaceId: string, file: File) => Promise<Workspace>;
   removeImage: (workspaceId: string) => Promise<Workspace>;
 };
@@ -191,10 +192,15 @@ export function WorkspaceProvider({
     [],
   );
 
-  const deleteWorkspace = useCallback(
-    async (workspaceId: string, name: string) => {
-      await workspaceApi.deleteWorkspace(workspaceId, { name });
-
+  /**
+   * Tira o workspace da lista e, se ele era o ativo, aponta a sessão para
+   * outro. A ativação precisa ir ao servidor: tanto apagar quanto sair zeram o
+   * `activeWorkspaceId` lá, então sem o POST o backend seguiria respondendo
+   * pelo workspace antigo enquanto a tela já mostra outro — e o cache local de
+   * chat continuaria com as conversas de um workspace que não é mais acessível.
+   */
+  const dropWorkspace = useCallback(
+    async (workspaceId: string) => {
       const remaining = await new Promise<Workspace[]>((resolve) => {
         setWorkspaces((prev) => {
           const next = prev.filter((item) => item.id !== workspaceId);
@@ -224,6 +230,22 @@ export function WorkspaceProvider({
       await refreshList();
     },
     [activeWorkspaceId, refreshList],
+  );
+
+  const deleteWorkspace = useCallback(
+    async (workspaceId: string, name: string) => {
+      await workspaceApi.deleteWorkspace(workspaceId, { name });
+      await dropWorkspace(workspaceId);
+    },
+    [dropWorkspace],
+  );
+
+  const leaveWorkspace = useCallback(
+    async (workspaceId: string) => {
+      await workspaceApi.leaveWorkspace(workspaceId);
+      await dropWorkspace(workspaceId);
+    },
+    [dropWorkspace],
   );
 
   const uploadImage = useCallback(
@@ -269,6 +291,7 @@ export function WorkspaceProvider({
       createWorkspace,
       renameWorkspace,
       deleteWorkspace,
+      leaveWorkspace,
       uploadImage,
       removeImage,
     }),
@@ -284,6 +307,7 @@ export function WorkspaceProvider({
       createWorkspace,
       renameWorkspace,
       deleteWorkspace,
+      leaveWorkspace,
       uploadImage,
       removeImage,
     ],

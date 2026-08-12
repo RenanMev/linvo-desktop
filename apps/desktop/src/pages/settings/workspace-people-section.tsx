@@ -9,6 +9,7 @@ import {
 
 import { InviteCodePanel } from "@/components/settings/invite-code-panel";
 import { Button } from "@/components/ui/button";
+import { useWorkspace } from "@/context/workspace-context";
 import { useInviteCode } from "@/hooks/use-invite-code";
 import {
   FOREGROUND_POLL_MS,
@@ -51,16 +52,21 @@ export function WorkspacePeopleSection({
   workspaceId,
   isOwner,
   canManage,
+  canManageInvites,
   currentUserId,
   onMembershipChanged,
 }: {
   workspaceId: string;
   isOwner: boolean;
   canManage: boolean;
+  canManageInvites: boolean;
   currentUserId: string;
   onMembershipChanged?: () => void;
 }) {
-  const invite = useInviteCode(workspaceId);
+  const { leaveWorkspace } = useWorkspace();
+  // Sem `invites:manage` o hook nem busca o código: as rotas de convite exigem
+  // essa permissão e a resposta seria 403 em loop de polling.
+  const invite = useInviteCode(canManageInvites ? workspaceId : undefined);
   const { markAtCapacity, setOnRedeemed } = invite;
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [workspaceCount, setWorkspaceCount] = useState(1);
@@ -213,7 +219,11 @@ export function WorkspacePeopleSection({
     setBusyUserId(currentUserId);
     setError(null);
     try {
-      await workspaceApi.leaveWorkspace(workspaceId);
+      // Pelo contexto, não pela API direto: sair zera o workspace ativo no
+      // servidor, então alguém precisa ativar o próximo e limpar o cache local
+      // de chat — senão a sessão fica apontando para o workspace que acabou de
+      // ser abandonado.
+      await leaveWorkspace(workspaceId);
       onMembershipChanged?.();
     } catch (err) {
       reportError(err, "Não foi possível sair do workspace");
@@ -499,7 +509,7 @@ export function WorkspacePeopleSection({
         </div>
       ) : null}
 
-      {canManage ? <InviteCodePanel invite={invite} /> : null}
+      {canManageInvites ? <InviteCodePanel invite={invite} /> : null}
     </section>
   );
 }

@@ -105,6 +105,7 @@ export function WorkspaceDetailPage() {
   );
 
   const canUpdate = can("workspace:update");
+  const canReadRules = can("rules:read");
   const canWriteRules = can("rules:write");
   const canDeleteRules = can("rules:delete");
 
@@ -122,7 +123,9 @@ export function WorkspaceDetailPage() {
   }, [workspace?.name]);
 
   useEffect(() => {
-    if (!workspace) {
+    // A listagem exige `rules:read` no servidor; sem a permissão a chamada só
+    // renderizaria um erro para uma seção que nem devia estar na tela.
+    if (!workspace || !canReadRules) {
       setRules([]);
       return;
     }
@@ -130,7 +133,7 @@ export function WorkspaceDetailPage() {
       .listBusinessRules(workspace.id)
       .then(setRules)
       .catch(() => setError("Não foi possível carregar as regras"));
-  }, [workspace]);
+  }, [canReadRules, workspace]);
 
   async function handleActivate() {
     if (!workspace || isActive) return;
@@ -353,6 +356,7 @@ export function WorkspaceDetailPage() {
             workspaceId={workspace.id}
             isOwner={isOwner}
             canManage={can("members:manage")}
+            canManageInvites={can("invites:manage")}
             currentUserId={session.user.id}
             // As permissões do próprio usuário podem ter mudado junto — sem
             // recarregar a lista de workspaces, esta tela continuaria
@@ -485,93 +489,95 @@ export function WorkspaceDetailPage() {
           </div>
         </section>
 
-        <section className="space-y-3">
-          <SectionHeading
-            title="Regras de negócio"
-            description="Instruções que o assistente deve seguir neste workspace."
-            count={rules.length}
-          />
+        {canReadRules ? (
+          <section className="space-y-3">
+            <SectionHeading
+              title="Regras de negócio"
+              description="Instruções que o assistente deve seguir neste workspace."
+              count={rules.length}
+            />
 
-          {rules.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-7 text-center">
-              <ScrollText className="size-5 text-muted-foreground/70" />
-              <p className="text-xs font-medium">Nenhuma regra cadastrada</p>
-              <p className="max-w-xs text-[11px] text-muted-foreground">
-                Adicione regras para orientar as respostas do assistente.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {rules.map((rule, index) => (
-                <div
-                  key={rule.id}
-                  className="rounded-xl border border-hairline bg-muted/40 p-3"
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-md bg-neutral-deep text-[10px] font-medium tabular-nums text-muted-foreground ring-1 ring-border/60">
-                      {index + 1}
-                    </span>
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <p className="text-xs font-medium">{rule.title}</p>
-                      <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground">
-                        {rule.content}
-                      </p>
-                    </div>
-                    {canDeleteRules ? (
-                      <Button
-                        type="button"
-                        size="icon-xs"
-                        variant="ghost"
-                        disabled={busy}
-                        aria-label={`Remover regra ${rule.title}`}
-                        className="text-muted-foreground hover:text-destructive"
-                        onClick={() => void handleDeleteRule(rule.id)}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {canWriteRules ? (
-            <div className="space-y-2.5 rounded-xl border border-hairline bg-muted/20 p-3">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                Nova regra
-              </p>
-              <Input
-                value={ruleTitle}
-                onChange={(event) => setRuleTitle(event.target.value)}
-                placeholder="Título da regra"
-                className="h-8 text-xs"
-              />
-              <textarea
-                value={ruleContent}
-                onChange={(event) => setRuleContent(event.target.value)}
-                placeholder="Descreva a regra de negócio..."
-                rows={4}
-                className={cn(
-                  "min-h-24 w-full resize-y rounded-lg border border-hairline bg-neutral-deep px-3 py-2 text-xs leading-relaxed shadow-xs outline-none",
-                  "placeholder:text-muted-foreground",
-                  "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                )}
-              />
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={busy || !ruleTitle.trim() || !ruleContent.trim()}
-                  onClick={() => void handleCreateRule()}
-                >
-                  <Plus className="size-3.5" />
-                  Adicionar regra
-                </Button>
+            {rules.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-7 text-center">
+                <ScrollText className="size-5 text-muted-foreground/70" />
+                <p className="text-xs font-medium">Nenhuma regra cadastrada</p>
+                <p className="max-w-xs text-[11px] text-muted-foreground">
+                  Adicione regras para orientar as respostas do assistente.
+                </p>
               </div>
-            </div>
-          ) : null}
-        </section>
+            ) : (
+              <div className="space-y-2">
+                {rules.map((rule, index) => (
+                  <div
+                    key={rule.id}
+                    className="rounded-xl border border-hairline bg-muted/40 p-3"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-md bg-neutral-deep text-[10px] font-medium tabular-nums text-muted-foreground ring-1 ring-border/60">
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <p className="text-xs font-medium">{rule.title}</p>
+                        <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground">
+                          {rule.content}
+                        </p>
+                      </div>
+                      {canDeleteRules ? (
+                        <Button
+                          type="button"
+                          size="icon-xs"
+                          variant="ghost"
+                          disabled={busy}
+                          aria-label={`Remover regra ${rule.title}`}
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => void handleDeleteRule(rule.id)}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {canWriteRules ? (
+              <div className="space-y-2.5 rounded-xl border border-hairline bg-muted/20 p-3">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Nova regra
+                </p>
+                <Input
+                  value={ruleTitle}
+                  onChange={(event) => setRuleTitle(event.target.value)}
+                  placeholder="Título da regra"
+                  className="h-8 text-xs"
+                />
+                <textarea
+                  value={ruleContent}
+                  onChange={(event) => setRuleContent(event.target.value)}
+                  placeholder="Descreva a regra de negócio..."
+                  rows={4}
+                  className={cn(
+                    "min-h-24 w-full resize-y rounded-lg border border-hairline bg-neutral-deep px-3 py-2 text-xs leading-relaxed shadow-xs outline-none",
+                    "placeholder:text-muted-foreground",
+                    "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                  )}
+                />
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={busy || !ruleTitle.trim() || !ruleContent.trim()}
+                    onClick={() => void handleCreateRule()}
+                  >
+                    <Plus className="size-3.5" />
+                    Adicionar regra
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         {can("workspace:delete") ? (
           <section className="space-y-3">

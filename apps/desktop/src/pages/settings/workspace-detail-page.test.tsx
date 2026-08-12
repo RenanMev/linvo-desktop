@@ -86,6 +86,7 @@ function mockWorkspace(
     createWorkspace: vi.fn(),
     renameWorkspace: vi.fn(),
     deleteWorkspace: vi.fn(),
+    leaveWorkspace: vi.fn(),
     uploadImage: vi.fn(),
     removeImage: vi.fn(),
   });
