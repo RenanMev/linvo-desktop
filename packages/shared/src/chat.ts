@@ -129,9 +129,43 @@ export const llmModelOptionSchema = z.object({
   label: z.string().trim().min(1),
 });
 
+export const llmCredentialSourceSchema = z.enum([
+  "user",
+  "workspace",
+  "platform",
+]);
+
+export const llmCredentialStatusSchema = z.object({
+  hasApiKey: z.boolean(),
+  keyHint: z.string().nullable(),
+  model: z.string().nullable(),
+});
+
+export const llmCredentialEffectiveSchema = z.object({
+  source: llmCredentialSourceSchema,
+  model: z.string().min(1),
+  modelSelectionEnabled: z.boolean(),
+});
+
+export const llmCredentialStatusResponseSchema = z.object({
+  credential: llmCredentialStatusSchema,
+  effective: llmCredentialEffectiveSchema.optional(),
+});
+
+export const upsertLlmCredentialInputSchema = z.object({
+  apiKey: z.string().trim().min(1, "informe a API key"),
+  model: z.string().trim().min(1).optional(),
+});
+
+export const updateLlmModelInputSchema = z.object({
+  model: z.string().trim().min(1, "informe o modelo"),
+});
+
 export const llmModelsResponseSchema = z.object({
   models: z.array(llmModelOptionSchema).min(1),
   defaultModel: z.string().trim().min(1),
+  modelSelectionEnabled: z.boolean().optional(),
+  effectiveSource: llmCredentialSourceSchema.optional(),
 });
 
 export const TOOL_LABELS: Record<string, string> = {
@@ -226,6 +260,18 @@ export type DeskState = z.infer<typeof deskStateSchema>;
 export type ToolResultInput = z.infer<typeof toolResultInputSchema>;
 export type LlmModelOption = z.infer<typeof llmModelOptionSchema>;
 export type LlmModelsResponse = z.infer<typeof llmModelsResponseSchema>;
+export type LlmCredentialSource = z.infer<typeof llmCredentialSourceSchema>;
+export type LlmCredentialStatus = z.infer<typeof llmCredentialStatusSchema>;
+export type LlmCredentialEffective = z.infer<
+  typeof llmCredentialEffectiveSchema
+>;
+export type LlmCredentialStatusResponse = z.infer<
+  typeof llmCredentialStatusResponseSchema
+>;
+export type UpsertLlmCredentialInput = z.infer<
+  typeof upsertLlmCredentialInputSchema
+>;
+export type UpdateLlmModelInput = z.infer<typeof updateLlmModelInputSchema>;
 export type Conversation = z.infer<typeof conversationSchema>;
 export type Message = z.infer<typeof messageSchema>;
 export type ForceTool = z.infer<typeof forceToolSchema>;

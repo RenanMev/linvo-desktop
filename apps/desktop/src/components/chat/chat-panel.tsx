@@ -24,7 +24,7 @@ type ChatPanelProps = {
   disabled?: boolean;
   workspaceId?: string | null;
   selectedModel?: string | null;
-  onModelChange?: (modelId: string) => void;
+  onModelChange?: (modelId: string | null) => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
 };
 

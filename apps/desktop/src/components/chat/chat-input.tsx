@@ -39,6 +39,7 @@ import {
   loadSelectedModel,
   saveSelectedModel,
 } from "@/lib/chat/llm-models";
+import { fetchUserLlmStatus } from "@/lib/llm/llm-credential-api";
 import type { ChatReplyRef, ChatSendAttachment } from "@/lib/chat/types";
 import * as procedureApi from "@/lib/procedure/procedure-api";
 import {
@@ -64,7 +65,7 @@ type ChatInputProps = {
   disabled?: boolean;
   workspaceId?: string | null;
   selectedModel?: string | null;
-  onModelChange?: (modelId: string) => void;
+  onModelChange?: (modelId: string | null) => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
 };
 
@@ -87,6 +88,7 @@ export function ChatInput({
   const [resolving, setResolving] = useState(false);
   const [models, setModels] = useState<LlmModelOption[]>([]);
   const [modelId, setModelId] = useState(selectedModel ?? "");
+  const [modelSelectionEnabled, setModelSelectionEnabled] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const {
     pending,
@@ -120,16 +122,27 @@ export function ChatInput({
 
   useEffect(() => {
     let cancelled = false;
-    void fetchLlmModels()
-      .then((catalog) => {
+    void Promise.all([fetchLlmModels(), fetchUserLlmStatus()])
+      .then(([catalog, status]) => {
         if (cancelled) {
           return;
         }
+        const selectionEnabled = Boolean(
+          status.effective?.modelSelectionEnabled,
+        );
+        setModelSelectionEnabled(selectionEnabled);
         setModels(catalog.models);
-        const preferred = loadSelectedModel(catalog.defaultModel);
+        if (!selectionEnabled) {
+          setModelId("");
+          onModelChangeRef.current?.(null);
+          return;
+        }
+        const preferred = loadSelectedModel(
+          status.effective?.model ?? catalog.defaultModel,
+        );
         const allowed = catalog.models.some((model) => model.id === preferred)
           ? preferred
-          : catalog.defaultModel;
+          : (status.effective?.model ?? catalog.defaultModel);
         setModelId(allowed);
         onModelChangeRef.current?.(allowed);
         saveSelectedModel(allowed);
@@ -137,12 +150,13 @@ export function ChatInput({
       .catch(() => {
         if (!cancelled) {
           setModels([]);
+          setModelSelectionEnabled(false);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [workspaceId]);
 
   useEffect(() => {
     if (selectedModel && selectedModel !== modelId) {
@@ -472,12 +486,14 @@ export function ChatInput({
                 onChange={setForceTool}
                 disabled={controlsDisabled}
               />
-              <ChatModelPicker
-                models={models}
-                value={modelId}
-                onChange={handleModelChange}
-                disabled={controlsDisabled}
-              />
+              {modelSelectionEnabled ? (
+                <ChatModelPicker
+                  models={models}
+                  value={modelId}
+                  onChange={handleModelChange}
+                  disabled={controlsDisabled}
+                />
+              ) : null}
             </div>
             <Button
               size="icon-sm"
