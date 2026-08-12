@@ -101,7 +101,7 @@ describe("ChatInput", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the select context button", () => {
+  it("renders the capture context button", () => {
     render(
       <ChatInput
         onSend={vi.fn()}
@@ -112,7 +112,7 @@ describe("ChatInput", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Selecionar contexto" }),
+      screen.getByRole("button", { name: "Capturar contexto visual" }),
     ).toBeInTheDocument();
   });
 });

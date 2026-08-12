@@ -22,6 +22,8 @@ vi.mock("@/lib/chat/llm-models", () => ({
 
 describe("ChatInput visual context", () => {
   const capture = vi.fn();
+  const confirmDraft = vi.fn();
+  const discardDraft = vi.fn();
   const clear = vi.fn();
   const clearError = vi.fn();
 
@@ -34,15 +36,32 @@ describe("ChatInput visual context", () => {
     );
   });
 
-  it("starts capture from the dedicated button", async () => {
+  it("offers window and full-screen capture from the menu", async () => {
     const user = userEvent.setup();
     renderInput();
 
     await user.click(
-      screen.getByRole("button", { name: "Selecionar contexto" }),
+      screen.getByRole("button", { name: "Capturar contexto visual" }),
+    );
+    await user.click(
+      await screen.findByRole("menuitem", { name: /Capturar uma janela/ }),
     );
 
-    expect(capture).toHaveBeenCalledOnce();
+    expect(capture).toHaveBeenCalledWith("window");
+  });
+
+  it("passes the monitor preference when capturing the whole screen", async () => {
+    const user = userEvent.setup();
+    renderInput();
+
+    await user.click(
+      screen.getByRole("button", { name: "Capturar contexto visual" }),
+    );
+    await user.click(
+      await screen.findByRole("menuitem", { name: /Capturar a tela inteira/ }),
+    );
+
+    expect(capture).toHaveBeenCalledWith("monitor");
   });
 
   it("shows the preview and enables attachment-only send", async () => {
@@ -125,7 +144,7 @@ describe("ChatInput visual context", () => {
       "Não foi possível capturar a tela",
     );
     expect(
-      screen.getByRole("button", { name: "Selecionar contexto" }),
+      screen.getByRole("button", { name: "Capturar contexto visual" }),
     ).toBeDisabled();
   });
 
@@ -145,9 +164,13 @@ describe("ChatInput visual context", () => {
   ): DisplaySnapshotController {
     return {
       pending: null,
+      draft: null,
       isCapturing: false,
+      isCropping: false,
       error: null,
       capture,
+      confirmDraft,
+      discardDraft,
       clear,
       clearError,
       ...overrides,
