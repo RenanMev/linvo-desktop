@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-
+import { invoke } from "@tauri-apps/api/core";
 import {
   DisplaySnapshotCancelledError,
   captureDisplaySnapshot,
@@ -9,6 +9,18 @@ import {
   type DisplaySurfacePreference,
   type StartDisplayMedia,
 } from "@/lib/context-capture/display-snapshot";
+import {
+  base64ToPngBlob,
+  bytesToPngBlob,
+  captureSourceBytes,
+  captureSourceMeta,
+  closeCaptureOverlay,
+  listenOverlayCancel,
+  listenOverlayResult,
+  openCaptureOverlay,
+  type CaptureSource,
+  type OverlayResult,
+} from "@/lib/context-capture/capture-sources";
 import type { Rect } from "@/lib/context-capture/crop";
 
 export type PendingContextAttachment = {
@@ -22,7 +34,6 @@ export type PendingContextAttachment = {
   errorMessage?: string;
 };
 
-/** Snapshot capturado aguardando o usuário confirmar ou recortar. */
 export type DraftSnapshot = {
   snapshot: DisplaySnapshot;
   previewUrl: string;
@@ -33,8 +44,13 @@ export type DisplaySnapshotController = {
   draft: DraftSnapshot | null;
   isCapturing: boolean;
   isCropping: boolean;
+  pickerOpen: boolean;
   error: string | null;
   capture: (surface?: DisplaySurfacePreference) => Promise<void>;
+  openPicker: () => void;
+  closePicker: () => void;
+  captureNativeSource: (source: CaptureSource) => Promise<void>;
+  startMagneticCapture: () => Promise<void>;
   confirmDraft: (region?: Rect | null) => Promise<void>;
   discardDraft: () => void;
   clear: () => void;
@@ -56,6 +72,43 @@ function snapshotToPending(snapshot: DisplaySnapshot): PendingContextAttachment 
   };
 }
 
+function formatSnapshotFilename(date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `context-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}.png`;
+}
+
+async function blobImageSize(
+  blob: Blob,
+): Promise<{ width: number; height: number }> {
+  const url = URL.createObjectURL(blob);
+  try {
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Falha ao ler a imagem"));
+      image.src = url;
+    });
+    return { width: image.naturalWidth, height: image.naturalHeight };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function setDraftSnapshot(
+  snapshot: DisplaySnapshot,
+  draftRef: { current: DraftSnapshot | null },
+  setDraft: (value: DraftSnapshot | null) => void,
+  revokeDraft: (value: DraftSnapshot | null) => void,
+) {
+  const next: DraftSnapshot = {
+    snapshot,
+    previewUrl: URL.createObjectURL(snapshot.blob),
+  };
+  revokeDraft(draftRef.current);
+  draftRef.current = next;
+  setDraft(next);
+}
+
 export function useDisplaySnapshot(options?: {
   startDisplayMedia?: StartDisplayMedia;
 }): DisplaySnapshotController {
@@ -63,6 +116,7 @@ export function useDisplaySnapshot(options?: {
   const [draft, setDraft] = useState<DraftSnapshot | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isCropping, setIsCropping] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pendingRef = useRef<PendingContextAttachment | null>(null);
   const draftRef = useRef<DraftSnapshot | null>(null);
@@ -95,21 +149,71 @@ export function useDisplaySnapshot(options?: {
     setDraft(null);
   }, [revokeDraft]);
 
+  const applyOverlayResult = useCallback(
+    async (result: OverlayResult) => {
+      const fullBlob = base64ToPngBlob(result.imagePngBase64);
+      const fullSnapshot: DisplaySnapshot = {
+        blob: fullBlob,
+        mimeType: "image/png",
+        filename: formatSnapshotFilename(),
+        width: result.width,
+        height: result.height,
+        sourceLabel: "Recorte magnético",
+      };
+      const cropped = await cropDisplaySnapshot(fullSnapshot, result.region);
+      if (!mountedRef.current) {
+        return;
+      }
+      setIsCapturing(false);
+      setDraftSnapshot(cropped, draftRef, setDraft, revokeDraft);
+    },
+    [revokeDraft],
+  );
+
   useEffect(() => {
     mountedRef.current = true;
+    let unlistenResult: (() => void) | undefined;
+    let unlistenCancel: (() => void) | undefined;
+
+    void listenOverlayResult((result) => {
+      void applyOverlayResult(result).catch((caught) => {
+        if (!mountedRef.current) {
+          return;
+        }
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Não foi possível aplicar o recorte",
+        );
+      });
+    }).then((fn) => {
+      unlistenResult = fn;
+    });
+
+    void listenOverlayCancel(() => {
+      if (mountedRef.current) {
+        setIsCapturing(false);
+      }
+    }).then((fn) => {
+      unlistenCancel = fn;
+    });
+
     return () => {
       mountedRef.current = false;
+      unlistenResult?.();
+      unlistenCancel?.();
       revokePending(pendingRef.current);
       pendingRef.current = null;
       revokeDraft(draftRef.current);
       draftRef.current = null;
     };
-  }, [revokeDraft, revokePending]);
+  }, [applyOverlayResult, revokeDraft, revokePending]);
 
   const capture = useCallback(
     async (surface?: DisplaySurfacePreference) => {
       setError(null);
       setIsCapturing(true);
+      setPickerOpen(false);
       try {
         const snapshot = await captureDisplaySnapshot({
           startDisplayMedia:
@@ -118,15 +222,7 @@ export function useDisplaySnapshot(options?: {
         if (!mountedRef.current) {
           return;
         }
-        // Vai para o preview, não direto para o anexo: o usuário confere e
-        // recorta antes de a imagem entrar na mensagem.
-        const next: DraftSnapshot = {
-          snapshot,
-          previewUrl: URL.createObjectURL(snapshot.blob),
-        };
-        revokeDraft(draftRef.current);
-        draftRef.current = next;
-        setDraft(next);
+        setDraftSnapshot(snapshot, draftRef, setDraft, revokeDraft);
       } catch (caught) {
         if (!mountedRef.current) {
           return;
@@ -147,6 +243,82 @@ export function useDisplaySnapshot(options?: {
     },
     [options?.startDisplayMedia, revokeDraft],
   );
+
+  const captureNativeSource = useCallback(
+    async (source: CaptureSource) => {
+      setError(null);
+      setIsCapturing(true);
+      setPickerOpen(false);
+      try {
+        const [bytes, meta] = await Promise.all([
+          captureSourceBytes(source.id),
+          captureSourceMeta(source.id),
+        ]);
+        const blob = bytesToPngBlob(bytes);
+        const size =
+          meta.width > 0 && meta.height > 0
+            ? { width: meta.width, height: meta.height }
+            : await blobImageSize(blob);
+        if (!mountedRef.current) {
+          return;
+        }
+        setDraftSnapshot(
+          {
+            blob,
+            mimeType: "image/png",
+            filename: formatSnapshotFilename(),
+            width: size.width,
+            height: size.height,
+            sourceLabel: meta.title || source.title,
+          },
+          draftRef,
+          setDraft,
+          revokeDraft,
+        );
+      } catch (caught) {
+        if (!mountedRef.current) {
+          return;
+        }
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Não foi possível capturar a fonte",
+        );
+      } finally {
+        if (mountedRef.current) {
+          setIsCapturing(false);
+        }
+      }
+    },
+    [revokeDraft],
+  );
+
+  const startMagneticCapture = useCallback(async () => {
+    setError(null);
+    setIsCapturing(true);
+    setPickerOpen(false);
+    try {
+      try {
+        await invoke("panel_close");
+      } catch {
+      }
+      await openCaptureOverlay();
+    } catch (caught) {
+      if (!mountedRef.current) {
+        return;
+      }
+      setIsCapturing(false);
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Não foi possível abrir o recorte magnético",
+      );
+      try {
+        await closeCaptureOverlay();
+      } catch {
+      }
+    }
+  }, []);
 
   const confirmDraft = useCallback(
     async (region?: Rect | null) => {
@@ -197,8 +369,13 @@ export function useDisplaySnapshot(options?: {
     draft,
     isCapturing,
     isCropping,
+    pickerOpen,
     error,
     capture,
+    openPicker: () => setPickerOpen(true),
+    closePicker: () => setPickerOpen(false),
+    captureNativeSource,
+    startMagneticCapture,
     confirmDraft,
     discardDraft,
     clear,

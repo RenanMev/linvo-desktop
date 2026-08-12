@@ -15,6 +15,7 @@ import {
 import {
   AppWindow,
   ArrowUp,
+  Crosshair,
   Monitor,
   Paperclip,
   SquareDashedMousePointer,
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 
 import { CapturePreviewDialog } from "@/components/chat/capture-preview-dialog";
+import { CaptureSourcePicker } from "@/components/chat/capture-source-picker";
 import { ChatModelPicker } from "@/components/chat/chat-model-picker";
 import { ChatReplyPreview } from "@/components/chat/chat-reply-preview";
 import { ChatToolsMenu } from "@/components/chat/chat-tools-menu";
@@ -95,8 +97,13 @@ export function ChatInput({
     draft,
     isCapturing,
     isCropping,
+    pickerOpen,
     error: captureError,
     capture,
+    openPicker,
+    closePicker,
+    captureNativeSource,
+    startMagneticCapture,
     confirmDraft,
     discardDraft,
     clear: clearPending,
@@ -343,11 +350,19 @@ export function ChatInput({
           onConfirm={(region) => void confirmDraft(region)}
           onRecapture={() => {
             discardDraft();
-            void capture();
+            openPicker();
           }}
           onCancel={discardDraft}
         />
       ) : null}
+
+      <CaptureSourcePicker
+        open={pickerOpen}
+        busy={isCapturing}
+        onSelect={(source) => void captureNativeSource(source)}
+        onCancel={closePicker}
+        onFallback={() => void capture()}
+      />
 
       {replyTarget && (
         <ChatReplyPreview replyTarget={replyTarget} onCancel={onCancelReply} />
@@ -471,13 +486,19 @@ export function ChatInput({
                   <SquareDashedMousePointer />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" side="top">
-                  <DropdownMenuItem onClick={() => void capture("window")}>
+                  <DropdownMenuItem onClick={() => openPicker()}>
                     <AppWindow />
-                    Capturar uma janela
+                    Escolher janela ou tela
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void capture("monitor")}>
+                  <DropdownMenuItem
+                    onClick={() => void startMagneticCapture()}
+                  >
+                    <Crosshair />
+                    Recorte magnético
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => void capture("window")}>
                     <Monitor />
-                    Capturar a tela inteira
+                    Seletor do sistema
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

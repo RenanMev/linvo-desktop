@@ -1,5 +1,6 @@
 mod app;
 mod auth;
+mod capture;
 mod chat_store;
 mod checklist;
 mod documents;
@@ -216,6 +217,12 @@ pub fn run() {
             checklist::checklist_close,
             checklist::checklist_is_open,
             documents::documents_save_file,
+            capture::capture_list_sources,
+            capture::capture_source,
+            capture::capture_source_meta,
+            capture::capture_overlay_open,
+            capture::capture_overlay_close,
+            capture::capture_element_at,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
