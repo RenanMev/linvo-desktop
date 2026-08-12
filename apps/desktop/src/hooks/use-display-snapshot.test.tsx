@@ -19,7 +19,7 @@ describe("useDisplaySnapshot", () => {
     URL.revokeObjectURL = revokeObjectURL;
   });
 
-  it("creates a pending attachment from a captured snapshot", async () => {
+  it("parks the capture in a draft instead of attaching it directly", async () => {
     vi.spyOn(snapshotModule, "captureDisplaySnapshot").mockResolvedValue(
       snapshot("first.png"),
     );
@@ -29,8 +29,29 @@ describe("useDisplaySnapshot", () => {
       await result.current.capture();
     });
 
+    // A captura vai para o preview: só vira anexo depois da confirmação.
+    expect(result.current.pending).toBeNull();
+    expect(result.current.draft).toMatchObject({ previewUrl: "blob:first" });
+    expect(result.current.draft?.snapshot.filename).toBe("first.png");
+    expect(result.current.error).toBeNull();
+  });
+
+  it("promotes the draft to a pending attachment on confirm", async () => {
+    vi.spyOn(snapshotModule, "captureDisplaySnapshot").mockResolvedValue(
+      snapshot("first.png"),
+    );
+    const { result } = renderHook(() => useDisplaySnapshot());
+
+    await act(async () => {
+      await result.current.capture();
+    });
+    await act(async () => {
+      await result.current.confirmDraft();
+    });
+
+    expect(result.current.draft).toBeNull();
     expect(result.current.pending).toMatchObject({
-      previewUrl: "blob:first",
+      previewUrl: "blob:second",
       width: 800,
       height: 600,
       sourceLabel: "Browser",
@@ -38,45 +59,72 @@ describe("useDisplaySnapshot", () => {
     });
     expect(result.current.pending?.file).toBeInstanceOf(File);
     expect(result.current.pending?.file.name).toBe("first.png");
-    expect(result.current.error).toBeNull();
+    // O preview do rascunho é liberado ao virar anexo.
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:first");
   });
 
-  it("revokes the previous preview when replacing a capture", async () => {
-    vi.spyOn(snapshotModule, "captureDisplaySnapshot")
-      .mockResolvedValueOnce(snapshot("first.png"))
-      .mockResolvedValueOnce(snapshot("second.png"));
+  it("crops the draft when a region is confirmed", async () => {
+    vi.spyOn(snapshotModule, "captureDisplaySnapshot").mockResolvedValue(
+      snapshot("first.png"),
+    );
+    const cropped = { ...snapshot("cropped.png"), width: 100, height: 50 };
+    const crop = vi
+      .spyOn(snapshotModule, "cropDisplaySnapshot")
+      .mockResolvedValue(cropped);
     const { result } = renderHook(() => useDisplaySnapshot());
 
     await act(async () => {
       await result.current.capture();
-      await result.current.capture();
+    });
+    const region = { x: 10, y: 20, width: 100, height: 50 };
+    await act(async () => {
+      await result.current.confirmDraft(region);
     });
 
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:first");
-    expect(result.current.pending?.previewUrl).toBe("blob:second");
+    expect(crop).toHaveBeenCalledWith(
+      expect.objectContaining({ filename: "first.png" }),
+      region,
+    );
+    expect(result.current.pending).toMatchObject({ width: 100, height: 50 });
   });
 
-  it("revokes the preview when clearing and unmounting", async () => {
+  it("drops the draft without attaching when discarded", async () => {
     vi.spyOn(snapshotModule, "captureDisplaySnapshot").mockResolvedValue(
       snapshot("first.png"),
     );
-    const first = renderHook(() => useDisplaySnapshot());
+    const { result } = renderHook(() => useDisplaySnapshot());
 
     await act(async () => {
-      await first.result.current.capture();
+      await result.current.capture();
     });
     act(() => {
-      first.result.current.clear();
+      result.current.discardDraft();
     });
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:first");
-    expect(first.result.current.pending).toBeNull();
 
-    const second = renderHook(() => useDisplaySnapshot());
+    expect(result.current.draft).toBeNull();
+    expect(result.current.pending).toBeNull();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:first");
+  });
+
+  it("revokes the attachment preview when clearing and unmounting", async () => {
+    vi.spyOn(snapshotModule, "captureDisplaySnapshot").mockResolvedValue(
+      snapshot("first.png"),
+    );
+    const { result, unmount } = renderHook(() => useDisplaySnapshot());
+
     await act(async () => {
-      await second.result.current.capture();
+      await result.current.capture();
     });
-    second.unmount();
+    await act(async () => {
+      await result.current.confirmDraft();
+    });
+    act(() => {
+      result.current.clear();
+    });
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:second");
+    expect(result.current.pending).toBeNull();
+
+    unmount();
   });
 
   it("keeps cancellation silent", async () => {

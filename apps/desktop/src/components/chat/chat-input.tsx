@@ -12,12 +12,26 @@ import {
   type LlmModelOption,
   type Procedure,
 } from "@linvo/shared";
-import { ArrowUp, Paperclip, SquareDashedMousePointer, X } from "lucide-react";
+import {
+  AppWindow,
+  ArrowUp,
+  Monitor,
+  Paperclip,
+  SquareDashedMousePointer,
+  X,
+} from "lucide-react";
 
+import { CapturePreviewDialog } from "@/components/chat/capture-preview-dialog";
 import { ChatModelPicker } from "@/components/chat/chat-model-picker";
 import { ChatReplyPreview } from "@/components/chat/chat-reply-preview";
 import { ChatToolsMenu } from "@/components/chat/chat-tools-menu";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useDisplaySnapshot } from "@/hooks/use-display-snapshot";
 import { canSendMessage } from "@/lib/chat/chat-state";
 import {
@@ -76,9 +90,13 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const {
     pending,
+    draft,
     isCapturing,
+    isCropping,
     error: captureError,
     capture,
+    confirmDraft,
+    discardDraft,
     clear: clearPending,
     clearError: clearCaptureError,
   } = useDisplaySnapshot();
@@ -294,10 +312,29 @@ export function ChatInput({
     textareaRef.current?.focus();
   }, [replyTarget]);
 
-  const controlsDisabled = disabled || isResponding || resolving || isCapturing;
+  const controlsDisabled =
+    disabled || isResponding || resolving || isCapturing || isCropping;
 
   return (
     <div className="mx-auto w-full max-w-3xl shrink-0 px-6 pb-5 pt-2">
+      {draft ? (
+        <CapturePreviewDialog
+          previewUrl={draft.previewUrl}
+          sourceWidth={draft.snapshot.width}
+          sourceHeight={draft.snapshot.height}
+          {...(draft.snapshot.sourceLabel
+            ? { sourceLabel: draft.snapshot.sourceLabel }
+            : {})}
+          isBusy={isCropping}
+          onConfirm={(region) => void confirmDraft(region)}
+          onRecapture={() => {
+            discardDraft();
+            void capture();
+          }}
+          onCancel={discardDraft}
+        />
+      ) : null}
+
       {replyTarget && (
         <ChatReplyPreview replyTarget={replyTarget} onCancel={onCancelReply} />
       )}
@@ -403,18 +440,33 @@ export function ChatInput({
               >
                 <Paperclip />
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                disabled={controlsDisabled}
-                title="Selecionar janela ou tela"
-                aria-label="Selecionar contexto"
-                className="text-muted-foreground"
-                onClick={() => void capture()}
-              >
-                <SquareDashedMousePointer />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={controlsDisabled}
+                      title="Capturar contexto visual"
+                      aria-label="Capturar contexto visual"
+                      className="text-muted-foreground"
+                    />
+                  }
+                >
+                  <SquareDashedMousePointer />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" side="top">
+                  <DropdownMenuItem onClick={() => void capture("window")}>
+                    <AppWindow />
+                    Capturar uma janela
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => void capture("monitor")}>
+                    <Monitor />
+                    Capturar a tela inteira
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <ChatToolsMenu
                 value={forceTool}
                 onChange={setForceTool}

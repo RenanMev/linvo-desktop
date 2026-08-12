@@ -12,6 +12,13 @@ export type DisplaySnapshot = {
 
 export type StartDisplayMedia = () => Promise<MediaStream>;
 
+/**
+ * Dica de qual superfície o picker deve destacar. É só uma preferência: o
+ * WebView2 ignora quando não sabe atender, e o usuário continua livre para
+ * escolher outra coisa na lista.
+ */
+export type DisplaySurfacePreference = "monitor" | "window" | "browser";
+
 export class DisplaySnapshotCancelledError extends Error {
   constructor() {
     super("Display snapshot cancelled");
@@ -32,6 +39,20 @@ const defaultStartDisplayMedia: StartDisplayMedia = () =>
     video: true,
     audio: false,
   });
+
+export function createStartDisplayMedia(
+  surface?: DisplaySurfacePreference,
+): StartDisplayMedia {
+  if (!surface) {
+    return defaultStartDisplayMedia;
+  }
+
+  return () =>
+    navigator.mediaDevices.getDisplayMedia({
+      video: { displaySurface: surface },
+      audio: false,
+    } as DisplayMediaStreamOptions);
+}
 
 function isCancellationError(error: unknown): boolean {
   if (!(error instanceof Error)) {
@@ -201,4 +222,102 @@ export function resolveDrawSizeForTests(
   maxDimension: number,
 ) {
   return resolveDrawSize(sourceWidth, sourceHeight, maxDimension);
+}
+
+type DecodeImage = (blob: Blob) => Promise<CanvasImageSource & Size>;
+
+type Size = { width: number; height: number };
+
+const defaultDecodeImage: DecodeImage = async (blob) => {
+  if (typeof createImageBitmap === "function") {
+    return createImageBitmap(blob);
+  }
+
+  // Fallback para ambientes sem createImageBitmap.
+  const url = URL.createObjectURL(blob);
+  try {
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Falha ao ler a imagem"));
+      image.src = url;
+    });
+    return Object.assign(image, {
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+};
+
+/**
+ * Recorta um snapshot já capturado. Opera sobre o frame congelado em vez de
+ * pedir uma nova captura: o usuário escolhe a região olhando exatamente a
+ * imagem que vai anexar, e nada na tela muda entre ver e confirmar.
+ */
+export async function cropDisplaySnapshot(
+  snapshot: DisplaySnapshot,
+  region: { x: number; y: number; width: number; height: number },
+  options: {
+    maxDimension?: number;
+    maxBytes?: number;
+    decodeImage?: DecodeImage;
+    now?: () => Date;
+  } = {},
+): Promise<DisplaySnapshot> {
+  const maxDimension = options.maxDimension ?? DISPLAY_SNAPSHOT_MAX_DIMENSION;
+  const maxBytes = options.maxBytes ?? DISPLAY_SNAPSHOT_MAX_BYTES;
+  const decodeImage = options.decodeImage ?? defaultDecodeImage;
+  const now = options.now ?? (() => new Date());
+
+  if (region.width <= 0 || region.height <= 0) {
+    throw new Error("Região de recorte inválida");
+  }
+
+  const source = await decodeImage(snapshot.blob);
+  const { width, height } = resolveDrawSize(
+    region.width,
+    region.height,
+    maxDimension,
+  );
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Canvas 2D indisponível");
+  }
+
+  context.drawImage(
+    source,
+    region.x,
+    region.y,
+    region.width,
+    region.height,
+    0,
+    0,
+    width,
+    height,
+  );
+
+  let mimeType: "image/png" | "image/jpeg" = "image/png";
+  let blob = await canvasToBlob(canvas, mimeType);
+  if (blob.size > maxBytes) {
+    mimeType = "image/jpeg";
+    blob = await canvasToBlob(canvas, mimeType, 0.85);
+  }
+
+  return {
+    blob,
+    mimeType,
+    filename: formatSnapshotFilename(
+      now(),
+      mimeType === "image/png" ? "png" : "jpg",
+    ),
+    width,
+    height,
+    ...(snapshot.sourceLabel ? { sourceLabel: snapshot.sourceLabel } : {}),
+  };
 }
