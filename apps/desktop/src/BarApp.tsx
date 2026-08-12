@@ -96,6 +96,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   const chatButtonRef = useRef<HTMLButtonElement>(null);
   const edgeHandleRef = useRef<HTMLButtonElement>(null);
   const suppressBlurCloseUntilRef = useRef(0);
+  const captureActiveRef = useRef(false);
   const islandMorphRef = useRef<FloatingIslandMorph | null>(null);
   const islandMorphIdRef = useRef(0);
   const islandMorphCompletionRef = useRef<{
@@ -540,6 +541,23 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     suppressBlurCloseUntilRef.current = Date.now() + 1200;
   }
 
+  /*
+   * Captura de contexto tira o foco da janela por fora do webview — o seletor
+   * do sistema e o overlay de recorte são janelas nativas. Sem esta trava o
+   * `onFocusChanged` fecharia o quick menu no meio da captura, levando junto o
+   * anexo pendente e o texto já digitado.
+   */
+  function handleCaptureActiveChange(active: boolean) {
+    const wasActive = captureActiveRef.current;
+    captureActiveRef.current = active;
+    // A folga só vale na saída de uma captura de verdade: o foco só volta pra
+    // cá alguns frames depois, e é esse blur residual que ela engole. Armá-la
+    // no `false` inicial do painel silenciaria o fecho por blur comum.
+    if (wasActive && !active) {
+      suppressBlurCloseUntilRef.current = Date.now() + 800;
+    }
+  }
+
   useEffect(() => {
     if (windowMode !== "compact" || !restoreChatFocusRef.current) {
       return;
@@ -609,6 +627,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
           !focused &&
           windowModeRef.current === "quick-menu" &&
           modeIntentRef.current === "quick-menu" &&
+          !captureActiveRef.current &&
           Date.now() > suppressBlurCloseUntilRef.current
         ) {
           void closeQuickMenu({ restoreFocus: false });
@@ -728,6 +747,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
           onOpenSettings={() => void closeQuickMenu({ restoreFocus: false })}
           onHide={() => void handleHideQuickMenu()}
           onWindowDragStart={handleQuickMenuDragStart}
+          onCaptureActiveChange={handleCaptureActiveChange}
         />
       );
     }

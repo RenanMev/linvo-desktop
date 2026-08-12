@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+
 import {
   DisplaySnapshotCancelledError,
   captureDisplaySnapshot,
@@ -10,11 +10,11 @@ import {
   type StartDisplayMedia,
 } from "@/lib/context-capture/display-snapshot";
 import {
-  base64ToPngBlob,
   bytesToPngBlob,
   captureSourceBytes,
   captureSourceMeta,
   closeCaptureOverlay,
+  fetchOverlayCrop,
   listenOverlayCancel,
   listenOverlayResult,
   openCaptureOverlay,
@@ -37,6 +37,10 @@ export type PendingContextAttachment = {
 export type DraftSnapshot = {
   snapshot: DisplaySnapshot;
   previewUrl: string;
+};
+
+export type UseDisplaySnapshotOptions = {
+  startDisplayMedia?: StartDisplayMedia;
 };
 
 export type DisplaySnapshotController = {
@@ -109,9 +113,9 @@ function setDraftSnapshot(
   setDraft(next);
 }
 
-export function useDisplaySnapshot(options?: {
-  startDisplayMedia?: StartDisplayMedia;
-}): DisplaySnapshotController {
+export function useDisplaySnapshot(
+  options?: UseDisplaySnapshotOptions,
+): DisplaySnapshotController {
   const [pending, setPending] = useState<PendingContextAttachment | null>(null);
   const [draft, setDraft] = useState<DraftSnapshot | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -121,6 +125,25 @@ export function useDisplaySnapshot(options?: {
   const pendingRef = useRef<PendingContextAttachment | null>(null);
   const draftRef = useRef<DraftSnapshot | null>(null);
   const mountedRef = useRef(true);
+  /*
+   * Os hooks do overlay vêm em um objeto novo a cada render do chamador; guardá-los
+   * numa ref evita reassinar os listeners de `capture-overlay://*` sem parar.
+   */
+  /*
+   * `capture-overlay://result` é global: o painel e a barra flutuante escutam o
+   * mesmo evento. Sem marcar quem pediu a captura, um recorte feito no chat
+   * flutuante também viraria rascunho no painel.
+   */
+  const overlayRunRef = useRef(false);
+
+  /** Consome o overlay em voo; devolve false quando a captura é de outra janela. */
+  const claimOverlayRun = useCallback(() => {
+    if (!overlayRunRef.current) {
+      return false;
+    }
+    overlayRunRef.current = false;
+    return true;
+  }, []);
 
   const revokePending = useCallback(
     (attachment: PendingContextAttachment | null) => {
@@ -151,21 +174,25 @@ export function useDisplaySnapshot(options?: {
 
   const applyOverlayResult = useCallback(
     async (result: OverlayResult) => {
-      const fullBlob = base64ToPngBlob(result.imagePngBase64);
-      const fullSnapshot: DisplaySnapshot = {
-        blob: fullBlob,
-        mimeType: "image/png",
-        filename: formatSnapshotFilename(),
-        width: result.width,
-        height: result.height,
-        sourceLabel: "Recorte magnético",
-      };
-      const cropped = await cropDisplaySnapshot(fullSnapshot, result.region);
+      // O Rust já devolve a região recortada: chegam KB, não o desktop inteiro.
+      const blob = await fetchOverlayCrop(result.region);
       if (!mountedRef.current) {
         return;
       }
       setIsCapturing(false);
-      setDraftSnapshot(cropped, draftRef, setDraft, revokeDraft);
+      setDraftSnapshot(
+        {
+          blob,
+          mimeType: "image/png",
+          filename: formatSnapshotFilename(),
+          width: result.region.width,
+          height: result.region.height,
+          sourceLabel: "Recorte magnético",
+        },
+        draftRef,
+        setDraft,
+        revokeDraft,
+      );
     },
     [revokeDraft],
   );
@@ -176,6 +203,9 @@ export function useDisplaySnapshot(options?: {
     let unlistenCancel: (() => void) | undefined;
 
     void listenOverlayResult((result) => {
+      if (!claimOverlayRun()) {
+        return;
+      }
       void applyOverlayResult(result).catch((caught) => {
         if (!mountedRef.current) {
           return;
@@ -191,6 +221,9 @@ export function useDisplaySnapshot(options?: {
     });
 
     void listenOverlayCancel(() => {
+      if (!claimOverlayRun()) {
+        return;
+      }
       if (mountedRef.current) {
         setIsCapturing(false);
       }
@@ -207,7 +240,7 @@ export function useDisplaySnapshot(options?: {
       revokeDraft(draftRef.current);
       draftRef.current = null;
     };
-  }, [applyOverlayResult, revokeDraft, revokePending]);
+  }, [applyOverlayResult, claimOverlayRun, revokeDraft, revokePending]);
 
   const capture = useCallback(
     async (surface?: DisplaySurfacePreference) => {
@@ -297,13 +330,18 @@ export function useDisplaySnapshot(options?: {
     setError(null);
     setIsCapturing(true);
     setPickerOpen(false);
+    overlayRunRef.current = true;
     try {
-      try {
-        await invoke("panel_close");
-      } catch {
-      }
+      // O Rust esconde as nossas janelas, espera o compositor e só então
+      // congela — fazer isso daqui deixava a janela como fantasma na captura.
       await openCaptureOverlay();
     } catch (caught) {
+      overlayRunRef.current = false;
+      // Devolve as janelas escondidas pelo comando que falhou.
+      try {
+        await closeCaptureOverlay();
+      } catch {
+      }
       if (!mountedRef.current) {
         return;
       }
@@ -313,10 +351,6 @@ export function useDisplaySnapshot(options?: {
           ? caught.message
           : "Não foi possível abrir o recorte magnético",
       );
-      try {
-        await closeCaptureOverlay();
-      } catch {
-      }
     }
   }, []);
 

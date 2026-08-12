@@ -2,7 +2,9 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useDisplaySnapshot } from "@/hooks/use-display-snapshot";
+import * as captureSources from "@/lib/context-capture/capture-sources";
 import * as snapshotModule from "@/lib/context-capture/display-snapshot";
+import { invokeMock } from "@/test/mocks/tauri";
 
 describe("useDisplaySnapshot", () => {
   const createObjectURL = vi.fn();
@@ -157,6 +159,102 @@ describe("useDisplaySnapshot", () => {
       result.current.clearError();
     });
     expect(result.current.error).toBeNull();
+  });
+
+  it("leaves window hiding to the overlay command", async () => {
+    invokeMock.mockClear();
+    const open = vi
+      .spyOn(captureSources, "openCaptureOverlay")
+      .mockResolvedValue(undefined);
+    const { result } = renderHook(() => useDisplaySnapshot());
+
+    await act(async () => {
+      await result.current.startMagneticCapture();
+    });
+
+    expect(open).toHaveBeenCalledOnce();
+    // Esconder daqui deixava a janela como fantasma dentro da própria captura:
+    // quem esconde, espera o compositor e congela é o Rust, em ordem.
+    expect(invokeMock).not.toHaveBeenCalledWith("panel_close");
+    expect(result.current.isCapturing).toBe(true);
+  });
+
+  it("ignores an overlay result it did not ask for", async () => {
+    let resultHandler:
+      | ((value: captureSources.OverlayResult) => void)
+      | undefined;
+    vi.spyOn(captureSources, "listenOverlayResult").mockImplementation(
+      (handler) => {
+        resultHandler = handler;
+        return Promise.resolve(() => {});
+      },
+    );
+    const crop = vi.spyOn(captureSources, "fetchOverlayCrop");
+    const { result } = renderHook(() => useDisplaySnapshot());
+
+    // Recorte disparado pela outra janela: o evento é global e chega aqui também.
+    await act(async () => {
+      resultHandler?.({ region: { x: 0, y: 0, width: 50, height: 50 } });
+      await Promise.resolve();
+    });
+
+    expect(result.current.draft).toBeNull();
+    expect(crop).not.toHaveBeenCalled();
+  });
+
+  it("turns the emitted region into a draft via the Rust crop", async () => {
+    let resultHandler:
+      | ((value: captureSources.OverlayResult) => void)
+      | undefined;
+    vi.spyOn(captureSources, "listenOverlayResult").mockImplementation(
+      (handler) => {
+        resultHandler = handler;
+        return Promise.resolve(() => {});
+      },
+    );
+    vi.spyOn(captureSources, "openCaptureOverlay").mockResolvedValue(undefined);
+    const crop = vi
+      .spyOn(captureSources, "fetchOverlayCrop")
+      .mockResolvedValue(new Blob(["png"], { type: "image/png" }));
+
+    const { result } = renderHook(() => useDisplaySnapshot());
+    await act(async () => {
+      await result.current.startMagneticCapture();
+    });
+
+    const region = { x: 10, y: 20, width: 300, height: 200 };
+    await act(async () => {
+      resultHandler?.({ region });
+      await Promise.resolve();
+    });
+
+    // Só a região trafega; os pixels saem do Rust já recortados.
+    expect(crop).toHaveBeenCalledWith(region);
+    expect(result.current.draft?.snapshot).toMatchObject({
+      width: 300,
+      height: 200,
+      sourceLabel: "Recorte magnético",
+    });
+    expect(result.current.isCapturing).toBe(false);
+  });
+
+  it("closes the overlay when it fails to open, restoring the windows", async () => {
+    vi.spyOn(captureSources, "openCaptureOverlay").mockRejectedValue(
+      new Error("overlay indisponível"),
+    );
+    const close = vi
+      .spyOn(captureSources, "closeCaptureOverlay")
+      .mockResolvedValue(undefined);
+    const { result } = renderHook(() => useDisplaySnapshot());
+
+    await act(async () => {
+      await result.current.startMagneticCapture();
+    });
+
+    // `capture_overlay_close` é quem devolve as janelas escondidas pelo Rust.
+    expect(close).toHaveBeenCalledOnce();
+    expect(result.current.isCapturing).toBe(false);
+    expect(result.current.error).toBe("overlay indisponível");
   });
 
   it("does not create a preview after unmounting during capture", async () => {

@@ -335,8 +335,8 @@ pub fn run() {
             capture::capture_source,
             capture::capture_source_meta,
             capture::capture_overlay_open,
+            capture::capture_overlay_crop,
             capture::capture_overlay_close,
-            capture::capture_element_at,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

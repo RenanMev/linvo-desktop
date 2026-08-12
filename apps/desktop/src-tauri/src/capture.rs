@@ -1,6 +1,8 @@
+use std::sync::{Mutex, OnceLock};
+
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use image::{ExtendedColorType, ImageEncoder, RgbaImage, codecs::png::PngEncoder, imageops};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 use tauri::ipc::Response;
 use xcap::{Monitor, Window};
@@ -22,7 +24,7 @@ pub struct CaptureSource {
     pub thumbnail: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CaptureRect {
     pub x: i32,
@@ -31,14 +33,28 @@ pub struct CaptureRect {
     pub height: i32,
 }
 
+/// Alvo de magnetismo, em pixels físicos da área de trabalho virtual.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapRect {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    /// "window" ou "monitor" — o overlay prefere janelas e cai no monitor.
+    pub kind: String,
+    pub title: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OverlayPayload {
-    pub image_png_base64: String,
     pub width: u32,
     pub height: u32,
     pub origin_x: i32,
     pub origin_y: i32,
+    /// Janelas (topo primeiro) e monitores, capturados antes do overlay subir.
+    pub snap_rects: Vec<SnapRect>,
 }
 
 fn encode_png(image: &RgbaImage) -> Result<Vec<u8>, String> {
@@ -292,7 +308,9 @@ fn virtual_desktop_bounds(monitors: &[Monitor]) -> Result<(i32, i32, u32, u32), 
     ))
 }
 
-fn freeze_virtual_desktop() -> Result<OverlayPayload, String> {
+type FrozenDesktop = (RgbaImage, i32, i32, u32, u32);
+
+fn freeze_virtual_desktop() -> Result<FrozenDesktop, String> {
     let monitors = Monitor::all().map_err(|e| e.to_string())?;
     let (origin_x, origin_y, width, height) = virtual_desktop_bounds(&monitors)?;
     let mut canvas = RgbaImage::new(width, height);
@@ -304,14 +322,191 @@ fn freeze_virtual_desktop() -> Result<OverlayPayload, String> {
         imageops::overlay(&mut canvas, &image, x as i64, y as i64);
     }
 
-    let png = encode_png(&canvas)?;
-    Ok(OverlayPayload {
-        image_png_base64: BASE64.encode(png),
-        width,
-        height,
-        origin_x,
-        origin_y,
-    })
+    Ok((canvas, origin_x, origin_y, width, height))
+}
+
+/*
+ * O overlay é uma janela always-on-top que cobre a área de trabalho inteira,
+ * então perguntar ao Windows "que elemento está sob o cursor?" depois dele subir
+ * sempre responde "o overlay" — e o magnetismo passa a devolver a tela toda, sem
+ * distinguir janela nem monitor. A lista é montada aqui, antes do `show()`, e as
+ * nossas próprias janelas ficam de fora. Mesma estratégia do ShareX
+ * (`WindowsRectangleList` + `IgnoreHandleList`).
+ */
+#[cfg(windows)]
+fn snap_targets(own: &[isize], monitors: &[Monitor]) -> Vec<SnapRect> {
+    use std::ffi::c_void;
+    use windows_sys::Win32::Foundation::{BOOL, HWND, LPARAM, RECT, TRUE};
+    use windows_sys::Win32::Graphics::Dwm::{
+        DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GWL_EXSTYLE, GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW,
+        GetWindowTextW, IsWindowVisible, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    };
+
+    struct EnumState<'a> {
+        own: &'a [isize],
+        out: Vec<SnapRect>,
+    }
+
+    fn window_title(hwnd: HWND) -> String {
+        unsafe {
+            let len = GetWindowTextLengthW(hwnd);
+            if len <= 0 {
+                return String::new();
+            }
+            let mut buf = vec![0u16; len as usize + 1];
+            let written = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
+            if written <= 0 {
+                return String::new();
+            }
+            String::from_utf16_lossy(&buf[..written as usize])
+        }
+    }
+
+    unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let state = unsafe { &mut *(lparam as *mut EnumState) };
+
+        if state.own.contains(&(hwnd as isize)) {
+            return TRUE;
+        }
+        if unsafe { IsWindowVisible(hwnd) } == 0 {
+            return TRUE;
+        }
+
+        // Janelas UWP suspensas continuam "visíveis" para o Win32 mas não são
+        // desenhadas; sem este filtro o magnetismo gruda em fantasmas.
+        let mut cloaked: u32 = 0;
+        let cloaked_ok = unsafe {
+            DwmGetWindowAttribute(
+                hwnd,
+                DWMWA_CLOAKED as u32,
+                &mut cloaked as *mut u32 as *mut c_void,
+                std::mem::size_of::<u32>() as u32,
+            )
+        };
+        if cloaked_ok == 0 && cloaked != 0 {
+            return TRUE;
+        }
+
+        let ex_style = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) } as u32;
+        if ex_style & WS_EX_TOOLWINDOW != 0 && ex_style & WS_EX_NOACTIVATE != 0 {
+            return TRUE;
+        }
+
+        // `GetWindowRect` inclui a borda invisível de redimensionamento do DWM;
+        // o frame estendido é o retângulo que o usuário enxerga.
+        let mut rect = RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        let frame_ok = unsafe {
+            DwmGetWindowAttribute(
+                hwnd,
+                DWMWA_EXTENDED_FRAME_BOUNDS as u32,
+                &mut rect as *mut RECT as *mut c_void,
+                std::mem::size_of::<RECT>() as u32,
+            )
+        };
+        if frame_ok != 0 && unsafe { GetWindowRect(hwnd, &mut rect) } == 0 {
+            return TRUE;
+        }
+
+        let width = rect.right - rect.left;
+        let height = rect.bottom - rect.top;
+        if width < 16 || height < 16 {
+            return TRUE;
+        }
+
+        state.out.push(SnapRect {
+            x: rect.left,
+            y: rect.top,
+            width,
+            height,
+            kind: "window".into(),
+            title: window_title(hwnd),
+        });
+        TRUE
+    }
+
+    let mut state = EnumState {
+        own,
+        out: Vec::new(),
+    };
+    // EnumWindows entrega da janela mais ao topo para a mais ao fundo, que é
+    // exatamente a ordem em que o hit-test precisa resolver empates.
+    unsafe {
+        EnumWindows(Some(enum_proc), &mut state as *mut EnumState as LPARAM);
+    }
+
+    let mut rects = state.out;
+    for monitor in monitors {
+        let (Ok(x), Ok(y), Ok(width), Ok(height)) = (
+            monitor.x(),
+            monitor.y(),
+            monitor.width(),
+            monitor.height(),
+        ) else {
+            continue;
+        };
+        rects.push(SnapRect {
+            x,
+            y,
+            width: width as i32,
+            height: height as i32,
+            kind: "monitor".into(),
+            title: monitor
+                .friendly_name()
+                .or_else(|_| monitor.name())
+                .unwrap_or_else(|_| "Tela".into()),
+        });
+    }
+    rects
+}
+
+#[cfg(not(windows))]
+fn snap_targets(_own: &[isize], monitors: &[Monitor]) -> Vec<SnapRect> {
+    monitors
+        .iter()
+        .filter_map(|monitor| {
+            let (Ok(x), Ok(y), Ok(width), Ok(height)) = (
+                monitor.x(),
+                monitor.y(),
+                monitor.width(),
+                monitor.height(),
+            ) else {
+                return None;
+            };
+            Some(SnapRect {
+                x,
+                y,
+                width: width as i32,
+                height: height as i32,
+                kind: "monitor".into(),
+                title: String::new(),
+            })
+        })
+        .collect()
+}
+
+/// Handles nativos das nossas janelas, para não magnetizar no próprio app.
+fn own_window_handles(app: &AppHandle) -> Vec<isize> {
+    #[cfg(windows)]
+    {
+        app.webview_windows()
+            .values()
+            .filter_map(|window| window.hwnd().ok())
+            .map(|hwnd| hwnd.0 as isize)
+            .collect()
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        Vec::new()
+    }
 }
 
 fn overlay_window(app: &AppHandle) -> Result<WebviewWindow, String> {
@@ -319,15 +514,96 @@ fn overlay_window(app: &AppHandle) -> Result<WebviewWindow, String> {
         .ok_or_else(|| format!("window '{OVERLAY_LABEL}' not found"))
 }
 
+/// Frame congelado, guardado aqui em vez de trafegar pelo barramento de eventos.
+///
+/// Numa área de trabalho de 3520x1080 o frame tem ~15 MB crus; em PNG+base64
+/// dentro de um evento JSON isso vira alguns megabytes de string atravessando o
+/// IPC — duas vezes, porque o overlay devolvia a mesma imagem no resultado.
+/// Era o que fazia a captura demorar e o que travava o `emit` de confirmação.
+/// Agora só metadados e a região trafegam; os pixels saem daqui por IPC binário.
+struct FrozenFrame {
+    image: RgbaImage,
+    origin_x: i32,
+    origin_y: i32,
+}
+
+static FROZEN: OnceLock<Mutex<Option<FrozenFrame>>> = OnceLock::new();
+static HIDDEN_WINDOWS: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
+
+fn frozen() -> &'static Mutex<Option<FrozenFrame>> {
+    FROZEN.get_or_init(|| Mutex::new(None))
+}
+
+fn hidden_windows() -> &'static Mutex<Vec<String>> {
+    HIDDEN_WINDOWS.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/*
+ * Esconder as nossas janelas e congelar a tela precisa ser feito aqui, em ordem.
+ * Quando o front escondia a janela e só então chamava este comando, o DWM ainda
+ * não tinha composto o quadro sem ela — e a janela aparecia como fantasma dentro
+ * da própria captura.
+ */
+fn hide_own_windows(app: &AppHandle) -> Result<(), String> {
+    let mut hidden = hidden_windows().lock().map_err(|e| e.to_string())?;
+    hidden.clear();
+
+    for (label, window) in app.webview_windows() {
+        if label == OVERLAY_LABEL {
+            continue;
+        }
+        if window.is_visible().unwrap_or(false) {
+            let _ = window.hide();
+            hidden.push(label);
+        }
+    }
+
+    // `hide()` retorna assim que a mensagem é processada; o compositor leva mais
+    // um quadro para parar de desenhar a janela.
+    if !hidden.is_empty() {
+        std::thread::sleep(std::time::Duration::from_millis(120));
+    }
+    Ok(())
+}
+
+fn restore_own_windows(app: &AppHandle) {
+    let Ok(mut hidden) = hidden_windows().lock() else {
+        return;
+    };
+    for label in hidden.drain(..) {
+        if let Some(window) = app.get_webview_window(&label) {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn capture_overlay_open(app: AppHandle) -> Result<(), String> {
-    let payload = tauri::async_runtime::spawn_blocking(freeze_virtual_desktop)
+    let hide_app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || hide_own_windows(&hide_app))
         .await
         .map_err(|e| e.to_string())??;
 
+    let (image, origin_x, origin_y, width, height) =
+        tauri::async_runtime::spawn_blocking(freeze_virtual_desktop)
+            .await
+            .map_err(|e| e.to_string())??;
+
     let overlay = overlay_window(&app)?;
     let monitors = Monitor::all().map_err(|e| e.to_string())?;
-    let (origin_x, origin_y, width, height) = virtual_desktop_bounds(&monitors)?;
+
+    // Antes do `show()`: depois dele o overlay é a janela do topo em todo lugar.
+    let snap_rects = snap_targets(&own_window_handles(&app), &monitors);
+
+    {
+        let mut slot = frozen().lock().map_err(|e| e.to_string())?;
+        *slot = Some(FrozenFrame {
+            image,
+            origin_x,
+            origin_y,
+        });
+    }
 
     overlay
         .set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }))
@@ -341,74 +617,56 @@ pub async fn capture_overlay_open(app: AppHandle) -> Result<(), String> {
     overlay.set_always_on_top(true).map_err(|e| e.to_string())?;
     overlay.show().map_err(|e| e.to_string())?;
     overlay.set_focus().map_err(|e| e.to_string())?;
-    app.emit_to(OVERLAY_LABEL, OVERLAY_READY_EVENT, payload)
-        .map_err(|e| e.to_string())?;
+    app.emit_to(
+        OVERLAY_LABEL,
+        OVERLAY_READY_EVENT,
+        OverlayPayload {
+            width,
+            height,
+            origin_x,
+            origin_y,
+            snap_rects,
+        },
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Recorta a região no Rust e devolve só ela. O anexo tem alguns KB em vez dos
+/// megabytes do frame inteiro, e o front não precisa decodificar o desktop todo.
+#[tauri::command]
+pub async fn capture_overlay_crop(region: CaptureRect) -> Result<Response, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let slot = frozen().lock().map_err(|e| e.to_string())?;
+        let frame = slot.as_ref().ok_or("nenhuma captura em andamento")?;
+
+        let x = region.x.max(0) as u32;
+        let y = region.y.max(0) as u32;
+        let width = (region.width.max(1) as u32).min(frame.image.width().saturating_sub(x));
+        let height = (region.height.max(1) as u32).min(frame.image.height().saturating_sub(y));
+        if width == 0 || height == 0 {
+            return Err("região de recorte inválida".into());
+        }
+
+        let cropped = imageops::crop_imm(&frame.image, x, y, width, height).to_image();
+        encode_png(&cropped)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map(Response::new)
 }
 
 #[tauri::command]
 pub async fn capture_overlay_close(app: AppHandle) -> Result<(), String> {
     let overlay = overlay_window(&app)?;
     overlay.hide().map_err(|e| e.to_string())?;
+    /*
+     * O frame fica. O overlay fecha logo depois de emitir o resultado, e quem
+     * pediu a captura ainda vai buscar o recorte aqui — limpar neste ponto era
+     * uma corrida perdida ("nenhuma captura em andamento"). A próxima abertura
+     * sobrescreve.
+     */
+    restore_own_windows(&app);
     Ok(())
 }
 
-#[cfg(windows)]
-fn element_rect_at(x: i32, y: i32) -> Result<CaptureRect, String> {
-    use windows::Win32::Foundation::POINT;
-    use windows::Win32::System::Com::{
-        CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED,
-    };
-    use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation, IUIAutomationElement};
-    use windows::Win32::UI::WindowsAndMessaging::{GetWindowRect, WindowFromPoint};
-
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-
-        let automation: IUIAutomation =
-            CoCreateInstance(&CUIAutomation, None, CLSCTX_ALL).map_err(|e| e.to_string())?;
-        let point = POINT { x, y };
-
-        if let Ok(element) = automation.ElementFromPoint(point) {
-            let element: IUIAutomationElement = element;
-            if let Ok(rect) = element.CurrentBoundingRectangle() {
-                let width = rect.right - rect.left;
-                let height = rect.bottom - rect.top;
-                if width >= 8 && height >= 8 {
-                    return Ok(CaptureRect {
-                        x: rect.left,
-                        y: rect.top,
-                        width,
-                        height,
-                    });
-                }
-            }
-        }
-
-        let hwnd = WindowFromPoint(point);
-        if hwnd.0.is_null() {
-            return Err("nenhum elemento sob o cursor".into());
-        }
-
-        let mut rect = windows::Win32::Foundation::RECT::default();
-        GetWindowRect(hwnd, &mut rect).map_err(|e| e.to_string())?;
-        Ok(CaptureRect {
-            x: rect.left,
-            y: rect.top,
-            width: rect.right - rect.left,
-            height: rect.bottom - rect.top,
-        })
-    }
-}
-
-#[cfg(not(windows))]
-fn element_rect_at(_x: i32, _y: i32) -> Result<CaptureRect, String> {
-    Err("magnetismo de elementos só está disponível no Windows".into())
-}
-
-#[tauri::command]
-pub async fn capture_element_at(x: i32, y: i32) -> Result<CaptureRect, String> {
-    tauri::async_runtime::spawn_blocking(move || element_rect_at(x, y))
-        .await
-        .map_err(|e| e.to_string())?
-}

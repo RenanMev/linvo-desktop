@@ -20,24 +20,36 @@ export type CaptureRect = {
   height: number;
 };
 
+export type SnapRectKind = "window" | "monitor";
+
+/**
+ * Alvo de magnetismo em pixels físicos absolutos da área de trabalho virtual.
+ * Vem pronto do Rust: enumerar isto no front, com o overlay já na frente de
+ * tudo, só devolveria o próprio overlay.
+ */
+export type SnapRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  kind: SnapRectKind;
+  title: string;
+};
+
 export type OverlayPayload = {
-  imagePngBase64: string;
   width: number;
   height: number;
   originX: number;
   originY: number;
+  snapRects: SnapRect[];
 };
 
 export const OVERLAY_READY_EVENT = "capture-overlay://ready";
 export const OVERLAY_RESULT_EVENT = "capture-overlay://result";
 export const OVERLAY_CANCEL_EVENT = "capture-overlay://cancel";
 
+/** Só a região: os pixels ficam no Rust e saem de lá já recortados. */
 export type OverlayResult = {
-  imagePngBase64: string;
-  width: number;
-  height: number;
-  originX: number;
-  originY: number;
   region: CaptureRect;
 };
 
@@ -67,15 +79,24 @@ export async function openCaptureOverlay(): Promise<void> {
   await invoke("capture_overlay_open");
 }
 
-export async function closeCaptureOverlay(): Promise<void> {
-  await invoke("capture_overlay_close");
+async function invokeBytes(
+  command: string,
+  args?: Record<string, unknown>,
+): Promise<Uint8Array> {
+  const response = await invoke<ArrayBuffer | number[]>(command, args);
+  if (response instanceof ArrayBuffer) {
+    return new Uint8Array(response);
+  }
+  return Uint8Array.from(response);
 }
 
-export async function captureElementAt(
-  x: number,
-  y: number,
-): Promise<CaptureRect> {
-  return invoke<CaptureRect>("capture_element_at", { x, y });
+/** Recorte final, já cortado no Rust: chegam KB em vez do desktop inteiro. */
+export async function fetchOverlayCrop(region: CaptureRect): Promise<Blob> {
+  return bytesToPngBlob(await invokeBytes("capture_overlay_crop", { region }));
+}
+
+export async function closeCaptureOverlay(): Promise<void> {
+  await invoke("capture_overlay_close");
 }
 
 export function listenOverlayReady(

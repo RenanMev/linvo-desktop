@@ -65,6 +65,79 @@ export function scaleRectToSource(
   return clampRectToBounds(scaled, sourceSize);
 }
 
+/**
+ * Inverso de `scaleRectToSource`: leva um retângulo do frame para o elemento
+ * exibido. O magnetismo devolve retângulos em pixels físicos da tela, e é
+ * assim que eles viram um destaque alinhado com o que o usuário está vendo.
+ */
+export function scaleRectToDisplay(
+  rect: Rect,
+  sourceSize: Size,
+  displaySize: Size,
+): Rect {
+  if (sourceSize.width <= 0 || sourceSize.height <= 0) {
+    return { x: 0, y: 0, width: 0, height: 0 };
+  }
+
+  const scaleX = displaySize.width / sourceSize.width;
+  const scaleY = displaySize.height / sourceSize.height;
+
+  return {
+    x: rect.x * scaleX,
+    y: rect.y * scaleY,
+    width: rect.width * scaleX,
+    height: rect.height * scaleY,
+  };
+}
+
+/**
+ * Converte um ponto do elemento exibido para o frame original. Sem isto o
+ * magnetismo consultaria o Windows com coordenadas CSS, que só coincidem com
+ * as físicas quando o monitor está em 100%.
+ */
+export function scalePointToSource(
+  point: Point,
+  displaySize: Size,
+  sourceSize: Size,
+): Point {
+  if (displaySize.width <= 0 || displaySize.height <= 0) {
+    return { x: 0, y: 0 };
+  }
+
+  return {
+    x: Math.round((point.x * sourceSize.width) / displaySize.width),
+    y: Math.round((point.y * sourceSize.height) / displaySize.height),
+  };
+}
+
+export type SnapTarget = Rect & { kind: "window" | "monitor" };
+
+function containsPoint(rect: Rect, point: Point): boolean {
+  return (
+    point.x >= rect.x &&
+    point.x < rect.x + rect.width &&
+    point.y >= rect.y &&
+    point.y < rect.y + rect.height
+  );
+}
+
+/**
+ * Escolhe o alvo sob o cursor. Janelas vêm do `EnumWindows` já em ordem de
+ * z-order (topo primeiro), então a primeira que contém o ponto é a que o
+ * usuário está vendo; sobrando só a área de trabalho, vale o monitor — é o que
+ * permite mirar uma tela inteira num setup de múltiplos monitores.
+ */
+export function pickSnapTarget<T extends SnapTarget>(
+  point: Point,
+  targets: readonly T[],
+): T | null {
+  return (
+    targets.find((t) => t.kind === "window" && containsPoint(t, point)) ??
+    targets.find((t) => t.kind === "monitor" && containsPoint(t, point)) ??
+    null
+  );
+}
+
 export const MIN_CROP_SIZE = 16;
 
 /**

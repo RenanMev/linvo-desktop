@@ -3,8 +3,14 @@ import { useCallback, useRef, useState } from "react";
 import { AuthApiError, AuthNetworkError } from "@/lib/auth/auth-api";
 import * as chatApi from "@/lib/chat/chat-api";
 import { ChatApiError } from "@/lib/chat/chat-api";
+import { uploadChatAttachment } from "@/lib/chat/chat-attachments-api";
+import type { ChatSendAttachment } from "@/lib/chat/types";
 
 export type QuickPromptStatus = "idle" | "streaming" | "done" | "error";
+
+export type QuickPromptSendOptions = {
+  attachment?: ChatSendAttachment;
+};
 
 export type QuickPromptController = {
   status: QuickPromptStatus;
@@ -12,7 +18,7 @@ export type QuickPromptController = {
   errorMessage: string | null;
   conversationId: string | null;
   isThinking: boolean;
-  send: (text: string) => Promise<boolean>;
+  send: (text: string, options?: QuickPromptSendOptions) => Promise<boolean>;
   stop: () => void;
   reset: () => void;
 };
@@ -57,9 +63,14 @@ export function useQuickPrompt(): QuickPromptController {
     setIsThinking(false);
   }, []);
 
-  const send = useCallback(async (text: string) => {
+  const send = useCallback(async (
+    text: string,
+    options?: QuickPromptSendOptions,
+  ) => {
     const content = text.trim();
-    if (!content || abortRef.current) {
+    const attachment = options?.attachment;
+    // Um contexto visual sozinho já é uma pergunta válida — como no chat do painel.
+    if ((!content && !attachment) || abortRef.current) {
       return false;
     }
 
@@ -86,9 +97,26 @@ export function useQuickPrompt(): QuickPromptController {
         setConversationId(conversation.id);
       }
 
+      let attachmentIds: string[] | undefined;
+      if (attachment) {
+        const uploaded = await uploadChatAttachment(
+          activeConversationId,
+          attachment.file,
+          {
+            filename: attachment.file.name,
+            source: "display_capture",
+          },
+        );
+        if (controller.signal.aborted || abortRef.current !== controller) {
+          return false;
+        }
+        attachmentIds = [uploaded.id];
+      }
+
       const stream = chatApi.streamChatResponse({
         conversationId: activeConversationId,
         content,
+        ...(attachmentIds ? { attachmentIds } : {}),
         signal: controller.signal,
         onActivity: () => {
           if (

@@ -13,7 +13,12 @@ import {
 } from "lucide-react";
 import type { UserPublic } from "@linvo/shared";
 
+import { CaptureContextChip } from "@/components/chat/capture-context-chip";
+import { CaptureMenu } from "@/components/chat/capture-menu";
+import { CapturePreviewDialog } from "@/components/chat/capture-preview-dialog";
+import { CaptureSourcePicker } from "@/components/chat/capture-source-picker";
 import { Button } from "@/components/ui/button";
+import { useDisplaySnapshot } from "@/hooks/use-display-snapshot";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useQuickCenterWorkspace } from "@/hooks/use-quick-center-workspace";
 import { useQuickPrompt } from "@/hooks/use-quick-prompt";
@@ -34,6 +39,12 @@ type QuickCenterPanelProps = {
   onOpenSettings: () => void;
   onHide: () => void;
   onWindowDragStart?: () => void;
+  /**
+   * Avisa que existe captura em andamento. A janela flutuante fecha ao perder
+   * foco, e tanto o seletor do sistema quanto o overlay de recorte roubam o
+   * foco — sem essa trava o painel some junto com o contexto já capturado.
+   */
+  onCaptureActiveChange?: (active: boolean) => void;
 };
 
 function statusLabel(apiHealthy: boolean, sessionWarning: string | null) {
@@ -57,6 +68,7 @@ export function QuickCenterPanel({
   onOpenSettings,
   onHide,
   onWindowDragStart,
+  onCaptureActiveChange,
 }: QuickCenterPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -67,6 +79,23 @@ export function QuickCenterPanel({
 
   const prompt = useQuickPrompt();
   const workspace = useQuickCenterWorkspace(ready);
+  const {
+    pending,
+    draft,
+    isCapturing,
+    isCropping,
+    pickerOpen,
+    error: captureError,
+    capture,
+    openPicker,
+    closePicker,
+    captureNativeSource,
+    startMagneticCapture,
+    confirmDraft,
+    discardDraft,
+    clear: clearPending,
+    clearError: clearCaptureError,
+  } = useDisplaySnapshot();
 
   useFocusTrap(containerRef, {
     active: ready && !closing,
@@ -75,6 +104,25 @@ export function QuickCenterPanel({
 
   const fieldsDisabled = !apiHealthy || Boolean(sessionWarning);
   const isStreaming = prompt.status === "streaming";
+  const hasAttachment = pending?.status === "ready";
+  const captureDialogOpen = pickerOpen || Boolean(draft);
+  const captureActive = captureDialogOpen || isCapturing || isCropping;
+  const controlsDisabled = isStreaming || isCapturing || isCropping;
+
+  const captureActiveChangeRef = useRef(onCaptureActiveChange);
+  captureActiveChangeRef.current = onCaptureActiveChange;
+
+  useEffect(() => {
+    captureActiveChangeRef.current?.(captureActive);
+  }, [captureActive]);
+
+  // O painel desmonta ao fechar; deixar a trava ligada prenderia a janela aberta.
+  useEffect(
+    () => () => {
+      captureActiveChangeRef.current?.(false);
+    },
+    [],
+  );
 
   async function handleClose() {
     if (isStreaming) {
@@ -85,18 +133,46 @@ export function QuickCenterPanel({
 
   async function handleSend() {
     const text = inputValue;
-    if (!text.trim() || isStreaming) {
+    if ((!text.trim() && !hasAttachment) || isStreaming) {
       return;
     }
+
+    const attachment =
+      pending?.status === "ready"
+        ? {
+            file: pending.file,
+            width: pending.width,
+            height: pending.height,
+            previewUrl: pending.previewUrl,
+            ...(pending.sourceLabel ? { sourceLabel: pending.sourceLabel } : {}),
+          }
+        : undefined;
+
     setInputValue("");
-    const accepted = await prompt.send(text);
+    const accepted = await prompt.send(
+      text,
+      attachment ? { attachment } : undefined,
+    );
     if (!accepted) {
       setInputValue((current) => current || text);
+      return;
+    }
+    /*
+     * O anexo só sai depois do aceite: `clearPending` revoga a object URL da
+     * miniatura, então descartá-lo otimista deixaria o chip quebrado se o envio
+     * falhasse.
+     */
+    if (attachment) {
+      clearPending();
+      clearCaptureError();
     }
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Escape") {
+      if (captureDialogOpen) {
+        return;
+      }
       event.preventDefault();
       void handleClose();
       return;
@@ -109,6 +185,10 @@ export function QuickCenterPanel({
 
   function handleContainerKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape" && event.target !== inputRef.current) {
+      // Esc pertence ao diálogo de captura enquanto ele estiver aberto.
+      if (captureDialogOpen) {
+        return;
+      }
       event.preventDefault();
       void handleClose();
     }
@@ -177,6 +257,32 @@ export function QuickCenterPanel({
       aria-label="Quick Center"
       aria-busy={isStreaming || prompt.isThinking}
     >
+      {draft ? (
+        <CapturePreviewDialog
+          previewUrl={draft.previewUrl}
+          sourceWidth={draft.snapshot.width}
+          sourceHeight={draft.snapshot.height}
+          {...(draft.snapshot.sourceLabel
+            ? { sourceLabel: draft.snapshot.sourceLabel }
+            : {})}
+          isBusy={isCropping}
+          onConfirm={(region) => void confirmDraft(region)}
+          onRecapture={() => {
+            discardDraft();
+            openPicker();
+          }}
+          onCancel={discardDraft}
+        />
+      ) : null}
+
+      <CaptureSourcePicker
+        open={pickerOpen}
+        busy={isCapturing}
+        onSelect={(source) => void captureNativeSource(source)}
+        onCancel={closePicker}
+        onFallback={() => void capture()}
+      />
+
       <span className="sr-only" role="status" aria-live="polite">
         {copied
           ? "Resposta copiada"
@@ -247,22 +353,48 @@ export function QuickCenterPanel({
           )}
         />
 
-        <div className="flex shrink-0 items-center justify-between">
-          {prompt.errorMessage ? (
-            <p role="alert" className="text-xs text-destructive">
-              {prompt.errorMessage}
-            </p>
-          ) : prompt.isThinking ? (
-            <span
-              aria-hidden="true"
-              className="flex items-center gap-1.5 text-xs text-muted-foreground"
-            >
-              <Loader2 className="size-3 animate-spin" />
-              Pensando...
-            </span>
-          ) : (
-            <span />
-          )}
+        {pending ? (
+          <div className="flex shrink-0 flex-wrap items-center gap-1">
+            <CaptureContextChip
+              previewUrl={pending.previewUrl}
+              {...(pending.sourceLabel ? { label: pending.sourceLabel } : {})}
+              disabled={controlsDisabled}
+              onRemove={() => {
+                clearPending();
+                clearCaptureError();
+              }}
+            />
+          </div>
+        ) : null}
+
+        <div className="flex shrink-0 items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <CaptureMenu
+              disabled={fieldsDisabled || controlsDisabled}
+              size="icon-xs"
+              side="bottom"
+              onPickSource={openPicker}
+              onMagneticCapture={() => void startMagneticCapture()}
+              onSystemPicker={() => void capture("window")}
+            />
+            {captureError ? (
+              <p role="alert" className="truncate text-xs text-destructive">
+                {captureError}
+              </p>
+            ) : prompt.errorMessage ? (
+              <p role="alert" className="truncate text-xs text-destructive">
+                {prompt.errorMessage}
+              </p>
+            ) : prompt.isThinking ? (
+              <span
+                aria-hidden="true"
+                className="flex items-center gap-1.5 text-xs text-muted-foreground"
+              >
+                <Loader2 className="size-3 animate-spin" />
+                Pensando...
+              </span>
+            ) : null}
+          </div>
 
           {isStreaming ? (
             <Button
@@ -283,7 +415,11 @@ export function QuickCenterPanel({
               variant="secondary"
               size="xs"
               className="quick-center-fade-in"
-              disabled={fieldsDisabled || !inputValue.trim()}
+              disabled={
+                fieldsDisabled ||
+                controlsDisabled ||
+                (!inputValue.trim() && !hasAttachment)
+              }
               onClick={() => void handleSend()}
             >
               <Send className="size-3" />

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthApiError } from "@/lib/auth/auth-api";
 import * as chatApi from "@/lib/chat/chat-api";
 import { ChatApiError } from "@/lib/chat/chat-api";
+import { uploadChatAttachment } from "@/lib/chat/chat-attachments-api";
 import { useQuickPrompt } from "@/hooks/use-quick-prompt";
 
 vi.mock("@/lib/chat/chat-api", async () => {
@@ -16,6 +17,10 @@ vi.mock("@/lib/chat/chat-api", async () => {
     streamChatResponse: vi.fn(),
   };
 });
+
+vi.mock("@/lib/chat/chat-attachments-api", () => ({
+  uploadChatAttachment: vi.fn(),
+}));
 
 function makeConversation(id: string) {
   return {
@@ -36,6 +41,7 @@ describe("useQuickPrompt", () => {
   beforeEach(() => {
     vi.mocked(chatApi.createConversation).mockReset();
     vi.mocked(chatApi.streamChatResponse).mockReset();
+    vi.mocked(uploadChatAttachment).mockReset();
   });
 
   afterEach(() => {
@@ -72,6 +78,69 @@ describe("useQuickPrompt", () => {
     expect(result.current.conversationId).toBe("conv-1");
     expect(result.current.responseText).toBe("Olá, mundo");
     expect(result.current.status).toBe("done");
+  });
+
+  it("uploads the visual context and streams with its attachment id", async () => {
+    vi.mocked(chatApi.createConversation).mockResolvedValue(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      makeConversation("conv-1") as any,
+    );
+    vi.mocked(uploadChatAttachment).mockResolvedValue(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { id: "att-1" } as any,
+    );
+    vi.mocked(chatApi.streamChatResponse).mockReturnValue(
+      toAsyncGenerator(["vejo um erro"]),
+    );
+
+    const file = new File(["image"], "context.png", { type: "image/png" });
+    const { result } = renderHook(() => useQuickPrompt());
+
+    await act(async () => {
+      await expect(
+        result.current.send("", {
+          attachment: { file, width: 800, height: 600, previewUrl: "blob:x" },
+        }),
+      ).resolves.toBe(true);
+    });
+
+    expect(uploadChatAttachment).toHaveBeenCalledWith("conv-1", file, {
+      filename: "context.png",
+      source: "display_capture",
+    });
+    expect(chatApi.streamChatResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ content: "", attachmentIds: ["att-1"] }),
+    );
+    expect(result.current.responseText).toBe("vejo um erro");
+  });
+
+  it("reports an upload failure without streaming", async () => {
+    vi.mocked(chatApi.createConversation).mockResolvedValue(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      makeConversation("conv-1") as any,
+    );
+    vi.mocked(uploadChatAttachment).mockRejectedValue(
+      new ChatApiError("Anexo grande demais", 413),
+    );
+
+    const { result } = renderHook(() => useQuickPrompt());
+
+    await act(async () => {
+      await expect(
+        result.current.send("olha isso", {
+          attachment: {
+            file: new File(["image"], "context.png", { type: "image/png" }),
+            width: 800,
+            height: 600,
+            previewUrl: "blob:x",
+          },
+        }),
+      ).resolves.toBe(false);
+    });
+
+    expect(chatApi.streamChatResponse).not.toHaveBeenCalled();
+    expect(result.current.status).toBe("error");
+    expect(result.current.errorMessage).toBe("Anexo grande demais");
   });
 
   it("reuses the same conversation across sends", async () => {

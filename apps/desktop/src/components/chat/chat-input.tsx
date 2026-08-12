@@ -12,28 +12,16 @@ import {
   type LlmModelOption,
   type Procedure,
 } from "@linvo/shared";
-import {
-  AppWindow,
-  ArrowUp,
-  Crosshair,
-  Monitor,
-  Paperclip,
-  SquareDashedMousePointer,
-  X,
-} from "lucide-react";
+import { ArrowUp, Paperclip, X } from "lucide-react";
 
+import { CaptureContextChip } from "@/components/chat/capture-context-chip";
+import { CaptureMenu } from "@/components/chat/capture-menu";
 import { CapturePreviewDialog } from "@/components/chat/capture-preview-dialog";
 import { CaptureSourcePicker } from "@/components/chat/capture-source-picker";
 import { ChatModelPicker } from "@/components/chat/chat-model-picker";
 import { ChatReplyPreview } from "@/components/chat/chat-reply-preview";
 import { ChatToolsMenu } from "@/components/chat/chat-tools-menu";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useDisplaySnapshot } from "@/hooks/use-display-snapshot";
 import { canSendMessage } from "@/lib/chat/chat-state";
 import {
@@ -420,28 +408,17 @@ export function ChatInput({
                 </span>
               ) : null}
               {pending ? (
-                <span className="inline-flex items-center gap-2 rounded-lg border border-hairline bg-surface-raise-2 py-1 pr-1.5 pl-1 text-xs text-foreground/80">
-                  <img
-                    src={pending.previewUrl}
-                    alt=""
-                    className="size-10 rounded-md object-cover"
-                  />
-                  <span className="max-w-36 truncate">
-                    {pending.sourceLabel ?? "Contexto visual"}
-                  </span>
-                  <button
-                    type="button"
-                    className="rounded-md p-0.5 hover:bg-surface-hover"
-                    title="Remover contexto"
-                    disabled={controlsDisabled}
-                    onClick={() => {
-                      clearPending();
-                      clearCaptureError();
-                    }}
-                  >
-                    <X className="size-3" />
-                  </button>
-                </span>
+                <CaptureContextChip
+                  previewUrl={pending.previewUrl}
+                  {...(pending.sourceLabel
+                    ? { label: pending.sourceLabel }
+                    : {})}
+                  disabled={controlsDisabled}
+                  onRemove={() => {
+                    clearPending();
+                    clearCaptureError();
+                  }}
+                />
               ) : null}
             </div>
           ) : null}
@@ -469,39 +446,12 @@ export function ChatInput({
               >
                 <Paperclip />
               </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      disabled={controlsDisabled}
-                      title="Capturar contexto visual"
-                      aria-label="Capturar contexto visual"
-                      className="text-muted-foreground"
-                    />
-                  }
-                >
-                  <SquareDashedMousePointer />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" side="top">
-                  <DropdownMenuItem onClick={() => openPicker()}>
-                    <AppWindow />
-                    Escolher janela ou tela
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => void startMagneticCapture()}
-                  >
-                    <Crosshair />
-                    Recorte magnético
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void capture("window")}>
-                    <Monitor />
-                    Seletor do sistema
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <CaptureMenu
+                disabled={controlsDisabled}
+                onPickSource={openPicker}
+                onMagneticCapture={() => void startMagneticCapture()}
+                onSystemPicker={() => void capture("window")}
+              />
               <ChatToolsMenu
                 value={forceTool}
                 onChange={setForceTool}

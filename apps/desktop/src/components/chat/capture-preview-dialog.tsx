@@ -152,7 +152,7 @@ export function CapturePreviewDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-6"
       role="presentation"
     >
       <div
@@ -160,7 +160,7 @@ export function CapturePreviewDialog({
         role="dialog"
         aria-modal="true"
         aria-label="Confirmar contexto visual"
-        className="surface-premium flex max-h-full w-full max-w-3xl flex-col gap-3 rounded-premium p-4 shadow-2xl"
+        className="surface-premium flex max-h-full w-full max-w-3xl flex-col gap-2 rounded-premium p-3 shadow-2xl sm:gap-3 sm:p-4"
       >
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -223,7 +223,7 @@ export function CapturePreviewDialog({
           ) : null}
         </div>
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1">
             <Button
               type="button"
