@@ -85,7 +85,7 @@ const settingsGroups: NavGroup[] = [
     id: "avancado",
     label: "Avançado",
     items: [
-      { label: "Modelos", icon: Boxes, soon: true },
+      { label: "Modelos", icon: Boxes, to: "/settings/models" },
       { label: "Ferramentas & MCPs", icon: Layers, soon: true },
       { label: "Privacidade", icon: ShieldCheck, soon: true },
     ],
