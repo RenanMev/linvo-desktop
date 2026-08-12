@@ -1,0 +1,29 @@
+[[permission]]
+identifier = "allow-capture-list-sources"
+description = "Allows listing capture sources (windows and monitors)"
+commands.allow = ["capture_list_sources"]
+
+[[permission]]
+identifier = "allow-capture-source"
+description = "Allows capturing a window or monitor as PNG bytes"
+commands.allow = ["capture_source"]
+
+[[permission]]
+identifier = "allow-capture-source-meta"
+description = "Allows reading metadata for a capture source"
+commands.allow = ["capture_source_meta"]
+
+[[permission]]
+identifier = "allow-capture-overlay-open"
+description = "Allows opening the magnetic capture overlay"
+commands.allow = ["capture_overlay_open"]
+
+[[permission]]
+identifier = "allow-capture-overlay-close"
+description = "Allows closing the magnetic capture overlay"
+commands.allow = ["capture_overlay_close"]
+
+[[permission]]
+identifier = "allow-capture-element-at"
+description = "Allows resolving the UI element rectangle under a screen point"
+commands.allow = ["capture_element_at"]

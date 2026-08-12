@@ -10,6 +10,9 @@ import {
 import { hideAllWindows, toggleAppVisibility } from "@/lib/app-windows";
 import type { AuthPhase } from "@/lib/auth/auth-state";
 import { closeChecklist } from "@/lib/checklist-window";
+import {
+  closeCaptureOverlay,
+} from "@/lib/context-capture/capture-sources";
 import { closePanel } from "@/lib/panel-window";
 import {
   registerTrayHandlers,
@@ -75,6 +78,9 @@ export function WindowChromeProvider({
         return;
       case "close-checklist":
         await closeChecklist({ emitClosed: true });
+        return;
+      case "close-overlay":
+        await closeCaptureOverlay();
         return;
       case "hide":
         await hideAllWindows();

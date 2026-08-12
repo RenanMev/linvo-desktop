@@ -22,6 +22,10 @@ vi.mock("@/lib/chat/llm-models", () => ({
 
 describe("ChatInput visual context", () => {
   const capture = vi.fn();
+  const openPicker = vi.fn();
+  const closePicker = vi.fn();
+  const captureNativeSource = vi.fn();
+  const startMagneticCapture = vi.fn();
   const confirmDraft = vi.fn();
   const discardDraft = vi.fn();
   const clear = vi.fn();
@@ -36,7 +40,7 @@ describe("ChatInput visual context", () => {
     );
   });
 
-  it("offers window and full-screen capture from the menu", async () => {
+  it("opens the native source picker from the menu", async () => {
     const user = userEvent.setup();
     renderInput();
 
@@ -44,24 +48,38 @@ describe("ChatInput visual context", () => {
       screen.getByRole("button", { name: "Capturar contexto visual" }),
     );
     await user.click(
-      await screen.findByRole("menuitem", { name: /Capturar uma janela/ }),
+      await screen.findByRole("menuitem", { name: /Escolher janela ou tela/ }),
+    );
+
+    expect(openPicker).toHaveBeenCalledOnce();
+  });
+
+  it("starts magnetic capture from the menu", async () => {
+    const user = userEvent.setup();
+    renderInput();
+
+    await user.click(
+      screen.getByRole("button", { name: "Capturar contexto visual" }),
+    );
+    await user.click(
+      await screen.findByRole("menuitem", { name: /Recorte magnético/ }),
+    );
+
+    expect(startMagneticCapture).toHaveBeenCalledOnce();
+  });
+
+  it("falls back to the system picker", async () => {
+    const user = userEvent.setup();
+    renderInput();
+
+    await user.click(
+      screen.getByRole("button", { name: "Capturar contexto visual" }),
+    );
+    await user.click(
+      await screen.findByRole("menuitem", { name: /Seletor do sistema/ }),
     );
 
     expect(capture).toHaveBeenCalledWith("window");
-  });
-
-  it("passes the monitor preference when capturing the whole screen", async () => {
-    const user = userEvent.setup();
-    renderInput();
-
-    await user.click(
-      screen.getByRole("button", { name: "Capturar contexto visual" }),
-    );
-    await user.click(
-      await screen.findByRole("menuitem", { name: /Capturar a tela inteira/ }),
-    );
-
-    expect(capture).toHaveBeenCalledWith("monitor");
   });
 
   it("shows the preview and enables attachment-only send", async () => {
@@ -167,8 +185,13 @@ describe("ChatInput visual context", () => {
       draft: null,
       isCapturing: false,
       isCropping: false,
+      pickerOpen: false,
       error: null,
       capture,
+      openPicker,
+      closePicker,
+      captureNativeSource,
+      startMagneticCapture,
       confirmDraft,
       discardDraft,
       clear,

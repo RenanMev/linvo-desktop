@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { ChecklistApp } from "@/ChecklistApp";
+import { CaptureOverlayApp } from "@/CaptureOverlayApp";
 import { PanelApp } from "@/PanelApp";
 import { AuthGate } from "@/components/auth/auth-gate";
 import { AppearanceProvider } from "@/context/appearance-context";
@@ -17,6 +18,9 @@ function resolveWindowLabel(label: string): WindowLabel {
   }
   if (label === "checklist") {
     return "checklist";
+  }
+  if (label === "capture-overlay") {
+    return "capture-overlay";
   }
   return "main";
 }
@@ -34,6 +38,10 @@ function Bootstrap() {
         <span className="size-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
       </div>
     );
+  }
+
+  if (windowLabel === "capture-overlay") {
+    return <CaptureOverlayApp />;
   }
 
   const isPanel = windowLabel === "panel";

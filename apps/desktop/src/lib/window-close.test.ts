@@ -15,6 +15,15 @@ describe("resolveCloseAction", () => {
     ).toBe("close-checklist");
   });
 
+  it("closes capture overlay window", () => {
+    expect(
+      resolveCloseAction({
+        windowLabel: "capture-overlay",
+        authPhase: "floating",
+      }),
+    ).toBe("close-overlay");
+  });
+
   it("hides main window in auth phases", () => {
     expect(
       resolveCloseAction({ windowLabel: "main", authPhase: "checking" }),
