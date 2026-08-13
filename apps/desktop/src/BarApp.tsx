@@ -159,6 +159,55 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     });
   }
 
+  /*
+   * A promise do `set_window_bounds` confirma o SetWindowPos, mas o WebView2
+   * ainda pode estar com o layout do viewport anterior. Esperar o `resize` e
+   * dois frames depois dele separa o commit nativo da primeira mudanÃ§a de
+   * transform/opacity do CSS. Sem essa barreira os dois commits podem cair no
+   * mesmo frame e a janela transparente revela o desktop por um instante.
+   */
+  function waitForIslandViewportPaint(
+    geometry: IslandMorphGeometry,
+  ): Promise<void> {
+    return new Promise((resolve) => {
+      let settled = false;
+      let firstFrame = 0;
+      let secondFrame = 0;
+      let framesQueued = false;
+
+      const matchesTargetViewport = () =>
+        Math.abs(window.innerWidth - geometry.viewport.width) <= 1 &&
+        Math.abs(window.innerHeight - geometry.viewport.height) <= 1;
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeoutId);
+        window.cancelAnimationFrame(firstFrame);
+        window.cancelAnimationFrame(secondFrame);
+        window.removeEventListener("resize", onResize);
+        resolve();
+      };
+
+      const queuePaintFrames = () => {
+        if (framesQueued || !matchesTargetViewport()) return;
+        framesQueued = true;
+        firstFrame = window.requestAnimationFrame(() => {
+          secondFrame = window.requestAnimationFrame(finish);
+        });
+      };
+
+      const onResize = () => {
+        queuePaintFrames();
+      };
+
+      const timeoutId = window.setTimeout(finish, 180);
+      window.addEventListener("resize", onResize);
+      // O evento pode ter chegado entre o commit nativo e a inscriÃ§Ã£o acima.
+      queuePaintFrames();
+    });
+  }
+
   async function prepareIslandMorph(
     geometry: IslandMorphGeometry,
     fromMode: WindowMode,
@@ -270,6 +319,9 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
           onPrepare: async (geometry) => {
             await prepareIslandMorph(geometry, "compact", "checklist");
           },
+          onViewportReady: async (geometry) => {
+            await waitForIslandViewportPaint(geometry);
+          },
           onResizeStart: () => {
             void startIslandMorph();
           },
@@ -371,6 +423,9 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
       await expandFloatingToQuickMenu({
         onPrepare: async (geometry) => {
           await prepareIslandMorph(geometry, "compact", "quick-menu");
+        },
+        onViewportReady: async (geometry) => {
+          await waitForIslandViewportPaint(geometry);
         },
         onResizeStart: () => {
           if (modeIntentRef.current === "quick-menu") {

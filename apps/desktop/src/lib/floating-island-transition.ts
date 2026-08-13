@@ -28,6 +28,12 @@ export type PreparedIslandWindowTransition = {
 
 export type IslandExpandHooks = {
   onPrepare?: (geometry: IslandMorphGeometry) => Promise<void> | void;
+  /**
+   * Runs after the native bounds commit and after the WebView has painted the
+   * target viewport. This keeps the first CSS transition frame from being
+   * coalesced with the resize.
+   */
+  onViewportReady?: (geometry: IslandMorphGeometry) => Promise<void> | void;
   onResizeStart?: (geometry: IslandMorphGeometry) => Promise<void> | void;
 };
 
