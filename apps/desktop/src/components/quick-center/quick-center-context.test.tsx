@@ -302,4 +302,103 @@ describe("QuickCenterPanel visual context", () => {
       screen.getByRole("button", { name: "Capturar contexto visual" }),
     ).toBeDisabled();
   });
+
+  it("starts magnetic capture when autoCaptureAndSend is armed", async () => {
+    renderPanel({ autoCaptureAndSend: true });
+
+    await waitFor(() => expect(startMagneticCapture).toHaveBeenCalledOnce());
+  });
+
+  it("auto-sends the capture and consumes the arm when the pending is ready", async () => {
+    const send = vi.fn(() => Promise.resolve(true));
+    const onAutoCaptureAndSendConsumed = vi.fn();
+    vi.mocked(useQuickPrompt).mockReturnValue(makePrompt({ send }));
+
+    const { rerender } = renderPanel({
+      autoCaptureAndSend: true,
+      onAutoCaptureAndSendConsumed,
+    });
+
+    await waitFor(() => expect(startMagneticCapture).toHaveBeenCalledOnce());
+
+    const pending = readyPending({ sourceLabel: "Recorte magnético" });
+    useDisplaySnapshotMock.mockReturnValue(
+      controller({ pending, isCapturing: false }),
+    );
+    rerender(
+      <QuickCenterPanel
+        apiHealthy
+        sessionWarning={null}
+        user={user}
+        ready
+        autoCaptureAndSend
+        onAutoCaptureAndSendConsumed={onAutoCaptureAndSendConsumed}
+        onClose={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onHide={vi.fn()}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(send).toHaveBeenCalledWith("", {
+        attachment: {
+          file: pending.file,
+          width: 800,
+          height: 600,
+          previewUrl: "blob:preview",
+          sourceLabel: "Recorte magnético",
+        },
+      }),
+    );
+    expect(onAutoCaptureAndSendConsumed).toHaveBeenCalledOnce();
+    expect(clear).toHaveBeenCalledOnce();
+  });
+
+  it("consumes autoCaptureAndSend without sending when the crop is cancelled", async () => {
+    const send = vi.fn(() => Promise.resolve(true));
+    const onAutoCaptureAndSendConsumed = vi.fn();
+    vi.mocked(useQuickPrompt).mockReturnValue(makePrompt({ send }));
+
+    const { rerender } = renderPanel({
+      autoCaptureAndSend: true,
+      onAutoCaptureAndSendConsumed,
+    });
+
+    await waitFor(() => expect(startMagneticCapture).toHaveBeenCalledOnce());
+
+    useDisplaySnapshotMock.mockReturnValue(controller({ isCapturing: true }));
+    rerender(
+      <QuickCenterPanel
+        apiHealthy
+        sessionWarning={null}
+        user={user}
+        ready
+        autoCaptureAndSend
+        onAutoCaptureAndSendConsumed={onAutoCaptureAndSendConsumed}
+        onClose={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onHide={vi.fn()}
+      />,
+    );
+
+    useDisplaySnapshotMock.mockReturnValue(controller({ isCapturing: false }));
+    rerender(
+      <QuickCenterPanel
+        apiHealthy
+        sessionWarning={null}
+        user={user}
+        ready
+        autoCaptureAndSend
+        onAutoCaptureAndSendConsumed={onAutoCaptureAndSendConsumed}
+        onClose={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onHide={vi.fn()}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(onAutoCaptureAndSendConsumed).toHaveBeenCalledOnce(),
+    );
+    expect(send).not.toHaveBeenCalled();
+  });
 });

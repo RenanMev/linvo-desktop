@@ -4,7 +4,7 @@ import {
   GripVertical,
   Keyboard,
   MessageSquare,
-  Video,
+  SquareDashedMousePointer,
   type LucideIcon,
 } from "lucide-react";
 import type { Ref } from "react";
@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 type FloatingBarProps = {
   isActive: boolean;
   onOpenQuickMenu: () => void;
+  onCaptureContext: () => void;
   onCollapseToEdge: () => void;
   onMinimize: () => void;
   onResetPosition: () => void;
@@ -113,6 +114,7 @@ function ShortcutPopover() {
 export function FloatingBar({
   isActive,
   onOpenQuickMenu,
+  onCaptureContext,
   onCollapseToEdge,
   onMinimize,
   onResetPosition,
@@ -172,7 +174,11 @@ export function FloatingBar({
         />
         <ShortcutPopover />
       </div>
-      <BarAction icon={Video} label="Gravar · em breve" disabled />
+      <BarAction
+        icon={SquareDashedMousePointer}
+        label="Recorte"
+        onClick={onCaptureContext}
+      />
       <BarAction icon={Minimize2} label="Encolher" onClick={onCollapseToEdge} />
       <BarAction icon={Minus} label="Minimizar" onClick={onMinimize} />
     </div>

@@ -10,6 +10,7 @@ function renderBar(overrides: Overrides = {}) {
   const props = {
     isActive: true,
     onOpenQuickMenu: vi.fn(),
+    onCaptureContext: vi.fn(),
     onCollapseToEdge: vi.fn(),
     onMinimize: vi.fn(),
     onResetPosition: vi.fn(),
@@ -20,15 +21,13 @@ function renderBar(overrides: Overrides = {}) {
 }
 
 describe("FloatingBar", () => {
-  it("renders the compact set of controls: grip, status, chat, record, collapse, minimize", () => {
+  it("renders the compact set of controls: grip, status, chat, crop, collapse, minimize", () => {
     renderBar();
 
     expect(screen.getByTitle(/^Mover/)).toBeInTheDocument();
     expect(screen.getByRole("status")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Gravar · em breve" }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Recorte" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Encolher" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Minimizar" })).toBeInTheDocument();
   });
@@ -45,6 +44,14 @@ describe("FloatingBar", () => {
 
     await user.click(screen.getByRole("button", { name: "Chat" }));
     expect(onOpenQuickMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onCaptureContext when Recorte is clicked", async () => {
+    const user = userEvent.setup();
+    const { onCaptureContext } = renderBar();
+
+    await user.click(screen.getByRole("button", { name: "Recorte" }));
+    expect(onCaptureContext).toHaveBeenCalledTimes(1);
   });
 
   it("shows the chat shortcuts popover content", () => {
