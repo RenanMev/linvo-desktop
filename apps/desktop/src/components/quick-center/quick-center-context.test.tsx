@@ -309,6 +309,17 @@ describe("QuickCenterPanel visual context", () => {
     await waitFor(() => expect(startMagneticCapture).toHaveBeenCalledOnce());
   });
 
+  it("does not start magnetic capture when autoCaptureAndSend is off", async () => {
+    renderPanel({ autoCaptureAndSend: false });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Capturar contexto visual" }),
+      ).toBeEnabled(),
+    );
+    expect(startMagneticCapture).not.toHaveBeenCalled();
+  });
+
   it("auto-sends the capture and consumes the arm when the pending is ready", async () => {
     const send = vi.fn(() => Promise.resolve(true));
     const onAutoCaptureAndSendConsumed = vi.fn();
