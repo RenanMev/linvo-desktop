@@ -176,6 +176,7 @@ export async function expandFloatingToQuickMenu(
 
     // Só depois de a janela estar no tamanho final, para o painel nunca pintar
     // recortado dentro da pílula.
+    await options.onViewportReady?.(geometry);
     await options.onResizeStart?.(geometry);
     return geometry;
   });

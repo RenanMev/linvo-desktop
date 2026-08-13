@@ -621,23 +621,6 @@
     opacity: 1;
   }
 
-  .quick-center-panel-ready > :not(.sr-only) {
-    animation: quick-center-content-enter var(--motion-duration-island-content)
-      var(--motion-ease-island) both;
-  }
-
-  .quick-center-panel-ready > :nth-child(2) {
-    animation-delay: 25ms;
-  }
-
-  .quick-center-panel-ready > :nth-child(3) {
-    animation-delay: 45ms;
-  }
-
-  .quick-center-panel-ready > :nth-child(4) {
-    animation-delay: 65ms;
-  }
-
   .quick-center-panel-closing {
     pointer-events: none;
     opacity: 1;

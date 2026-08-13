@@ -129,6 +129,7 @@ export async function expandFloatingToChecklist(
     });
 
     await applyWindowBoundsImmediate(win, targetBounds);
+    await options.onViewportReady?.(geometry);
     await options.onResizeStart?.(geometry);
     return geometry;
   });
