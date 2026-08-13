@@ -70,7 +70,19 @@ vi.mock("@/lib/panel-window", () => ({
 
 vi.mock("@/lib/app-windows", () => ({
   hideAllWindows: vi.fn(() => Promise.resolve()),
+  hideMainBar: vi.fn(() => Promise.resolve()),
+  showMainBar: vi.fn(() => Promise.resolve()),
 }));
+
+vi.mock("@/lib/context-capture/capture-sources", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/lib/context-capture/capture-sources")
+  >("@/lib/context-capture/capture-sources");
+  return {
+    ...actual,
+    listCaptureSources: vi.fn(() => Promise.resolve([])),
+  };
+});
 
 vi.mock("@/hooks/use-quick-prompt", () => ({
   useQuickPrompt: () => ({
@@ -299,6 +311,32 @@ describe("BarApp window modes", () => {
     );
     const chatButton = screen.getByRole("button", { name: "Chat" });
     expect(chatButton).not.toHaveFocus();
+  });
+
+  it("does not collapse while the quick menu is capturing visual context", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
+    await waitFor(() => screen.getByLabelText("Quick Center"));
+    await waitFor(() => expect(focusHandler).not.toBeNull());
+
+    await userEventInstance.click(
+      screen.getByRole("button", { name: "Capturar contexto visual" }),
+    );
+    await userEventInstance.click(
+      await screen.findByRole("menuitem", { name: /Escolher janela ou tela/ }),
+    );
+    await screen.findByRole("dialog", { name: "Selecionar fonte de captura" });
+
+    // O seletor de fontes rouba o foco da janela; sem a trava o quick menu
+    // colapsaria e levaria junto a captura em andamento.
+    act(() => {
+      focusHandler!({ payload: false });
+    });
+
+    expect(collapseQuickMenuToFloating).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
   });
 
   it("does not collapse when blur is caused by dragging the quick menu", async () => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+
 import {
   DisplaySnapshotCancelledError,
   captureDisplaySnapshot,
@@ -10,11 +10,10 @@ import {
   type StartDisplayMedia,
 } from "@/lib/context-capture/display-snapshot";
 import {
-  base64ToPngBlob,
   bytesToPngBlob,
   captureSourceBytes,
-  captureSourceMeta,
   closeCaptureOverlay,
+  fetchOverlayCrop,
   listenOverlayCancel,
   listenOverlayResult,
   openCaptureOverlay,
@@ -39,6 +38,19 @@ export type DraftSnapshot = {
   previewUrl: string;
 };
 
+export type UseDisplaySnapshotOptions = {
+  startDisplayMedia?: StartDisplayMedia;
+  /** Label da janela que pede a captura, para o foco voltar para ela. */
+  windowLabel?: string;
+};
+
+/**
+ * Se nem `result` nem `cancel` chegarem, `isCapturing` ficava preso em `true`
+ * para sempre — e como a barra flutuante suprime o fechar-ao-perder-foco
+ * enquanto uma captura está ativa, ela deixava de fechar até reiniciar o app.
+ */
+const OVERLAY_TIMEOUT_MS = 15_000;
+
 export type DisplaySnapshotController = {
   pending: PendingContextAttachment | null;
   draft: DraftSnapshot | null;
@@ -53,6 +65,8 @@ export type DisplaySnapshotController = {
   startMagneticCapture: () => Promise<void>;
   confirmDraft: (region?: Rect | null) => Promise<void>;
   discardDraft: () => void;
+  /** Devolve o anexo já pronto para o preview, para recortar de novo. */
+  editPending: () => void;
   clear: () => void;
   clearError: () => void;
 };
@@ -109,9 +123,10 @@ function setDraftSnapshot(
   setDraft(next);
 }
 
-export function useDisplaySnapshot(options?: {
-  startDisplayMedia?: StartDisplayMedia;
-}): DisplaySnapshotController {
+export function useDisplaySnapshot(
+  options?: UseDisplaySnapshotOptions,
+): DisplaySnapshotController {
+  const windowLabel = options?.windowLabel;
   const [pending, setPending] = useState<PendingContextAttachment | null>(null);
   const [draft, setDraft] = useState<DraftSnapshot | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -121,6 +136,30 @@ export function useDisplaySnapshot(options?: {
   const pendingRef = useRef<PendingContextAttachment | null>(null);
   const draftRef = useRef<DraftSnapshot | null>(null);
   const mountedRef = useRef(true);
+  /*
+   * Os hooks do overlay vêm em um objeto novo a cada render do chamador; guardá-los
+   * numa ref evita reassinar os listeners de `capture-overlay://*` sem parar.
+   */
+  /*
+   * `capture-overlay://result` é global: o painel e a barra flutuante escutam o
+   * mesmo evento. Sem marcar quem pediu a captura, um recorte feito no chat
+   * flutuante também viraria rascunho no painel.
+   */
+  const overlayRunRef = useRef(false);
+  const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Consome o overlay em voo; devolve false quando a captura é de outra janela. */
+  const claimOverlayRun = useCallback(() => {
+    if (!overlayRunRef.current) {
+      return false;
+    }
+    overlayRunRef.current = false;
+    if (overlayTimeoutRef.current !== null) {
+      clearTimeout(overlayTimeoutRef.current);
+      overlayTimeoutRef.current = null;
+    }
+    return true;
+  }, []);
 
   const revokePending = useCallback(
     (attachment: PendingContextAttachment | null) => {
@@ -149,25 +188,36 @@ export function useDisplaySnapshot(options?: {
     setDraft(null);
   }, [revokeDraft]);
 
+  /*
+   * O recorte magnético anexa direto, sem passar pelo modal de preview: o
+   * usuário acabou de escolher a região vendo a tela, e o modal pedia uma
+   * segunda confirmação exatamente da mesma coisa. O modal continua no caminho
+   * do seletor de janela/tela, onde não houve seleção visual — e o chip abre
+   * o preview quando ele quiser refinar.
+   */
   const applyOverlayResult = useCallback(
     async (result: OverlayResult) => {
-      const fullBlob = base64ToPngBlob(result.imagePngBase64);
-      const fullSnapshot: DisplaySnapshot = {
-        blob: fullBlob,
-        mimeType: "image/png",
-        filename: formatSnapshotFilename(),
-        width: result.width,
-        height: result.height,
-        sourceLabel: "Recorte magnético",
-      };
-      const cropped = await cropDisplaySnapshot(fullSnapshot, result.region);
+      // O Rust captura só a região escolhida: chegam KB, não o desktop inteiro.
+      // É este comando que devolve as janelas, já com o print na mão.
+      const blob = await fetchOverlayCrop(result.region, windowLabel);
       if (!mountedRef.current) {
         return;
       }
       setIsCapturing(false);
-      setDraftSnapshot(cropped, draftRef, setDraft, revokeDraft);
+
+      const next = snapshotToPending({
+        blob,
+        mimeType: "image/png",
+        filename: formatSnapshotFilename(),
+        width: result.region.width,
+        height: result.region.height,
+        sourceLabel: "Recorte magnético",
+      });
+      revokePending(pendingRef.current);
+      pendingRef.current = next;
+      setPending(next);
     },
-    [revokeDraft],
+    [revokePending, windowLabel],
   );
 
   useEffect(() => {
@@ -176,10 +226,17 @@ export function useDisplaySnapshot(options?: {
     let unlistenCancel: (() => void) | undefined;
 
     void listenOverlayResult((result) => {
+      if (!claimOverlayRun()) {
+        return;
+      }
       void applyOverlayResult(result).catch((caught) => {
+        // O recorte é quem devolve as janelas; se ele nem chegou ao Rust, elas
+        // ficariam escondidas e o usuário sem app.
+        void closeCaptureOverlay(windowLabel).catch(() => {});
         if (!mountedRef.current) {
           return;
         }
+        setIsCapturing(false);
         setError(
           caught instanceof Error
             ? caught.message
@@ -191,6 +248,9 @@ export function useDisplaySnapshot(options?: {
     });
 
     void listenOverlayCancel(() => {
+      if (!claimOverlayRun()) {
+        return;
+      }
       if (mountedRef.current) {
         setIsCapturing(false);
       }
@@ -202,12 +262,22 @@ export function useDisplaySnapshot(options?: {
       mountedRef.current = false;
       unlistenResult?.();
       unlistenCancel?.();
+      if (overlayTimeoutRef.current !== null) {
+        clearTimeout(overlayTimeoutRef.current);
+        overlayTimeoutRef.current = null;
+      }
       revokePending(pendingRef.current);
       pendingRef.current = null;
       revokeDraft(draftRef.current);
       draftRef.current = null;
     };
-  }, [applyOverlayResult, revokeDraft, revokePending]);
+  }, [
+    applyOverlayResult,
+    claimOverlayRun,
+    revokeDraft,
+    revokePending,
+    windowLabel,
+  ]);
 
   const capture = useCallback(
     async (surface?: DisplaySurfacePreference) => {
@@ -250,14 +320,13 @@ export function useDisplaySnapshot(options?: {
       setIsCapturing(true);
       setPickerOpen(false);
       try {
-        const [bytes, meta] = await Promise.all([
-          captureSourceBytes(source.id),
-          captureSourceMeta(source.id),
-        ]);
-        const blob = bytesToPngBlob(bytes);
+        // As dimensões vêm da própria lista do seletor. Antes um
+        // `captureSourceMeta` rodava em paralelo e capturava a fonte inteira de
+        // novo só para lê-las — duas capturas por seleção.
+        const blob = bytesToPngBlob(await captureSourceBytes(source.id));
         const size =
-          meta.width > 0 && meta.height > 0
-            ? { width: meta.width, height: meta.height }
+          source.width > 0 && source.height > 0
+            ? { width: source.width, height: source.height }
             : await blobImageSize(blob);
         if (!mountedRef.current) {
           return;
@@ -269,7 +338,7 @@ export function useDisplaySnapshot(options?: {
             filename: formatSnapshotFilename(),
             width: size.width,
             height: size.height,
-            sourceLabel: meta.title || source.title,
+            sourceLabel: source.title,
           },
           draftRef,
           setDraft,
@@ -297,13 +366,38 @@ export function useDisplaySnapshot(options?: {
     setError(null);
     setIsCapturing(true);
     setPickerOpen(false);
-    try {
-      try {
-        await invoke("panel_close");
-      } catch {
+    overlayRunRef.current = true;
+
+    if (overlayTimeoutRef.current !== null) {
+      clearTimeout(overlayTimeoutRef.current);
+    }
+    overlayTimeoutRef.current = setTimeout(() => {
+      overlayTimeoutRef.current = null;
+      if (!overlayRunRef.current) {
+        return;
       }
+      overlayRunRef.current = false;
+      void closeCaptureOverlay(windowLabel).catch(() => {});
+      if (mountedRef.current) {
+        setIsCapturing(false);
+      }
+    }, OVERLAY_TIMEOUT_MS);
+
+    try {
+      // O Rust esconde as nossas janelas; fazer isso daqui não esperava o
+      // compositor e a janela saía como fantasma dentro da própria captura.
       await openCaptureOverlay();
     } catch (caught) {
+      overlayRunRef.current = false;
+      if (overlayTimeoutRef.current !== null) {
+        clearTimeout(overlayTimeoutRef.current);
+        overlayTimeoutRef.current = null;
+      }
+      // Devolve as janelas escondidas pelo comando que falhou.
+      try {
+        await closeCaptureOverlay(windowLabel);
+      } catch {
+      }
       if (!mountedRef.current) {
         return;
       }
@@ -313,12 +407,8 @@ export function useDisplaySnapshot(options?: {
           ? caught.message
           : "Não foi possível abrir o recorte magnético",
       );
-      try {
-        await closeCaptureOverlay();
-      } catch {
-      }
     }
-  }, []);
+  }, [windowLabel]);
 
   const confirmDraft = useCallback(
     async (region?: Rect | null) => {
@@ -364,6 +454,34 @@ export function useDisplaySnapshot(options?: {
     [revokeDraft, revokePending],
   );
 
+  /*
+   * O recorte magnético anexa direto, mas quem quiser ajustar clica na
+   * miniatura do chip e cai no mesmo preview de sempre. O anexo sai do chip só
+   * quando o preview for confirmado ou descartado.
+   */
+  const editPending = useCallback(() => {
+    const current = pendingRef.current;
+    if (!current) {
+      return;
+    }
+    setDraftSnapshot(
+      {
+        blob: current.file,
+        mimeType: current.file.type === "image/jpeg" ? "image/jpeg" : "image/png",
+        filename: current.file.name,
+        width: current.width,
+        height: current.height,
+        ...(current.sourceLabel ? { sourceLabel: current.sourceLabel } : {}),
+      },
+      draftRef,
+      setDraft,
+      revokeDraft,
+    );
+    revokePending(current);
+    pendingRef.current = null;
+    setPending(null);
+  }, [revokeDraft, revokePending]);
+
   return {
     pending,
     draft,
@@ -378,6 +496,7 @@ export function useDisplaySnapshot(options?: {
     startMagneticCapture,
     confirmDraft,
     discardDraft,
+    editPending,
     clear,
     clearError: () => setError(null),
   };

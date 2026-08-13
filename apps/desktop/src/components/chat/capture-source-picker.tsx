@@ -2,12 +2,14 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { Loader2, Monitor, Search, AppWindow } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
+  captureSourceThumbnail,
   listCaptureSources,
   type CaptureSource,
   type CaptureSourceKind,
@@ -36,30 +38,78 @@ export function CaptureSourcePicker({
   const [sources, setSources] = useState<CaptureSource[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Miniaturas carregadas depois da lista, uma por fonte. */
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
+  const thumbnailRunRef = useRef(0);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setThumbnails({});
+    const run = thumbnailRunRef.current + 1;
+    thumbnailRunRef.current = run;
     try {
       const next = await listCaptureSources("all");
       setSources(next);
+      setLoading(false);
+
+      /*
+       * A lista chega sem miniatura e elas são buscadas aqui, em sequência.
+       * Antes o Rust capturava e codificava em PNG+base64 toda janela e todo
+       * monitor antes de responder, e o seletor ficava segundos em "Carregando
+       * fontes…". Uma de cada vez, para não disputar a GPU com o resto do app.
+       */
+      for (const source of next) {
+        if (thumbnailRunRef.current !== run) {
+          return;
+        }
+        try {
+          const thumbnail = await captureSourceThumbnail(source.id);
+          if (thumbnailRunRef.current !== run) {
+            return;
+          }
+          setThumbnails((current) => ({ ...current, [source.id]: thumbnail }));
+        } catch {
+          // Uma fonte que não deixa capturar não pode derrubar as outras.
+        }
+      }
     } catch (caught) {
       setError(
         caught instanceof Error
           ? caught.message
           : "Não foi possível listar as fontes",
       );
-    } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     if (!open) {
+      // Cancela as miniaturas em voo do seletor que acabou de fechar.
+      thumbnailRunRef.current += 1;
       return;
     }
     void load();
   }, [load, open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") {
+        return;
+      }
+      // Sem isto o Esc atravessa até o dono do diálogo — no chat flutuante ele
+      // fecharia a janela inteira em vez de só desistir da fonte.
+      event.preventDefault();
+      onCancel();
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onCancel, open]);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -81,16 +131,20 @@ export function CaptureSourcePicker({
     return null;
   }
 
+  /*
+   * Os `sm:` separam a janela flutuante (380px de largura) do painel: é o mesmo
+   * diálogo nos dois, só com respiro menor onde o espaço é apertado.
+   */
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-6"
       role="presentation"
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Selecionar fonte de captura"
-        className="surface-premium flex max-h-full w-full max-w-3xl flex-col gap-3 rounded-premium p-4 shadow-2xl"
+        className="surface-premium flex max-h-full w-full max-w-3xl flex-col gap-2 rounded-premium p-3 shadow-2xl sm:gap-3 sm:p-4"
       >
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -145,12 +199,12 @@ export function CaptureSourcePicker({
 
         <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-hairline bg-surface-raise-2 p-2">
           {loading ? (
-            <div className="flex h-48 items-center justify-center gap-2 text-sm text-muted-foreground">
+            <div className="flex h-32 items-center justify-center gap-2 text-sm text-muted-foreground sm:h-48">
               <Loader2 className="size-4 animate-spin" />
               Carregando fontes…
             </div>
           ) : error ? (
-            <div className="flex h-48 flex-col items-center justify-center gap-3 text-sm">
+            <div className="flex h-32 flex-col items-center justify-center gap-3 text-sm sm:h-48">
               <p className="text-destructive">{error}</p>
               {onFallback ? (
                 <Button type="button" size="sm" onClick={onFallback}>
@@ -159,7 +213,7 @@ export function CaptureSourcePicker({
               ) : null}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
+            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground sm:h-48">
               Nenhuma fonte encontrada
             </div>
           ) : (
@@ -177,11 +231,18 @@ export function CaptureSourcePicker({
                   )}
                 >
                   <div className="relative aspect-video overflow-hidden rounded-md bg-black/40">
-                    <img
-                      src={source.thumbnail}
-                      alt=""
-                      className="size-full object-cover"
-                    />
+                    {thumbnails[source.id] ? (
+                      <img
+                        src={thumbnails[source.id]}
+                        alt=""
+                        className="size-full object-cover"
+                      />
+                    ) : (
+                      <span
+                        aria-hidden="true"
+                        className="absolute inset-0 animate-pulse bg-surface-raise-2"
+                      />
+                    )}
                   </div>
                   <div className="min-w-0">
                     <p className="flex items-center gap-1 truncate text-xs font-medium">

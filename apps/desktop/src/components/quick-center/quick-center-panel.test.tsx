@@ -108,7 +108,7 @@ describe("QuickCenterPanel", () => {
     await userEventInstance.type(field, "olá");
     await userEventInstance.click(screen.getByRole("button", { name: "Enviar" }));
 
-    expect(send).toHaveBeenCalledWith("olá");
+    expect(send).toHaveBeenCalledWith("olá", undefined);
     expect(field).toHaveValue("");
   });
 
