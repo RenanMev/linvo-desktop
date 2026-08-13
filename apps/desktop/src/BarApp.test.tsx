@@ -157,6 +157,38 @@ describe("BarApp window modes", () => {
     expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
   });
 
+  it("does not arm auto-capture when Chat opens without Recorte", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
+
+    await waitFor(() =>
+      expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
+    );
+    expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
+    await waitFor(() => expect(setResizableMock).toHaveBeenCalledWith(true));
+
+    expect(invokeMock).not.toHaveBeenCalledWith("capture_overlay_open");
+  });
+
+  it("opens the quick menu from Recorte to capture and send context", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(
+      screen.getByRole("button", { name: "Recorte" }),
+    );
+
+    await waitFor(() =>
+      expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
+    );
+    expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("capture_overlay_open"),
+    );
+  });
+
   it("expands to the quick menu when the local shortcut is pressed", async () => {
     const userEventInstance = userEvent.setup();
     render(<BarApp sessionWarning={null} user={user} />);

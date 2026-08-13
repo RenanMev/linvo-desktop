@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import {
   Check,
   Copy,
@@ -35,6 +41,12 @@ type QuickCenterPanelProps = {
   /** Pode aparecer durante o morph sem ainda ativar foco ou carregamento. */
   visible?: boolean;
   closing?: boolean;
+  /**
+   * Abrir o recorte magnético assim que o painel estiver pronto, enviar o
+   * contexto sozinho e ficar na resposta — atalho da barra compacta.
+   */
+  autoCaptureAndSend?: boolean;
+  onAutoCaptureAndSendConsumed?: () => void;
   onClose: (options?: { restoreFocus?: boolean }) => void;
   onOpenSettings: () => void;
   onHide: () => void;
@@ -64,6 +76,8 @@ export function QuickCenterPanel({
   ready,
   visible = ready,
   closing = false,
+  autoCaptureAndSend = false,
+  onAutoCaptureAndSendConsumed,
   onClose,
   onOpenSettings,
   onHide,
@@ -74,6 +88,9 @@ export function QuickCenterPanel({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const mountedRef = useRef(true);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoCaptureStartedRef = useRef(false);
+  const autoSendArmedRef = useRef(autoCaptureAndSend);
+  const sawAutoCaptureRef = useRef(false);
   const [inputValue, setInputValue] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -112,6 +129,14 @@ export function QuickCenterPanel({
 
   const captureActiveChangeRef = useRef(onCaptureActiveChange);
   captureActiveChangeRef.current = onCaptureActiveChange;
+  const onAutoCaptureAndSendConsumedRef = useRef(onAutoCaptureAndSendConsumed);
+  onAutoCaptureAndSendConsumedRef.current = onAutoCaptureAndSendConsumed;
+
+  useEffect(() => {
+    if (autoCaptureAndSend) {
+      autoSendArmedRef.current = true;
+    }
+  }, [autoCaptureAndSend]);
 
   useEffect(() => {
     captureActiveChangeRef.current?.(captureActive);
@@ -125,6 +150,32 @@ export function QuickCenterPanel({
     [],
   );
 
+  useEffect(() => {
+    if (
+      !ready ||
+      closing ||
+      !autoCaptureAndSend ||
+      fieldsDisabled ||
+      autoCaptureStartedRef.current
+    ) {
+      return;
+    }
+    autoCaptureStartedRef.current = true;
+    void startMagneticCapture();
+  }, [
+    autoCaptureAndSend,
+    closing,
+    fieldsDisabled,
+    ready,
+    startMagneticCapture,
+  ]);
+
+  useEffect(() => {
+    if (isCapturing || isCropping) {
+      sawAutoCaptureRef.current = true;
+    }
+  }, [isCapturing, isCropping]);
+
   async function handleClose() {
     if (isStreaming) {
       prompt.stop();
@@ -132,42 +183,82 @@ export function QuickCenterPanel({
     onClose();
   }
 
-  async function handleSend() {
-    const text = inputValue;
-    if ((!text.trim() && !hasAttachment) || isStreaming) {
-      return;
-    }
+  const sendPrompt = useCallback(
+    async (text: string, clearInput: boolean) => {
+      const readyAttachment = pending?.status === "ready" ? pending : null;
+      if ((!text.trim() && !readyAttachment) || isStreaming) {
+        return;
+      }
 
-    const attachment =
-      pending?.status === "ready"
+      const attachment = readyAttachment
         ? {
-            file: pending.file,
-            width: pending.width,
-            height: pending.height,
-            previewUrl: pending.previewUrl,
-            ...(pending.sourceLabel ? { sourceLabel: pending.sourceLabel } : {}),
+            file: readyAttachment.file,
+            width: readyAttachment.width,
+            height: readyAttachment.height,
+            previewUrl: readyAttachment.previewUrl,
+            ...(readyAttachment.sourceLabel
+              ? { sourceLabel: readyAttachment.sourceLabel }
+              : {}),
           }
         : undefined;
 
-    setInputValue("");
-    const accepted = await prompt.send(
-      text,
-      attachment ? { attachment } : undefined,
-    );
-    if (!accepted) {
-      setInputValue((current) => current || text);
+      if (clearInput) {
+        setInputValue("");
+      }
+      const accepted = await prompt.send(
+        text,
+        attachment ? { attachment } : undefined,
+      );
+      if (!accepted) {
+        if (clearInput) {
+          setInputValue((current) => current || text);
+        }
+        return;
+      }
+      /*
+       * O anexo só sai depois do aceite: `clearPending` revoga a object URL da
+       * miniatura, então descartá-lo otimista deixaria o chip quebrado se o envio
+       * falhasse.
+       */
+      if (attachment) {
+        clearPending();
+        clearCaptureError();
+      }
+    },
+    [clearCaptureError, clearPending, isStreaming, pending, prompt.send],
+  );
+
+  async function handleSend() {
+    await sendPrompt(inputValue, true);
+  }
+
+  useEffect(() => {
+    if (!autoSendArmedRef.current || !autoCaptureStartedRef.current) {
       return;
     }
-    /*
-     * O anexo só sai depois do aceite: `clearPending` revoga a object URL da
-     * miniatura, então descartá-lo otimista deixaria o chip quebrado se o envio
-     * falhasse.
-     */
-    if (attachment) {
-      clearPending();
-      clearCaptureError();
+    if (isCapturing || isCropping || isStreaming || fieldsDisabled) {
+      return;
     }
-  }
+
+    if (pending?.status === "ready") {
+      autoSendArmedRef.current = false;
+      onAutoCaptureAndSendConsumedRef.current?.();
+      void sendPrompt("", false);
+      return;
+    }
+
+    if (sawAutoCaptureRef.current) {
+      autoSendArmedRef.current = false;
+      onAutoCaptureAndSendConsumedRef.current?.();
+    }
+  }, [
+    fieldsDisabled,
+    isCapturing,
+    isCropping,
+    isStreaming,
+    pending,
+    sendPrompt,
+  ]);
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Escape") {

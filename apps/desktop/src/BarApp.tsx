@@ -81,6 +81,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   );
   const [windowMode, setWindowMode] = useState<WindowMode>("compact");
   const [panelReady, setPanelReady] = useState(false);
+  const [captureAndSendPending, setCaptureAndSendPending] = useState(false);
   const [quickMenuClosing, setQuickMenuClosing] = useState(false);
   const [edgeAnchor, setEdgeAnchor] = useState<EdgeAnchor>(NO_ANCHOR);
   const [transitioning, setTransitioning] = useState(false);
@@ -384,6 +385,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
         setPanelReady(true);
       } else {
         clearIslandMorph();
+        setCaptureAndSendPending(false);
       }
     } catch {
       clearIslandMorph();
@@ -391,10 +393,22 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
         modeIntentRef.current = "compact";
         setPanelReady(false);
         setWindowMode("compact");
+        setCaptureAndSendPending(false);
       }
     } finally {
       finishTransition();
     }
+  }
+
+  async function handleCaptureContext() {
+    if (
+      windowModeRef.current !== "compact" ||
+      transitionCountRef.current > 0
+    ) {
+      return;
+    }
+    setCaptureAndSendPending(true);
+    await handleOpenQuickMenu();
   }
 
   async function closeQuickMenu(
@@ -461,6 +475,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
         }
         setWindowMode("compact");
         setPanelReady(false);
+        setCaptureAndSendPending(false);
         clearIslandMorph();
         setQuickMenuClosing(false);
       }
@@ -743,6 +758,8 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
           ready={panelReady}
           visible
           closing={quickMenuClosing}
+          autoCaptureAndSend={captureAndSendPending}
+          onAutoCaptureAndSendConsumed={() => setCaptureAndSendPending(false)}
           onClose={(options) => void closeQuickMenu(options)}
           onOpenSettings={() => void closeQuickMenu({ restoreFocus: false })}
           onHide={() => void handleHideQuickMenu()}
@@ -767,6 +784,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
       <FloatingBar
         isActive={isActive}
         onOpenQuickMenu={() => void handleOpenQuickMenu()}
+        onCaptureContext={() => void handleCaptureContext()}
         onCollapseToEdge={() => void handleCollapseToEdge()}
         onMinimize={() => void hideAllWindows()}
         onResetPosition={() => void handleResetPosition()}
