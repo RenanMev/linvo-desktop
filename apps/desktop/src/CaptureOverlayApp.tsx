@@ -10,6 +10,7 @@ import { emit } from "@tauri-apps/api/event";
 
 import {
   closeCaptureOverlay,
+  fetchOverlayPayload,
   listenOverlayReady,
   OVERLAY_CANCEL_EVENT,
   OVERLAY_RESULT_EVENT,
@@ -28,9 +29,8 @@ import {
   type Rect,
   type Size,
 } from "@/lib/context-capture/crop";
-import { cn } from "@/lib/utils";
 
-/** Alvos do Rust, deslocados para a origem do frame congelado. */
+/** Alvos do Rust, deslocados para a origem do desktop virtual. */
 type FrameSnapTarget = Rect & { kind: SnapRect["kind"]; title: string };
 
 function toFrameTargets(payload: OverlayPayload): FrameSnapTarget[] {
@@ -44,51 +44,116 @@ function toFrameTargets(payload: OverlayPayload): FrameSnapTarget[] {
   }));
 }
 
+const EMPTY_RECT: Rect = { x: 0, y: 0, width: 0, height: 0 };
+
+function sameRect(a: Rect, b: Rect): boolean {
+  return (
+    a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+  );
+}
+
 /**
  * O overlay vive em dois sistemas de coordenadas e confundi-los quebra tudo de
- * uma vez: o Rust entrega o frame e os retângulos do magnetismo em **pixels
- * físicos** da área de trabalho virtual, enquanto o webview desenha e reporta
- * ponteiro em **pixels CSS** (físico ÷ escala do monitor). A imagem é esticada
- * para preencher o palco e a conversão sai da medida real dele, então a
- * seleção continua batendo com o recorte em qualquer DPI.
+ * uma vez: o Rust entrega os retângulos do magnetismo em **pixels físicos** da
+ * área de trabalho virtual, enquanto o webview desenha e reporta ponteiro em
+ * **pixels CSS** (físico ÷ escala do monitor). A conversão sai da medida real do
+ * palco, então a seleção continua batendo com o recorte em qualquer DPI.
+ *
+ * A janela é transparente e o usuário vê a própria tela por baixo, só escurecida
+ * — como a Ferramenta de Captura do Windows. Nada é capturado até o confirm, e
+ * aí só a região escolhida.
  */
 export function CaptureOverlayApp() {
   const [payload, setPayload] = useState<OverlayPayload | null>(null);
-  const [selection, setSelection] = useState<Rect | null>(null);
-  const [magnet, setMagnet] = useState<FrameSnapTarget | null>(null);
+  const [magnetTitle, setMagnetTitle] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [stageSize, setStageSize] = useState<Size>({ width: 0, height: 0 });
   const stageRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<Point | null>(null);
+
+  /*
+   * Geometria vive em refs, não em estado. Cada `pointermove` chegava como um
+   * `setState` e disparava uma reconciliação inteira do React numa janela do
+   * tamanho da área de trabalho — a seleção ficava travada. Agora o movimento
+   * só escreve na ref, e um único rAF por quadro pinta os retângulos.
+   */
+  const selectionRef = useRef<Rect | null>(null);
+  const magnetRef = useRef<FrameSnapTarget | null>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
+  const dimTop = useRef<HTMLDivElement>(null);
+  const dimBottom = useRef<HTMLDivElement>(null);
+  const dimLeft = useRef<HTMLDivElement>(null);
+  const dimRight = useRef<HTMLDivElement>(null);
+  // Objeto estável: recriá-lo a cada render trocaria a identidade de `paint` e
+  // remontaria o rAF sem parar.
+  const dimRefs = useMemo(
+    () => ({
+      top: dimTop,
+      bottom: dimBottom,
+      left: dimLeft,
+      right: dimRight,
+    }),
+    [],
+  );
+  const frameRef = useRef<number | null>(null);
+  const scheduledRef = useRef(false);
+  // `null` = nada pintado ainda. Um `EMPTY_RECT` inicial se confundiria com
+  // "sem seleção" e o escurecimento de tela cheia nunca chegaria a ser aplicado.
+  const paintedRef = useRef<Rect | null>(null);
+
+  const applyPayload = useCallback((next: OverlayPayload) => {
+    setPayload(next);
+    selectionRef.current = null;
+    magnetRef.current = null;
+    setMagnetTitle(null);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     let unlisten: (() => void) | undefined;
 
     void listenOverlayReady((next) => {
-      if (cancelled) {
-        return;
+      if (!cancelled) {
+        applyPayload(next);
       }
-      setPayload(next);
-      setSelection(null);
-      setMagnet(null);
     }).then((fn) => {
       unlisten = fn;
     });
 
+    /*
+     * `listen()` registra de forma assíncrona, então existe uma janela em que um
+     * `emit` do Rust cai no vazio (reload do WebView2, HMR, StrictMode). Quando
+     * isso acontecia o overlay ficava preso em "preparando" cobrindo a tela
+     * inteira, sem saída além do Esc. Puxar o payload fecha essa corrida.
+     */
+    const pull = () => {
+      void fetchOverlayPayload()
+        .then((next) => {
+          if (!cancelled && next) {
+            applyPayload(next);
+          }
+        })
+        .catch(() => {});
+    };
+
+    pull();
+    // A janela é pré-criada e reaproveitada: ela ganha foco toda vez que o Rust
+    // a mostra, que é exatamente quando vale reconferir se o payload chegou.
+    window.addEventListener("focus", pull);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("focus", pull);
       unlisten?.();
     };
-  }, []);
+  }, [applyPayload]);
 
   /*
-   * O Rust redimensiona esta janela para a área de trabalho virtual *antes* de
-   * emitir o payload, e o webview só reflete o novo tamanho alguns frames
-   * depois. Medir uma vez na chegada do payload pegava o tamanho antigo e
-   * deixava toda a conversão CSS <-> frame errada — era o que fazia o
-   * magnetismo mirar fora da tela. O observer não tem essa corrida: dispara na
-   * primeira observação e a cada mudança.
+   * O Rust redimensiona esta janela para a área de trabalho virtual, e o webview
+   * só reflete o novo tamanho alguns quadros depois. Medir uma vez na chegada do
+   * payload pegava o tamanho antigo e deixava toda a conversão CSS <-> frame
+   * errada — era o que fazia o magnetismo mirar fora da tela. O observer não tem
+   * essa corrida: dispara na primeira observação e a cada mudança.
    */
   useEffect(() => {
     const stage = stageRef.current;
@@ -112,6 +177,102 @@ export function CaptureOverlayApp() {
     [payload],
   );
 
+  /** Retângulo em destaque, em pixels CSS. */
+  const currentHighlight = useCallback((): Rect | null => {
+    const selection = selectionRef.current;
+    if (selection && isRectUsable(selection)) {
+      return selection;
+    }
+    const magnet = magnetRef.current;
+    if (magnet && sourceSize && canMap) {
+      return scaleRectToDisplay(magnet, sourceSize, stageSize);
+    }
+    return null;
+  }, [canMap, sourceSize, stageSize]);
+
+  /*
+   * Quatro retângulos sólidos em volta da seleção, em vez de um
+   * `box-shadow: 0 0 0 100vmax`. O shadow gigante obrigava o compositor a
+   * repintar uma área do tamanho do desktop virtual a cada quadro do arrasto;
+   * retângulos de cor sólida ele resolve na GPU.
+   */
+  const paint = useCallback(() => {
+    const highlight = currentHighlight();
+    const rect = highlight ?? EMPTY_RECT;
+    if (paintedRef.current && sameRect(rect, paintedRef.current)) {
+      return;
+    }
+    paintedRef.current = rect;
+
+    const box = highlightRef.current;
+    if (box) {
+      box.style.opacity = highlight ? "1" : "0";
+      box.style.transform = `translate(${rect.x}px, ${rect.y}px)`;
+      box.style.width = `${rect.width}px`;
+      box.style.height = `${rect.height}px`;
+    }
+
+    const { width, height } = stageSize;
+    const right = rect.x + rect.width;
+    const bottom = rect.y + rect.height;
+    const place = (
+      ref: { current: HTMLDivElement | null },
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+    ) => {
+      const node = ref.current;
+      if (!node) {
+        return;
+      }
+      node.style.transform = `translate(${x}px, ${y}px)`;
+      node.style.width = `${Math.max(0, w)}px`;
+      node.style.height = `${Math.max(0, h)}px`;
+    };
+
+    if (!highlight) {
+      // Sem seleção o escurecimento cobre tudo com um painel só.
+      place(dimRefs.top, 0, 0, width, height);
+      place(dimRefs.bottom, 0, 0, 0, 0);
+      place(dimRefs.left, 0, 0, 0, 0);
+      place(dimRefs.right, 0, 0, 0, 0);
+      return;
+    }
+
+    place(dimRefs.top, 0, 0, width, rect.y);
+    place(dimRefs.bottom, 0, bottom, width, height - bottom);
+    place(dimRefs.left, 0, rect.y, rect.x, rect.height);
+    place(dimRefs.right, right, rect.y, width - right, rect.height);
+  }, [currentHighlight, dimRefs, stageSize]);
+
+  /** Coalesce os movimentos do ponteiro num repaint por quadro. */
+  const schedulePaint = useCallback(() => {
+    if (scheduledRef.current) {
+      return;
+    }
+    // O "agendado" mora numa flag à parte, não no handle: se o callback rodar
+    // de forma síncrona, a atribuição do handle acontece *depois* dele e
+    // ressuscitaria um valor não-nulo, travando todos os repaints seguintes.
+    scheduledRef.current = true;
+    frameRef.current = requestAnimationFrame(() => {
+      scheduledRef.current = false;
+      paint();
+    });
+  }, [paint]);
+
+  useEffect(() => {
+    paintedRef.current = null;
+    schedulePaint();
+    return () => {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
+      scheduledRef.current = false;
+    };
+  }, [schedulePaint, stageSize, payload]);
+
   const cancel = useCallback(async () => {
     await emit(OVERLAY_CANCEL_EVENT);
     await closeCaptureOverlay();
@@ -123,26 +284,47 @@ export function CaptureOverlayApp() {
     }
 
     /*
-     * Sem seleção e sem magnetismo, Enter vale pelo frame inteiro. Antes ele
-     * não fazia nada: a tela seguia congelada e o chat — que se escondeu para
-     * a captura — não voltava, deixando o usuário sem saída além do Esc.
+     * Sem seleção e sem magnetismo, o confirm vale pelo frame inteiro. Antes ele
+     * não fazia nada: a tela seguia coberta e o chat — que se escondeu para a
+     * captura — não voltava, deixando o usuário sem saída além do Esc.
      */
+    const selection = selectionRef.current;
+    const magnet = magnetRef.current;
     const region =
       selection && isRectUsable(selection)
         ? scaleRectToSource(selection, stageSize, sourceSize)
         : magnet
-          ? { x: magnet.x, y: magnet.y, width: magnet.width, height: magnet.height }
+          ? {
+              x: magnet.x,
+              y: magnet.y,
+              width: magnet.width,
+              height: magnet.height,
+            }
           : { x: 0, y: 0, width: payload.width, height: payload.height };
 
     if (!isRectUsable(region, 8)) {
       return;
     }
 
-    // Só a região viaja. Emitir a imagem inteira aqui travava o evento e o
-    // `closeCaptureOverlay` abaixo nunca rodava — a janela nunca voltava.
-    await emit(OVERLAY_RESULT_EVENT, { region });
-    await closeCaptureOverlay();
-  }, [canMap, magnet, payload, selection, sourceSize, stageSize]);
+    /*
+     * A região é devolvida em coordenadas absolutas do desktop virtual: o Rust
+     * captura direto dos monitores, sem frame congelado no meio. Só o retângulo
+     * viaja — emitir a imagem aqui travava o evento e o `closeCaptureOverlay`
+     * abaixo nunca rodava, então a janela nunca voltava.
+     */
+    await emit(OVERLAY_RESULT_EVENT, {
+      region: {
+        x: region.x + payload.originX,
+        y: region.y + payload.originY,
+        width: region.width,
+        height: region.height,
+      },
+    });
+    // Sem restaurar: quem devolve as janelas é o comando do recorte, depois de
+    // já ter capturado. Restaurar aqui traria o chat de volta a tempo de ele
+    // aparecer dentro do próprio print.
+    await closeCaptureOverlay(undefined, { restore: false });
+  }, [canMap, payload, sourceSize, stageSize]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -173,15 +355,25 @@ export function CaptureOverlayApp() {
 
   const updateMagnet = useCallback(
     (point: Point) => {
-      if (!sourceSize || !canMap || isDragging) {
+      if (!sourceSize || !canMap) {
         return;
       }
       // Hit-test local: a lista veio pronta do Rust, então não há IPC — nem a
       // chance de o Windows responder "o elemento sob o cursor é o overlay".
       const framePoint = scalePointToSource(point, stageSize, sourceSize);
-      setMagnet(pickSnapTarget(framePoint, snapTargets));
+      const next = pickSnapTarget(framePoint, snapTargets);
+      if (next === magnetRef.current) {
+        return;
+      }
+      magnetRef.current = next;
+      // O rótulo é a única parte que passa por estado: muda de alvo em alvo, não
+      // de pixel em pixel.
+      setMagnetTitle(
+        next ? `${next.kind === "monitor" ? "Tela: " : ""}${next.title || "Janela sem título"}` : null,
+      );
+      schedulePaint();
     },
-    [canMap, isDragging, snapTargets, sourceSize, stageSize],
+    [canMap, schedulePaint, snapTargets, sourceSize, stageSize],
   );
 
   const handlePointerDown = useCallback(
@@ -194,10 +386,10 @@ export function CaptureOverlayApp() {
       const origin = pointFromEvent(event);
       dragStartRef.current = origin;
       setIsDragging(true);
-      setMagnet(null);
-      setSelection({ x: origin.x, y: origin.y, width: 0, height: 0 });
+      selectionRef.current = { x: origin.x, y: origin.y, width: 0, height: 0 };
+      schedulePaint();
     },
-    [payload, pointFromEvent],
+    [payload, pointFromEvent, schedulePaint],
   );
 
   const handlePointerMove = useCallback(
@@ -207,89 +399,90 @@ export function CaptureOverlayApp() {
       if (origin && payload) {
         // Limite é o palco em CSS: usar o tamanho do frame deixaria arrastar
         // para muito além da borda visível em telas com escala.
-        setSelection(clampRectToBounds(normalizeRect(origin, point), stageSize));
+        selectionRef.current = clampRectToBounds(
+          normalizeRect(origin, point),
+          stageSize,
+        );
+        schedulePaint();
         return;
       }
       updateMagnet(point);
     },
-    [payload, pointFromEvent, updateMagnet, stageSize],
+    [payload, pointFromEvent, schedulePaint, stageSize, updateMagnet],
   );
 
+  /*
+   * Soltar o botão confirma. Antes ele só assentava a seleção e era preciso
+   * apertar Enter em seguida — um passo escondido, já que o único aviso era o
+   * texto da barra de dicas. Um clique sem arrasto confirma o alvo magnetizado.
+   */
   const endDrag = useCallback(() => {
+    const dragged = dragStartRef.current !== null;
     dragStartRef.current = null;
     setIsDragging(false);
-    setSelection((current) =>
-      current && isRectUsable(current) ? current : null,
-    );
-  }, []);
 
-  const highlight =
-    selection && isRectUsable(selection)
-      ? selection
-      : magnet && sourceSize && canMap
-        ? scaleRectToDisplay(magnet, sourceSize, stageSize)
-        : null;
+    const selection = selectionRef.current;
+    if (selection && !isRectUsable(selection)) {
+      selectionRef.current = null;
+      schedulePaint();
+    }
+    if (dragged && (selectionRef.current || magnetRef.current)) {
+      void confirm();
+    }
+  }, [confirm, schedulePaint]);
 
-  if (!payload) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-black/60 text-sm text-white">
-        Preparando captura…
-      </div>
-    );
-  }
+  const cancelDrag = useCallback(() => {
+    dragStartRef.current = null;
+    setIsDragging(false);
+    selectionRef.current = null;
+    schedulePaint();
+  }, [schedulePaint]);
 
-  /*
-   * A janela é transparente e o usuário vê a própria tela por baixo, só
-   * escurecida — como a Ferramenta de Captura do Windows. Desenhar aqui o frame
-   * congelado obrigava a mandar ~15 MB de pixels do Rust para cá a cada
-   * captura, e enquanto isso não chegava a tela ficava preta. Os pixels que
-   * viram anexo continuam vindo do frame congelado no Rust, então o que é
-   * recortado é o instante do clique, não o que está passando na tela agora.
-   */
   return (
     <div
       ref={stageRef}
       data-testid="capture-overlay-stage"
-      className={cn(
-        "relative h-screen w-screen cursor-crosshair overflow-hidden",
-        // Com destaque, o escurecimento vem da sombra dele (recorte "vazado").
-        !highlight && "bg-black/35",
-      )}
+      className="relative h-screen w-screen cursor-crosshair overflow-hidden"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={endDrag}
-      onPointerCancel={endDrag}
+      onPointerCancel={cancelDrag}
     >
-      {highlight ? (
+      {/*
+       * O estado sem payload é transparente de propósito. Antes ele pintava
+       * `bg-black/60` sobre a tela inteira e clareava para `bg-black/35` quando
+       * os dados chegavam — um flash preto que parecia travamento.
+       */}
+      {(["top", "bottom", "left", "right"] as const).map((side) => (
         <div
+          key={side}
+          ref={dimRefs[side]}
           aria-hidden="true"
-          className={cn(
-            "pointer-events-none absolute border-2 border-sky-400",
-            isDragging && "border-dashed",
-          )}
-          style={{
-            left: highlight.x,
-            top: highlight.y,
-            width: highlight.width,
-            height: highlight.height,
-            // Escurece tudo em volta e deixa a região escolhida limpa, para o
-            // usuário ver exatamente o que vai anexar.
-            boxShadow: "0 0 0 100vmax rgba(0,0,0,0.35)",
-          }}
+          data-testid={`capture-overlay-dim-${side}`}
+          className="pointer-events-none absolute top-0 left-0 bg-black/35"
+          style={{ width: 0, height: 0 }}
         />
-      ) : null}
-      <div className="pointer-events-none absolute bottom-6 left-1/2 flex max-w-[min(90vw,42rem)] -translate-x-1/2 flex-col items-center gap-1 rounded-2xl bg-black/70 px-4 py-2 text-xs text-white">
-        {magnet && !selection ? (
-          <span className="max-w-full truncate font-medium text-sky-300">
-            {magnet.kind === "monitor" ? "Tela: " : ""}
-            {magnet.title || "Janela sem título"}
+      ))}
+      <div
+        ref={highlightRef}
+        aria-hidden="true"
+        data-testid="capture-overlay-highlight"
+        className="pointer-events-none absolute top-0 left-0 border-2 border-sky-400 opacity-0"
+        style={{ width: 0, height: 0 }}
+      />
+      {payload ? (
+        <div className="pointer-events-none absolute bottom-6 left-1/2 flex max-w-[min(90vw,42rem)] -translate-x-1/2 flex-col items-center gap-1 rounded-2xl bg-black/70 px-4 py-2 text-xs text-white">
+          {magnetTitle && !isDragging ? (
+            <span className="max-w-full truncate font-medium text-sky-300">
+              {magnetTitle}
+            </span>
+          ) : null}
+          <span>
+            Arraste para recortar · clique para capturar o que está destacado ·
+            Esc cancela
           </span>
-        ) : null}
-        <span>
-          Arraste para recortar · passe o mouse para magnetizar · Enter{" "}
-          {highlight ? "confirma" : "captura tudo"} · Esc cancela
-        </span>
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

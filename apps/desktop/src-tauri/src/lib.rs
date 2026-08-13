@@ -5,6 +5,7 @@ mod chat_store;
 mod checklist;
 mod documents;
 mod panel;
+mod win_capture_flags;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
@@ -308,6 +309,10 @@ pub fn run() {
             if let Some(panel) = app.get_webview_window("panel") {
                 panel::init_native_blur(&panel);
             }
+            // Desliga o fade de show/hide das janelas e deixa o overlay fora de
+            // qualquer captura. Precisa rodar aqui: as quatro janelas são
+            // criadas pelo `tauri.conf.json`, antes deste ponto.
+            win_capture_flags::init(app.handle(), capture::OVERLAY_LABEL);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -333,9 +338,10 @@ pub fn run() {
             documents::documents_save_file,
             capture::capture_list_sources,
             capture::capture_source,
-            capture::capture_source_meta,
+            capture::capture_source_thumbnail,
             capture::capture_overlay_open,
-            capture::capture_overlay_crop,
+            capture::capture_overlay_payload,
+            capture::capture_overlay_region,
             capture::capture_overlay_close,
         ])
         .run(tauri::generate_context!())

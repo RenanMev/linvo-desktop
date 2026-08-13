@@ -2,12 +2,14 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { Loader2, Monitor, Search, AppWindow } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
+  captureSourceThumbnail,
   listCaptureSources,
   type CaptureSource,
   type CaptureSourceKind,
@@ -36,26 +38,55 @@ export function CaptureSourcePicker({
   const [sources, setSources] = useState<CaptureSource[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Miniaturas carregadas depois da lista, uma por fonte. */
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
+  const thumbnailRunRef = useRef(0);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setThumbnails({});
+    const run = thumbnailRunRef.current + 1;
+    thumbnailRunRef.current = run;
     try {
       const next = await listCaptureSources("all");
       setSources(next);
+      setLoading(false);
+
+      /*
+       * A lista chega sem miniatura e elas são buscadas aqui, em sequência.
+       * Antes o Rust capturava e codificava em PNG+base64 toda janela e todo
+       * monitor antes de responder, e o seletor ficava segundos em "Carregando
+       * fontes…". Uma de cada vez, para não disputar a GPU com o resto do app.
+       */
+      for (const source of next) {
+        if (thumbnailRunRef.current !== run) {
+          return;
+        }
+        try {
+          const thumbnail = await captureSourceThumbnail(source.id);
+          if (thumbnailRunRef.current !== run) {
+            return;
+          }
+          setThumbnails((current) => ({ ...current, [source.id]: thumbnail }));
+        } catch {
+          // Uma fonte que não deixa capturar não pode derrubar as outras.
+        }
+      }
     } catch (caught) {
       setError(
         caught instanceof Error
           ? caught.message
           : "Não foi possível listar as fontes",
       );
-    } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     if (!open) {
+      // Cancela as miniaturas em voo do seletor que acabou de fechar.
+      thumbnailRunRef.current += 1;
       return;
     }
     void load();
@@ -200,11 +231,18 @@ export function CaptureSourcePicker({
                   )}
                 >
                   <div className="relative aspect-video overflow-hidden rounded-md bg-black/40">
-                    <img
-                      src={source.thumbnail}
-                      alt=""
-                      className="size-full object-cover"
-                    />
+                    {thumbnails[source.id] ? (
+                      <img
+                        src={thumbnails[source.id]}
+                        alt=""
+                        className="size-full object-cover"
+                      />
+                    ) : (
+                      <span
+                        aria-hidden="true"
+                        className="absolute inset-0 animate-pulse bg-surface-raise-2"
+                      />
+                    )}
                   </div>
                   <div className="min-w-0">
                     <p className="flex items-center gap-1 truncate text-xs font-medium">

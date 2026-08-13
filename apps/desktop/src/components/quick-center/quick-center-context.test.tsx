@@ -47,6 +47,7 @@ const captureNativeSource = vi.fn();
 const startMagneticCapture = vi.fn();
 const confirmDraft = vi.fn();
 const discardDraft = vi.fn();
+const editPending = vi.fn();
 const clear = vi.fn();
 const clearError = vi.fn();
 
@@ -67,6 +68,7 @@ function controller(
     startMagneticCapture,
     confirmDraft,
     discardDraft,
+    editPending,
     clear,
     clearError,
     ...overrides,
@@ -162,8 +164,11 @@ describe("QuickCenterPanel visual context", () => {
   it("uses the shared snapshot hook without window-hiding hooks", () => {
     renderPanel();
 
-    // Quem esconde e devolve as janelas em volta do overlay é o Rust.
-    expect(useDisplaySnapshotMock).toHaveBeenCalledWith();
+    /*
+     * Quem esconde e devolve as janelas em volta do overlay é o Rust — daqui só
+     * vai o label, para o foco voltar para esta janela e não para o painel.
+     */
+    expect(useDisplaySnapshotMock).toHaveBeenCalledWith({ windowLabel: "main" });
   });
 
   it("sends the pending capture with the question and clears it after the send", async () => {

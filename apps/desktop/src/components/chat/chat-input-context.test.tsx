@@ -194,6 +194,7 @@ describe("ChatInput visual context", () => {
       startMagneticCapture,
       confirmDraft,
       discardDraft,
+      editPending: vi.fn(),
       clear,
       clearError,
       ...overrides,

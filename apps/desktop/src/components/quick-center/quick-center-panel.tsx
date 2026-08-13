@@ -93,9 +93,10 @@ export function QuickCenterPanel({
     startMagneticCapture,
     confirmDraft,
     discardDraft,
+    editPending,
     clear: clearPending,
     clearError: clearCaptureError,
-  } = useDisplaySnapshot();
+  } = useDisplaySnapshot({ windowLabel: "main" });
 
   useFocusTrap(containerRef, {
     active: ready && !closing,
@@ -363,6 +364,7 @@ export function QuickCenterPanel({
                 clearPending();
                 clearCaptureError();
               }}
+              onEdit={editPending}
             />
           </div>
         ) : null}

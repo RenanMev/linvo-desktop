@@ -7,7 +7,7 @@ use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 use tauri::ipc::Response;
 use xcap::{Monitor, Window};
 
-const OVERLAY_LABEL: &str = "capture-overlay";
+pub const OVERLAY_LABEL: &str = "capture-overlay";
 const OVERLAY_READY_EVENT: &str = "capture-overlay://ready";
 const THUMBNAIL_MAX: u32 = 320;
 const OWN_TITLE_MARKERS: &[&str] = &["Linvo Desktop", "Checklist"];
@@ -112,6 +112,12 @@ fn parse_source_id(id: &str) -> Result<(&str, u32), String> {
     Ok((kind, parsed))
 }
 
+/*
+ * A lista sai **sem** miniatura de propósito. Montá-la capturando e codificando
+ * em PNG+base64 toda janela e todo monitor aberto custava segundos com o seletor
+ * mostrando só um spinner. Aqui a lista sai de chamadas de metadata (baratas) e
+ * cada miniatura é buscada depois, por linha, via `capture_source_thumbnail`.
+ */
 fn list_monitors() -> Result<Vec<CaptureSource>, String> {
     let monitors = Monitor::all().map_err(|e| e.to_string())?;
     let mut sources = Vec::with_capacity(monitors.len());
@@ -123,15 +129,9 @@ fn list_monitors() -> Result<Vec<CaptureSource>, String> {
             continue;
         }
 
-        let image = match monitor.capture_image() {
-            Ok(image) => image,
-            Err(_) => continue,
-        };
-
         let id = monitor.id().unwrap_or(index as u32);
         let name = monitor
-            .friendly_name()
-            .or_else(|_| monitor.name())
+            .name()
             .unwrap_or_else(|_| format!("Tela {}", index + 1));
         let title = if monitor.is_primary().unwrap_or(false) {
             format!("{name} (principal)")
@@ -146,7 +146,7 @@ fn list_monitors() -> Result<Vec<CaptureSource>, String> {
             app_name: "Display".into(),
             width,
             height,
-            thumbnail: thumbnail_data_url(&image)?,
+            thumbnail: String::new(),
         });
     }
 
@@ -176,11 +176,6 @@ fn list_windows() -> Result<Vec<CaptureSource>, String> {
             continue;
         }
 
-        let image = match window.capture_image() {
-            Ok(image) => image,
-            Err(_) => continue,
-        };
-
         let id = window.id().map_err(|e| e.to_string())?;
         sources.push(CaptureSource {
             id: source_id("window", id),
@@ -189,7 +184,7 @@ fn list_windows() -> Result<Vec<CaptureSource>, String> {
             app_name: window.app_name().unwrap_or_default(),
             width,
             height,
-            thumbnail: thumbnail_data_url(&image)?,
+            thumbnail: String::new(),
         });
     }
 
@@ -246,34 +241,29 @@ fn capture_by_id(id: &str) -> Result<(RgbaImage, String), String> {
     }
 }
 
+/// Miniatura de uma fonte, buscada sob demanda pelo seletor.
+#[tauri::command]
+pub async fn capture_source_thumbnail(id: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let (image, _title) = capture_by_id(&id)?;
+        thumbnail_data_url(&image)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Pixels da fonte escolhida.
+///
+/// Não existe mais um `capture_source_meta` ao lado: aquele comando capturava a
+/// fonte inteira de novo só para ler `width`/`height` e jogar os pixels fora, e
+/// o front o disparava em paralelo com este — toda seleção custava duas
+/// capturas. As dimensões saem da própria lista do seletor.
 #[tauri::command]
 pub async fn capture_source(id: String) -> Result<Response, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let (image, _title) = capture_by_id(&id)?;
         let png = encode_png(&image)?;
         Ok(Response::new(png))
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-#[tauri::command]
-pub async fn capture_source_meta(id: String) -> Result<CaptureSource, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let (image, title) = capture_by_id(&id)?;
-        let kind = {
-            let (kind, _) = parse_source_id(&id)?;
-            kind.to_string()
-        };
-        Ok(CaptureSource {
-            id,
-            kind,
-            title,
-            app_name: String::new(),
-            width: image.width(),
-            height: image.height(),
-            thumbnail: String::new(),
-        })
     })
     .await
     .map_err(|e| e.to_string())?
@@ -308,21 +298,76 @@ fn virtual_desktop_bounds(monitors: &[Monitor]) -> Result<(i32, i32, u32, u32), 
     ))
 }
 
-type FrozenDesktop = (RgbaImage, i32, i32, u32, u32);
-
-fn freeze_virtual_desktop() -> Result<FrozenDesktop, String> {
+/// Recorta a região pedida capturando **só** ela, direto dos monitores.
+///
+/// Antes o app congelava a área de trabalho inteira na abertura do overlay
+/// (~15 MB de alocação + BitBlt de cada monitor + composição pixel a pixel) e
+/// recortava desse frame. Isso custava 60-200 ms *antes* de qualquer coisa
+/// aparecer na tela, para no fim usar um pedaço pequeno da imagem. Agora nada é
+/// capturado na abertura: só aqui, no confirm, e só o retângulo escolhido.
+fn capture_region(region: &CaptureRect) -> Result<RgbaImage, String> {
     let monitors = Monitor::all().map_err(|e| e.to_string())?;
-    let (origin_x, origin_y, width, height) = virtual_desktop_bounds(&monitors)?;
-    let mut canvas = RgbaImage::new(width, height);
+    let width = region.width.max(1) as u32;
+    let height = region.height.max(1) as u32;
 
-    for monitor in monitors {
-        let image = monitor.capture_image().map_err(|e| e.to_string())?;
-        let x = monitor.x().map_err(|e| e.to_string())? - origin_x;
-        let y = monitor.y().map_err(|e| e.to_string())? - origin_y;
-        imageops::overlay(&mut canvas, &image, x as i64, y as i64);
+    // Interseções da região com cada monitor, em coordenadas do próprio monitor.
+    let mut parts = Vec::new();
+    for monitor in &monitors {
+        let (Ok(mx), Ok(my), Ok(mw), Ok(mh)) = (
+            monitor.x(),
+            monitor.y(),
+            monitor.width(),
+            monitor.height(),
+        ) else {
+            continue;
+        };
+
+        let left = region.x.max(mx);
+        let top = region.y.max(my);
+        let right = (region.x + region.width).min(mx + mw as i32);
+        let bottom = (region.y + region.height).min(my + mh as i32);
+        if right <= left || bottom <= top {
+            continue;
+        }
+
+        parts.push((
+            monitor,
+            // Origem dentro do monitor.
+            (left - mx) as u32,
+            (top - my) as u32,
+            (right - left) as u32,
+            (bottom - top) as u32,
+            // Destino dentro do recorte.
+            (left - region.x) as i64,
+            (top - region.y) as i64,
+        ));
     }
 
-    Ok((canvas, origin_x, origin_y, width, height))
+    if parts.is_empty() {
+        return Err("a região escolhida não está em nenhum monitor".into());
+    }
+
+    // Caso comum: a seleção cabe num monitor só, então a captura já é o recorte.
+    if let [(monitor, sx, sy, sw, sh, ..)] = parts.as_slice() {
+        return monitor
+            .capture_region(*sx, *sy, *sw, *sh)
+            .map_err(|e| e.to_string());
+    }
+
+    let mut canvas = RgbaImage::new(width, height);
+    for (monitor, sx, sy, sw, sh, dx, dy) in &parts {
+        let part = monitor
+            .capture_region(*sx, *sy, *sw, *sh)
+            .map_err(|e| e.to_string())?;
+        /*
+         * `replace` copia; `imageops::overlay` faz blend e o `Rgba<u8>::blend`
+         * retorna sem escrever quando o alpha da origem é 0. O GDI às vezes
+         * devolve alpha zerado, e era isso que podia deixar buracos
+         * transparentes no recorte.
+         */
+        imageops::replace(&mut canvas, &part, *dx, *dy);
+    }
+    Ok(canvas)
 }
 
 /*
@@ -514,159 +559,220 @@ fn overlay_window(app: &AppHandle) -> Result<WebviewWindow, String> {
         .ok_or_else(|| format!("window '{OVERLAY_LABEL}' not found"))
 }
 
-/// Frame congelado, guardado aqui em vez de trafegar pelo barramento de eventos.
-///
-/// Numa área de trabalho de 3520x1080 o frame tem ~15 MB crus; em PNG+base64
-/// dentro de um evento JSON isso vira alguns megabytes de string atravessando o
-/// IPC — duas vezes, porque o overlay devolvia a mesma imagem no resultado.
-/// Era o que fazia a captura demorar e o que travava o `emit` de confirmação.
-/// Agora só metadados e a região trafegam; os pixels saem daqui por IPC binário.
-struct FrozenFrame {
-    image: RgbaImage,
-    origin_x: i32,
-    origin_y: i32,
-}
-
-static FROZEN: OnceLock<Mutex<Option<FrozenFrame>>> = OnceLock::new();
+/// Janelas escondidas para a captura, na ordem em que devem voltar.
 static HIDDEN_WINDOWS: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
-
-fn frozen() -> &'static Mutex<Option<FrozenFrame>> {
-    FROZEN.get_or_init(|| Mutex::new(None))
-}
+/// Último payload emitido, para o overlay poder puxá-lo se perdeu o evento.
+static PENDING_PAYLOAD: OnceLock<Mutex<Option<OverlayPayload>>> = OnceLock::new();
 
 fn hidden_windows() -> &'static Mutex<Vec<String>> {
     HIDDEN_WINDOWS.get_or_init(|| Mutex::new(Vec::new()))
 }
 
+fn pending_payload() -> &'static Mutex<Option<OverlayPayload>> {
+    PENDING_PAYLOAD.get_or_init(|| Mutex::new(None))
+}
+
 /*
- * Esconder as nossas janelas e congelar a tela precisa ser feito aqui, em ordem.
- * Quando o front escondia a janela e só então chamava este comando, o DWM ainda
- * não tinha composto o quadro sem ela — e a janela aparecia como fantasma dentro
- * da própria captura.
+ * As nossas janelas saem da tela por dois motivos diferentes, e só um deles
+ * precisa de espera:
+ *
+ * 1. Não atrapalhar a visão do usuário — resolvido por `hide()`, imediato.
+ * 2. Não sair dentro do print — resolvido por `WDA_EXCLUDEFROMCAPTURE`, que age
+ *    no compositor e vale já no quadro seguinte.
+ *
+ * Antes só existia o `hide()`, e como o DWM leva um quadro para parar de
+ * desenhar a janela, era preciso dormir 120 ms antes de capturar. Com a flag de
+ * exclusão essa espera some: mesmo que a janela ainda esteja composta na tela,
+ * ela já não está na superfície que o BitBlt lê.
  */
 fn hide_own_windows(app: &AppHandle) -> Result<(), String> {
     let mut hidden = hidden_windows().lock().map_err(|e| e.to_string())?;
     hidden.clear();
 
-    for (label, window) in app.webview_windows() {
-        if label == OVERLAY_LABEL {
+    let mut labels: Vec<String> = app
+        .webview_windows()
+        .keys()
+        .filter(|label| *label != OVERLAY_LABEL)
+        .cloned()
+        .collect();
+    // `webview_windows` é um HashMap: sem ordenar, qual janela recebe o foco na
+    // volta mudava de uma execução para outra.
+    labels.sort();
+
+    for label in labels {
+        let Some(window) = app.get_webview_window(&label) else {
             continue;
-        }
+        };
+        crate::win_capture_flags::set_excluded_from_capture(&window, true);
         if window.is_visible().unwrap_or(false) {
             let _ = window.hide();
             hidden.push(label);
         }
     }
 
-    // `hide()` retorna assim que a mensagem é processada; o compositor leva mais
-    // um quadro para parar de desenhar a janela.
-    if !hidden.is_empty() {
+    // Fallback para Windows < 10 2004, onde a exclusão de captura não existe e o
+    // fantasma só some quando o compositor redesenha.
+    if !hidden.is_empty() && !crate::win_capture_flags::exclusion_supported() {
         std::thread::sleep(std::time::Duration::from_millis(120));
     }
     Ok(())
 }
 
-fn restore_own_windows(app: &AppHandle) {
+/// Devolve as janelas escondidas e religa a captura delas.
+///
+/// **Sempre depois** de a região já ter sido capturada: enquanto a exclusão está
+/// ligada, nada do Linvo entra no print mesmo que a janela já tenha reaparecido.
+/// Fazer isso na ordem inversa devolvia o chat para a tela a tempo de ele sair
+/// dentro da própria captura.
+fn restore_own_windows(app: &AppHandle, focus: Option<&str>) {
     let Ok(mut hidden) = hidden_windows().lock() else {
         return;
     };
-    for label in hidden.drain(..) {
-        if let Some(window) = app.get_webview_window(&label) {
-            let _ = window.show();
-            let _ = window.set_focus();
+    let restored: Vec<String> = hidden.drain(..).collect();
+
+    for (label, window) in app.webview_windows() {
+        if label != OVERLAY_LABEL {
+            crate::win_capture_flags::set_excluded_from_capture(&window, false);
         }
+    }
+
+    for label in &restored {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.show();
+        }
+    }
+
+    // O foco vai para quem pediu a captura; sem isso ele caía numa janela
+    // qualquer e o chat não voltava em primeiro plano.
+    let target = focus
+        .filter(|label| restored.iter().any(|l| l == label))
+        .or_else(|| restored.first().map(String::as_str));
+    if let Some(window) = target.and_then(|label| app.get_webview_window(label)) {
+        let _ = window.set_focus();
     }
 }
 
 #[tauri::command]
 pub async fn capture_overlay_open(app: AppHandle) -> Result<(), String> {
     let hide_app = app.clone();
-    tauri::async_runtime::spawn_blocking(move || hide_own_windows(&hide_app))
-        .await
-        .map_err(|e| e.to_string())??;
+    let snap_app = app.clone();
 
-    let (image, origin_x, origin_y, width, height) =
-        tauri::async_runtime::spawn_blocking(freeze_virtual_desktop)
-            .await
-            .map_err(|e| e.to_string())??;
+    /*
+     * Tudo o que roda antes do `show()` é latência que o usuário sente como
+     * "cliquei e não aconteceu nada". Sobrou só o necessário: esconder as nossas
+     * janelas, enumerar monitores uma vez e montar a lista do magnetismo.
+     */
+    let (payload, bounds) = tauri::async_runtime::spawn_blocking(move || {
+        hide_own_windows(&hide_app)?;
 
+        let monitors = Monitor::all().map_err(|e| e.to_string())?;
+        let (origin_x, origin_y, width, height) = virtual_desktop_bounds(&monitors)?;
+        // Antes do `show()`: depois dele o overlay é a janela do topo em todo lugar.
+        let snap_rects = snap_targets(&own_window_handles(&snap_app), &monitors);
+
+        Ok::<_, String>((
+            OverlayPayload {
+                width,
+                height,
+                origin_x,
+                origin_y,
+                snap_rects,
+            },
+            (origin_x, origin_y, width, height),
+        ))
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    let (origin_x, origin_y, width, height) = bounds;
     let overlay = overlay_window(&app)?;
-    let monitors = Monitor::all().map_err(|e| e.to_string())?;
-
-    // Antes do `show()`: depois dele o overlay é a janela do topo em todo lugar.
-    let snap_rects = snap_targets(&own_window_handles(&app), &monitors);
 
     {
-        let mut slot = frozen().lock().map_err(|e| e.to_string())?;
-        *slot = Some(FrozenFrame {
-            image,
-            origin_x,
-            origin_y,
-        });
+        let mut slot = pending_payload().lock().map_err(|e| e.to_string())?;
+        *slot = Some(payload.clone());
     }
 
-    overlay
-        .set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }))
+    /*
+     * Emitir **antes** do `show()`. A janela é pré-criada no `tauri.conf.json` e
+     * nunca destruída, então o webview já está montado e escutando: quando ela
+     * pinta, o payload já chegou. Na ordem inversa o overlay aparecia primeiro e
+     * ficava alguns quadros mostrando um placeholder escuro sobre a tela inteira.
+     */
+    app.emit_to(OVERLAY_LABEL, OVERLAY_READY_EVENT, payload)
         .map_err(|e| e.to_string())?;
+
     overlay
         .set_position(tauri::Position::Physical(tauri::PhysicalPosition {
             x: origin_x,
             y: origin_y,
         }))
         .map_err(|e| e.to_string())?;
+    overlay
+        .set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }))
+        .map_err(|e| e.to_string())?;
     overlay.set_always_on_top(true).map_err(|e| e.to_string())?;
     overlay.show().map_err(|e| e.to_string())?;
     overlay.set_focus().map_err(|e| e.to_string())?;
-    app.emit_to(
-        OVERLAY_LABEL,
-        OVERLAY_READY_EVENT,
-        OverlayPayload {
-            width,
-            height,
-            origin_x,
-            origin_y,
-            snap_rects,
-        },
-    )
-    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
-/// Recorta a região no Rust e devolve só ela. O anexo tem alguns KB em vez dos
-/// megabytes do frame inteiro, e o front não precisa decodificar o desktop todo.
+/// Payload da sessão em andamento, para o overlay que perdeu o evento `ready`.
+///
+/// `listen()` registra de forma assíncrona; entre o React montar e o registro
+/// completar existe uma janela em que um `emit_to` cai no vazio (reload do
+/// WebView2, HMR, StrictMode). Sem isto o overlay ficava preso em "preparando"
+/// para sempre, e quem pediu a captura ficava com `isCapturing` travado.
 #[tauri::command]
-pub async fn capture_overlay_crop(region: CaptureRect) -> Result<Response, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let slot = frozen().lock().map_err(|e| e.to_string())?;
-        let frame = slot.as_ref().ok_or("nenhuma captura em andamento")?;
-
-        let x = region.x.max(0) as u32;
-        let y = region.y.max(0) as u32;
-        let width = (region.width.max(1) as u32).min(frame.image.width().saturating_sub(x));
-        let height = (region.height.max(1) as u32).min(frame.image.height().saturating_sub(y));
-        if width == 0 || height == 0 {
-            return Err("região de recorte inválida".into());
-        }
-
-        let cropped = imageops::crop_imm(&frame.image, x, y, width, height).to_image();
-        encode_png(&cropped)
-    })
-    .await
-    .map_err(|e| e.to_string())?
-    .map(Response::new)
+pub async fn capture_overlay_payload() -> Result<Option<OverlayPayload>, String> {
+    let slot = pending_payload().lock().map_err(|e| e.to_string())?;
+    Ok(slot.clone())
 }
 
+/// Captura só a região escolhida, devolve o PNG dela e devolve as janelas.
+///
+/// A restauração acontece **aqui**, depois da captura, e não no
+/// `capture_overlay_close`: o overlay fecha assim que confirma, mas quem pede o
+/// recorte é a outra janela, logo depois. Restaurar no fechamento deixava o chat
+/// reaparecer bem a tempo de sair dentro do próprio print.
 #[tauri::command]
-pub async fn capture_overlay_close(app: AppHandle) -> Result<(), String> {
+pub async fn capture_overlay_region(
+    app: AppHandle,
+    region: CaptureRect,
+    focus: Option<String>,
+) -> Result<Response, String> {
+    let captured = tauri::async_runtime::spawn_blocking(move || {
+        if region.width < 1 || region.height < 1 {
+            return Err("região de recorte inválida".into());
+        }
+        let image = capture_region(&region)?;
+        encode_png(&image)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // Mesmo se a captura falhar, as janelas precisam voltar.
+    restore_own_windows(&app, focus.as_deref());
+    captured.map(Response::new)
+}
+
+/// Fecha o overlay. `restore` só é falso no confirm, onde quem devolve as
+/// janelas é o `capture_overlay_region`, depois de já ter capturado.
+#[tauri::command]
+pub async fn capture_overlay_close(
+    app: AppHandle,
+    focus: Option<String>,
+    restore: Option<bool>,
+) -> Result<(), String> {
     let overlay = overlay_window(&app)?;
     overlay.hide().map_err(|e| e.to_string())?;
-    /*
-     * O frame fica. O overlay fecha logo depois de emitir o resultado, e quem
-     * pediu a captura ainda vai buscar o recorte aqui — limpar neste ponto era
-     * uma corrida perdida ("nenhuma captura em andamento"). A próxima abertura
-     * sobrescreve.
-     */
-    restore_own_windows(&app);
+
+    if let Ok(mut slot) = pending_payload().lock() {
+        *slot = None;
+    }
+
+    if restore.unwrap_or(true) {
+        restore_own_windows(&app, focus.as_deref());
+    }
     Ok(())
 }
 

@@ -94,9 +94,10 @@ export function ChatInput({
     startMagneticCapture,
     confirmDraft,
     discardDraft,
+    editPending,
     clear: clearPending,
     clearError: clearCaptureError,
-  } = useDisplaySnapshot();
+  } = useDisplaySnapshot({ windowLabel: "panel" });
 
   const hasAttachment = pending?.status === "ready";
   const canSend =
@@ -418,6 +419,7 @@ export function ChatInput({
                     clearPending();
                     clearCaptureError();
                   }}
+                  onEdit={editPending}
                 />
               ) : null}
             </div>

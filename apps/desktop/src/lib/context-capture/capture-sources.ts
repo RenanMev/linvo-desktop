@@ -53,6 +53,12 @@ export type OverlayResult = {
   region: CaptureRect;
 };
 
+/**
+ * Lista as fontes **sem** miniatura — só metadata, que é barata. As miniaturas
+ * chegam depois, uma por linha, via `captureSourceThumbnail`: montá-las aqui
+ * significava capturar e codificar em PNG toda janela e todo monitor aberto
+ * antes do seletor pintar qualquer coisa.
+ */
 export async function listCaptureSources(
   kind: CaptureSourceKind | "all" = "all",
 ): Promise<CaptureSource[]> {
@@ -61,22 +67,8 @@ export async function listCaptureSources(
   });
 }
 
-export async function captureSourceBytes(id: string): Promise<Uint8Array> {
-  const response = await invoke<ArrayBuffer | number[]>("capture_source", { id });
-  if (response instanceof ArrayBuffer) {
-    return new Uint8Array(response);
-  }
-  return Uint8Array.from(response);
-}
-
-export async function captureSourceMeta(
-  id: string,
-): Promise<Pick<CaptureSource, "id" | "kind" | "title" | "width" | "height">> {
-  return invoke("capture_source_meta", { id });
-}
-
-export async function openCaptureOverlay(): Promise<void> {
-  await invoke("capture_overlay_open");
+export async function captureSourceThumbnail(id: string): Promise<string> {
+  return invoke<string>("capture_source_thumbnail", { id });
 }
 
 async function invokeBytes(
@@ -90,13 +82,50 @@ async function invokeBytes(
   return Uint8Array.from(response);
 }
 
-/** Recorte final, já cortado no Rust: chegam KB em vez do desktop inteiro. */
-export async function fetchOverlayCrop(region: CaptureRect): Promise<Blob> {
-  return bytesToPngBlob(await invokeBytes("capture_overlay_crop", { region }));
+export async function captureSourceBytes(id: string): Promise<Uint8Array> {
+  return invokeBytes("capture_source", { id });
 }
 
-export async function closeCaptureOverlay(): Promise<void> {
-  await invoke("capture_overlay_close");
+export async function openCaptureOverlay(): Promise<void> {
+  await invoke("capture_overlay_open");
+}
+
+/** Payload da sessão em voo, para quando o evento `ready` se perde. */
+export async function fetchOverlayPayload(): Promise<OverlayPayload | null> {
+  return invoke<OverlayPayload | null>("capture_overlay_payload");
+}
+
+/**
+ * Captura só a região escolhida, direto dos monitores. Chegam KB, e nada é
+ * capturado na abertura do overlay.
+ *
+ * É este comando que devolve as janelas escondidas — depois de já ter
+ * capturado, para o chat não reaparecer a tempo de sair dentro do print.
+ */
+export async function fetchOverlayCrop(
+  region: CaptureRect,
+  focus?: string,
+): Promise<Blob> {
+  return bytesToPngBlob(
+    await invokeBytes("capture_overlay_region", {
+      region,
+      focus: focus ?? null,
+    }),
+  );
+}
+
+/**
+ * `focus`: janela que pediu a captura, para o foco voltar para ela.
+ * `restore: false` no confirm, onde quem devolve as janelas é `fetchOverlayCrop`.
+ */
+export async function closeCaptureOverlay(
+  focus?: string,
+  options?: { restore?: boolean },
+): Promise<void> {
+  await invoke("capture_overlay_close", {
+    focus: focus ?? null,
+    restore: options?.restore ?? true,
+  });
 }
 
 export function listenOverlayReady(

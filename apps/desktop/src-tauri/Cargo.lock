@@ -2464,7 +2464,6 @@ dependencies = [
  "tauri-plugin-process",
  "tauri-plugin-updater",
  "window-vibrancy 0.5.3",
- "windows 0.61.3",
  "windows-sys 0.59.0",
  "xcap",
 ]
