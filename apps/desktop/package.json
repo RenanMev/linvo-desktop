@@ -1,7 +1,7 @@
 {
   "name": "@linvo/desktop",
   "private": true,
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "App Tauri + React do Linvo Desktop",
   "type": "module",
   "scripts": {
