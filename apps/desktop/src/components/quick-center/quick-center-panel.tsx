@@ -29,6 +29,10 @@ import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useQuickCenterWorkspace } from "@/hooks/use-quick-center-workspace";
 import { useQuickPrompt } from "@/hooks/use-quick-prompt";
 import { writeClipboardText } from "@/lib/clipboard";
+import {
+  buildChatHandoffPayload,
+  emitChatHandoff,
+} from "@/lib/chat/chat-handoff";
 import { openPanel } from "@/lib/panel-window";
 import { cn } from "@/lib/utils";
 
@@ -300,10 +304,23 @@ export function QuickCenterPanel({
     }
   }
 
+  async function emitComposerHandoff() {
+    const payload = await buildChatHandoffPayload({
+      conversationId: prompt.conversationId,
+      draftText: inputValue,
+      pending: pending?.status === "ready" ? pending : null,
+    });
+    if (!payload) {
+      return;
+    }
+    await emitChatHandoff(payload);
+  }
+
   async function handleOpenInChat() {
     if (!prompt.conversationId) {
       return;
     }
+    await emitComposerHandoff();
     await openPanel(`/chat/${prompt.conversationId}`, user);
     onClose({ restoreFocus: false });
   }
@@ -314,7 +331,11 @@ export function QuickCenterPanel({
   }
 
   async function handleOpenPanel() {
-    await openPanel("/chat", user);
+    await emitComposerHandoff();
+    const route = prompt.conversationId
+      ? `/chat/${prompt.conversationId}`
+      : "/chat";
+    await openPanel(route, user);
     onClose({ restoreFocus: false });
   }
 

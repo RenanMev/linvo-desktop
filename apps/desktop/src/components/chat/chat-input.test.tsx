@@ -115,4 +115,27 @@ describe("ChatInput", () => {
       screen.getByRole("button", { name: "Capturar contexto visual" }),
     ).toBeInTheDocument();
   });
+
+  it("applies composer handoff text once", () => {
+    const onConsumed = vi.fn();
+    render(
+      <ChatInput
+        onSend={vi.fn()}
+        isResponding={false}
+        replyTarget={null}
+        onCancelReply={vi.fn()}
+        composerHandoff={{
+          id: "handoff-1",
+          conversationId: null,
+          draftText: "do quick center",
+        }}
+        onComposerHandoffConsumed={onConsumed}
+      />,
+    );
+
+    expect(screen.getByPlaceholderText("Pergunte qualquer coisa...")).toHaveValue(
+      "do quick center",
+    );
+    expect(onConsumed).toHaveBeenCalledTimes(1);
+  });
 });

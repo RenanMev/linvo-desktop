@@ -67,6 +67,12 @@ export type DisplaySnapshotController = {
   discardDraft: () => void;
   /** Devolve o anexo já pronto para o preview, para recortar de novo. */
   editPending: () => void;
+  hydratePending: (input: {
+    file: File;
+    width: number;
+    height: number;
+    sourceLabel?: string;
+  }) => void;
   clear: () => void;
   clearError: () => void;
 };
@@ -181,6 +187,30 @@ export function useDisplaySnapshot(
     pendingRef.current = null;
     setPending(null);
   }, [revokePending]);
+
+  const hydratePending = useCallback(
+    (input: {
+      file: File;
+      width: number;
+      height: number;
+      sourceLabel?: string;
+    }) => {
+      const next: PendingContextAttachment = {
+        localId: crypto.randomUUID(),
+        file: input.file,
+        previewUrl: URL.createObjectURL(input.file),
+        width: input.width,
+        height: input.height,
+        ...(input.sourceLabel ? { sourceLabel: input.sourceLabel } : {}),
+        status: "ready",
+      };
+      revokePending(pendingRef.current);
+      pendingRef.current = next;
+      setPending(next);
+      setError(null);
+    },
+    [revokePending],
+  );
 
   const discardDraft = useCallback(() => {
     revokeDraft(draftRef.current);
@@ -497,6 +527,7 @@ export function useDisplaySnapshot(
     confirmDraft,
     discardDraft,
     editPending,
+    hydratePending,
     clear,
     clearError: () => setError(null),
   };

@@ -7,6 +7,7 @@ import {
 import { ChatMessageList } from "@/components/chat/chat-message-list";
 import { ChatToolbar } from "@/components/chat/chat-toolbar";
 import type { ChatMessage, ChatReplyRef, ChatToolRequest } from "@/lib/chat/types";
+import type { ChatHandoffPayload } from "@/lib/chat/chat-handoff";
 
 type ChatPanelProps = {
   conversationKey?: string | null;
@@ -26,6 +27,8 @@ type ChatPanelProps = {
   selectedModel?: string | null;
   onModelChange?: (modelId: string | null) => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
+  composerHandoff?: ChatHandoffPayload | null;
+  onComposerHandoffConsumed?: () => void;
 };
 
 export function ChatPanel({
@@ -46,6 +49,8 @@ export function ChatPanel({
   selectedModel = null,
   onModelChange,
   onOpenProcedureChecklist,
+  composerHandoff = null,
+  onComposerHandoffConsumed,
 }: ChatPanelProps) {
   const inputDisabled = disabled || Boolean(pendingToolRequest);
   const activeModel =
@@ -88,6 +93,8 @@ export function ChatPanel({
         selectedModel={selectedModel}
         onModelChange={onModelChange}
         onOpenProcedureChecklist={onOpenProcedureChecklist}
+        composerHandoff={composerHandoff}
+        onComposerHandoffConsumed={onComposerHandoffConsumed}
       />
     </main>
   );

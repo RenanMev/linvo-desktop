@@ -364,6 +364,32 @@ describe("useDisplaySnapshot", () => {
     expect(crop).toHaveBeenCalledWith(region, "panel");
   });
 
+  it("hydratePending installs a ready attachment", () => {
+    const { result } = renderHook(() => useDisplaySnapshot());
+    const file = new File([new Uint8Array([9, 9])], "handoff.png", {
+      type: "image/png",
+    });
+
+    act(() => {
+      result.current.hydratePending({
+        file,
+        width: 40,
+        height: 30,
+        sourceLabel: "Recorte",
+      });
+    });
+
+    expect(result.current.pending).toMatchObject({
+      status: "ready",
+      width: 40,
+      height: 30,
+      sourceLabel: "Recorte",
+      previewUrl: "blob:first",
+      file,
+    });
+    expect(createObjectURL).toHaveBeenCalled();
+  });
+
   it("does not create a preview after unmounting during capture", async () => {
     let resolveSnapshot!: (value: snapshotModule.DisplaySnapshot) => void;
     vi.spyOn(snapshotModule, "captureDisplaySnapshot").mockReturnValue(

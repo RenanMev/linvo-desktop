@@ -8,6 +8,7 @@ import { QuickCenterPanel } from "@/components/quick-center/quick-center-panel";
 import { useQuickCenterWorkspace } from "@/hooks/use-quick-center-workspace";
 import { useQuickPrompt } from "@/hooks/use-quick-prompt";
 import { writeClipboardText } from "@/lib/clipboard";
+import { emitChatHandoff, buildChatHandoffPayload } from "@/lib/chat/chat-handoff";
 import { openPanel } from "@/lib/panel-window";
 
 vi.mock("@/hooks/use-quick-prompt", () => ({
@@ -24,6 +25,11 @@ vi.mock("@/lib/panel-window", () => ({
 
 vi.mock("@/lib/clipboard", () => ({
   writeClipboardText: vi.fn(() => Promise.resolve(true)),
+}));
+
+vi.mock("@/lib/chat/chat-handoff", () => ({
+  buildChatHandoffPayload: vi.fn(() => Promise.resolve(null)),
+  emitChatHandoff: vi.fn(() => Promise.resolve()),
 }));
 
 const user: UserPublic = {
@@ -70,6 +76,9 @@ describe("QuickCenterPanel", () => {
     });
     vi.mocked(openPanel).mockClear();
     vi.mocked(writeClipboardText).mockClear();
+    vi.mocked(buildChatHandoffPayload).mockClear();
+    vi.mocked(buildChatHandoffPayload).mockResolvedValue(null);
+    vi.mocked(emitChatHandoff).mockClear();
   });
 
   it("focuses the prompt field on mount when ready", () => {
@@ -175,6 +184,52 @@ describe("QuickCenterPanel", () => {
 
     expect(openPanel).toHaveBeenCalledWith("/chat", user);
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("emits composer handoff before opening the panel", async () => {
+    vi.mocked(useQuickPrompt).mockReturnValue(makePrompt());
+    vi.mocked(buildChatHandoffPayload).mockResolvedValue({
+      id: "h1",
+      conversationId: null,
+      draftText: "rascunho",
+    });
+    const userEventInstance = userEvent.setup();
+
+    renderPanel();
+    await userEventInstance.type(
+      screen.getByPlaceholderText("Pergunte alguma coisa..."),
+      "rascunho",
+    );
+    await userEventInstance.click(
+      screen.getByRole("button", { name: "Abrir no painel" }),
+    );
+
+    expect(buildChatHandoffPayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draftText: "rascunho",
+        conversationId: null,
+      }),
+    );
+    expect(emitChatHandoff).toHaveBeenCalledWith({
+      id: "h1",
+      conversationId: null,
+      draftText: "rascunho",
+    });
+    expect(openPanel).toHaveBeenCalledWith("/chat", user);
+  });
+
+  it("Abrir no painel reuses active conversation route when present", async () => {
+    vi.mocked(useQuickPrompt).mockReturnValue(
+      makePrompt({ conversationId: "conv-9" }),
+    );
+    const userEventInstance = userEvent.setup();
+
+    renderPanel();
+    await userEventInstance.click(
+      screen.getByRole("button", { name: "Abrir no painel" }),
+    );
+
+    expect(openPanel).toHaveBeenCalledWith("/chat/conv-9", user);
   });
 
   it("Esc calls stop() when streaming and always closes", async () => {

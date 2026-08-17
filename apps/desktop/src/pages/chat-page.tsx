@@ -13,6 +13,11 @@ import {
   type ChecklistProgress,
 } from "@/lib/chat/desk-state";
 import {
+  type ChatHandoffPayload,
+  consumeChatHandoffBuffer,
+  listenChatHandoff,
+} from "@/lib/chat/chat-handoff";
+import {
   closeChecklist,
   listenChecklistClosed,
   listenChecklistProgress,
@@ -34,6 +39,8 @@ export function ChatPage() {
   const [checklistByConversation, setChecklistByConversation] =
     useState<ChecklistByConversation>({});
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [composerHandoff, setComposerHandoff] =
+    useState<ChatHandoffPayload | null>(null);
 
   const conversationId = routeConversationId ?? null;
   const activeConversation = conversations.find(
@@ -44,6 +51,30 @@ export function ChatPage() {
   useEffect(() => {
     syncActiveId(conversationId);
   }, [conversationId, syncActiveId]);
+
+  useEffect(() => {
+    const buffered = consumeChatHandoffBuffer();
+    if (buffered) {
+      setComposerHandoff(buffered);
+    }
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void listenChatHandoff((payload) => {
+      if (!disposed) {
+        setComposerHandoff(payload);
+      }
+    }).then((dispose) => {
+      if (disposed) {
+        dispose();
+        return;
+      }
+      unlisten = dispose;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
 
   const deskState = useMemo(
     () =>
@@ -219,6 +250,8 @@ export function ChatPage() {
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
             onOpenProcedureChecklist={setChecklistForActive}
+            composerHandoff={composerHandoff}
+            onComposerHandoffConsumed={() => setComposerHandoff(null)}
           />
         </div>
       )}

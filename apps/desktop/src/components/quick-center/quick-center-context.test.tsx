@@ -30,6 +30,11 @@ vi.mock("@/lib/panel-window", () => ({
   openPanel: vi.fn(() => Promise.resolve()),
 }));
 
+vi.mock("@/lib/chat/chat-handoff", () => ({
+  buildChatHandoffPayload: vi.fn(() => Promise.resolve(null)),
+  emitChatHandoff: vi.fn(() => Promise.resolve()),
+}));
+
 vi.mock("@/lib/clipboard", () => ({
   writeClipboardText: vi.fn(() => Promise.resolve(true)),
 }));
@@ -48,6 +53,7 @@ const startMagneticCapture = vi.fn();
 const confirmDraft = vi.fn();
 const discardDraft = vi.fn();
 const editPending = vi.fn();
+const hydratePending = vi.fn();
 const clear = vi.fn();
 const clearError = vi.fn();
 
@@ -69,6 +75,7 @@ function controller(
     confirmDraft,
     discardDraft,
     editPending,
+    hydratePending,
     clear,
     clearError,
     ...overrides,

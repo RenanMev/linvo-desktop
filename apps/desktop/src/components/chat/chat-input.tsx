@@ -31,6 +31,10 @@ import {
 } from "@/lib/chat/llm-models";
 import { fetchUserLlmStatus } from "@/lib/llm/llm-credential-api";
 import type { ChatReplyRef, ChatSendAttachment } from "@/lib/chat/types";
+import type { ChatHandoffPayload } from "@/lib/chat/chat-handoff";
+import {
+  decodeChatHandoffAttachment,
+} from "@/lib/chat/chat-handoff";
 import * as procedureApi from "@/lib/procedure/procedure-api";
 import {
   extractSlashSlug,
@@ -57,6 +61,8 @@ type ChatInputProps = {
   selectedModel?: string | null;
   onModelChange?: (modelId: string | null) => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
+  composerHandoff?: ChatHandoffPayload | null;
+  onComposerHandoffConsumed?: () => void;
 };
 
 export function ChatInput({
@@ -69,6 +75,8 @@ export function ChatInput({
   selectedModel = null,
   onModelChange,
   onOpenProcedureChecklist,
+  composerHandoff = null,
+  onComposerHandoffConsumed,
 }: ChatInputProps) {
   const [value, setValue] = useState("");
   const [forceTool, setForceTool] = useState<ForceTool | null>(null);
@@ -95,6 +103,7 @@ export function ChatInput({
     confirmDraft,
     discardDraft,
     editPending,
+    hydratePending,
     clear: clearPending,
     clearError: clearCaptureError,
   } = useDisplaySnapshot({ windowLabel: "panel" });
@@ -115,6 +124,31 @@ export function ChatInput({
 
   const onModelChangeRef = useRef(onModelChange);
   onModelChangeRef.current = onModelChange;
+  const onComposerHandoffConsumedRef = useRef(onComposerHandoffConsumed);
+  onComposerHandoffConsumedRef.current = onComposerHandoffConsumed;
+  const appliedHandoffIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!composerHandoff) {
+      return;
+    }
+    if (appliedHandoffIdRef.current === composerHandoff.id) {
+      return;
+    }
+    appliedHandoffIdRef.current = composerHandoff.id;
+    if (composerHandoff.draftText.trim()) {
+      setValue(composerHandoff.draftText);
+    }
+    if (composerHandoff.attachment) {
+      try {
+        const decoded = decodeChatHandoffAttachment(composerHandoff.attachment);
+        hydratePending(decoded);
+      } catch {
+        clearCaptureError();
+      }
+    }
+    onComposerHandoffConsumedRef.current?.();
+  }, [clearCaptureError, composerHandoff, hydratePending]);
 
   useEffect(() => {
     let cancelled = false;
