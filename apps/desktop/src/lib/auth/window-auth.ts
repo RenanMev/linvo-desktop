@@ -1,7 +1,7 @@
 import type { Size } from "@/lib/window-position";
 import { ONBOARDING_SIZE } from "@/lib/window-mode";
 
-export const AUTH_SIZE: Size = { width: 880, height: 600 };
+export const AUTH_SIZE: Size = { width: 440, height: 620 };
 
 export type WindowSurfaceMode = "auth" | "onboarding" | "compact";
 

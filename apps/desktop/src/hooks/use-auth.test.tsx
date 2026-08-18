@@ -112,6 +112,7 @@ vi.mock("@/lib/auth/enter-logged-in-desktop", () => ({
 }));
 
 import { useAuth } from "@/hooks/use-auth";
+import { AuthApiError } from "@/lib/auth/auth-api";
 
 const user = {
   id: "user-1",
@@ -201,5 +202,75 @@ describe("useAuth onboarding integration", () => {
     expect(mocks.markOnboardingCompleted).toHaveBeenCalledWith("user-1");
     expect(mocks.clearOnboardingProgress).toHaveBeenCalledWith("user-1");
     expect(mocks.enterLoggedInDesktop).toHaveBeenCalledWith(user, "/chat");
+  });
+});
+
+/*
+ * O painel oculto valida a mesma sessão no mesmo boot (`usePanelSession`), então
+ * ele pode invalidar os tokens enquanto o boot do `main` ainda está no `me`.
+ * Sem guarda, esse boot obsoleto seguia e abria o painel — que ficava vazio
+ * atrás da tela de login.
+ */
+describe("useAuth boot invalidado no meio", () => {
+  let authSyncHandler:
+    | ((payload: { type: "logout" | "unauthorized" }) => void)
+    | null = null;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authSyncHandler = null;
+    mocks.getTokens.mockResolvedValue({
+      accessToken: "access",
+      refreshToken: "refresh",
+    });
+    mocks.me.mockResolvedValue(user);
+    mocks.hasCompletedOnboarding.mockReturnValue(true);
+    mocks.isOnboardingForced.mockReturnValue(false);
+    mocks.listenOnboardingReview.mockResolvedValue(vi.fn());
+    mocks.listenTokenSync.mockResolvedValue(vi.fn());
+    mocks.listenAuthSync.mockImplementation(
+      async (handler: (payload: { type: "logout" | "unauthorized" }) => void) => {
+        authSyncHandler = handler;
+        return vi.fn();
+      },
+    );
+    mocks.applyWindowSurface.mockResolvedValue(undefined);
+    mocks.applyOnboardingWindowSurface.mockResolvedValue(undefined);
+    mocks.enterLoggedInDesktop.mockResolvedValue(undefined);
+    mocks.closePanel.mockResolvedValue(undefined);
+  });
+
+  it("não abre o painel quando a sessão cai durante o boot", async () => {
+    let resolveMe: ((value: UserPublic) => void) | undefined;
+    mocks.me.mockReturnValue(
+      new Promise<UserPublic>((resolve) => {
+        resolveMe = resolve;
+      }),
+    );
+
+    const { result } = renderHook(() => useAuth());
+
+    await waitFor(() => expect(authSyncHandler).not.toBeNull());
+    act(() => authSyncHandler?.({ type: "unauthorized" }));
+
+    await act(async () => {
+      resolveMe?.(user);
+    });
+
+    expect(mocks.enterLoggedInDesktop).not.toHaveBeenCalled();
+    expect(result.current.phase).toBe("unauthenticated");
+  });
+
+  it("fecha o painel quando o boot cai para a tela de login", async () => {
+    mocks.me.mockRejectedValue(new AuthApiError("expirado", 401));
+    mocks.refreshStoredTokens.mockRejectedValue(
+      new AuthApiError("refresh expirado", 401),
+    );
+
+    const { result } = renderHook(() => useAuth());
+
+    await waitFor(() => expect(result.current.phase).toBe("unauthenticated"));
+    await waitFor(() => expect(mocks.closePanel).toHaveBeenCalled());
+    expect(mocks.enterLoggedInDesktop).not.toHaveBeenCalled();
   });
 });

@@ -230,7 +230,7 @@ describe("RuleReviewPage", () => {
     renderPage();
 
     expect(
-      await screen.findByText("Acesso restrito ao proprietário"),
+      await screen.findByText("Sem permissão para extrair regras"),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Arraste arquivos/i }),
@@ -249,7 +249,7 @@ describe("RuleReviewPage", () => {
     expect(
       await screen.findByLabelText("Modo de aprovação"),
     ).toBeInTheDocument();
-    expect(await screen.findByText("Sessões recentes")).toBeInTheDocument();
+    expect(await screen.findByText("Análises")).toBeInTheDocument();
     expect(ruleDiscoveryApi.listSessions).toHaveBeenCalledWith("ws-1");
 
     await user.click(screen.getByRole("button", { name: /1 candidato/i }));
@@ -257,7 +257,7 @@ describe("RuleReviewPage", () => {
     expect(await screen.findByText("Raciocínio")).toBeInTheDocument();
 
     expect(
-      await screen.findByText("Checklist de candidatos"),
+      await screen.findByText("Sugestões"),
     ).toBeInTheDocument();
     expect(screen.getAllByText("manual.txt").length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Título do candidato")).toHaveValue(

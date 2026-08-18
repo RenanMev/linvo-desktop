@@ -27,7 +27,7 @@ type PanelShellProps = {
 export function PanelShell({ session, sessionReady, sessionError }: PanelShellProps) {
   const { maximized, toggleMaximize } = useWindowMaximized();
   const { collapsed, toggleCollapsed } = useSidebarCollapsed();
-  const update = useDesktopUpdate(true);
+  const update = useDesktopUpdate(!import.meta.env.DEV);
 
   return (
     <ChatConversationsProvider enabled={sessionReady}>

@@ -1,10 +1,15 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, ImagePlus, Plus } from "lucide-react";
+import { ImagePlus, Plus } from "lucide-react";
 
+import {
+  SettingsBack,
+  SettingsError,
+  SettingsHeader,
+  SettingsPage,
+} from "@/components/settings/settings-page";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspace } from "@/context/workspace-context";
 
 export function WorkspaceCreatePage() {
@@ -43,131 +48,98 @@ export function WorkspaceCreatePage() {
   }
 
   return (
-    <ScrollArea className="h-full">
-      <div className="mx-auto max-w-2xl space-y-6 px-6 py-6">
-        <div className="space-y-3">
-          <Button
+    <SettingsPage>
+      <div className="space-y-5">
+        <SettingsBack onClick={() => navigate("/settings/workspace")} />
+        <SettingsHeader
+          title="Novo workspace"
+          description="Defina o nome e, se quiser, uma foto para identificar o contexto."
+        />
+      </div>
+
+      {error ? <SettingsError message={error} /> : null}
+
+      <div className="space-y-5">
+        <div className="flex items-center gap-3.5">
+          <button
             type="button"
-            size="sm"
-            variant="ghost"
-            className="-ml-2 text-muted-foreground"
-            onClick={() => navigate("/settings/workspace")}
+            className="grid size-16 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-raise-2 text-muted-foreground transition-colors hover:bg-surface-hover"
+            onClick={() => fileInputRef.current?.click()}
+            aria-label="Escolher foto do workspace"
           >
-            <ArrowLeft className="size-3.5" />
-            Voltar
-          </Button>
-
-          <div className="space-y-1">
-            <h1 className="text-lg font-semibold tracking-tight">
-              Novo workspace
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              Defina o nome e, se quiser, uma foto para identificar o contexto.
+            {previewUrl ? (
+              <img src={previewUrl} alt="" className="size-full object-cover" />
+            ) : (
+              <ImagePlus className="size-5" />
+            )}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(event) =>
+              handleFileChange(event.target.files?.[0] ?? null)
+            }
+          />
+          <div className="min-w-0 space-y-1">
+            <p className="text-[13px] text-muted-foreground">
+              JPEG, PNG ou WebP · máx. 2MB
             </p>
-          </div>
-        </div>
-
-        {error ? (
-          <div className="rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2.5">
-            <p className="text-xs text-destructive">{error}</p>
-          </div>
-        ) : null}
-
-        <div className="space-y-4 rounded-xl border border-hairline bg-muted/30 p-4">
-          <div className="space-y-1.5">
-            <label
-              htmlFor="workspace-name"
-              className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
-            >
-              Nome
-            </label>
-            <Input
-              id="workspace-name"
-              value={newName}
-              onChange={(event) => setNewName(event.target.value)}
-              placeholder="Nome do workspace"
-              className="h-9 text-xs"
-              autoFocus
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void handleCreate();
-                }
-              }}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Foto
-            </p>
-            <div className="flex items-center gap-3">
+            {imageFile ? (
               <button
                 type="button"
-                className="grid size-20 place-items-center overflow-hidden rounded-xl border border-dashed border-hairline bg-muted/40 text-muted-foreground transition-colors hover:border-hairline-strong hover:bg-muted/60"
-                onClick={() => fileInputRef.current?.click()}
-                aria-label="Escolher foto do workspace"
+                disabled={busy}
+                className="text-[12px] text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => handleFileChange(null)}
               >
-                {previewUrl ? (
-                  <img
-                    src={previewUrl}
-                    alt=""
-                    className="size-full object-cover"
-                  />
-                ) : (
-                  <ImagePlus className="size-5" />
-                )}
+                Remover foto
               </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={(event) =>
-                  handleFileChange(event.target.files?.[0] ?? null)
-                }
-              />
-              <div className="min-w-0 space-y-1">
-                <p className="text-[11px] text-muted-foreground">
-                  JPEG, PNG ou WebP · máx. 2MB
-                </p>
-                {imageFile ? (
-                  <Button
-                    type="button"
-                    size="xs"
-                    variant="ghost"
-                    disabled={busy}
-                    onClick={() => handleFileChange(null)}
-                  >
-                    Remover foto
-                  </Button>
-                ) : null}
-              </div>
-            </div>
+            ) : null}
           </div>
         </div>
 
-        <div className="flex justify-end gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={busy}
-            onClick={() => navigate("/settings/workspace")}
-          >
-            Cancelar
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            disabled={busy || !newName.trim()}
-            onClick={() => void handleCreate()}
-          >
-            <Plus className="size-3.5" />
-            Criar workspace
-          </Button>
+        <div className="space-y-2">
+          <label htmlFor="workspace-name" className="text-sm font-medium">
+            Nome
+          </label>
+          <Input
+            id="workspace-name"
+            value={newName}
+            onChange={(event) => setNewName(event.target.value)}
+            placeholder="Nome do workspace"
+            className="h-11"
+            autoFocus
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void handleCreate();
+              }
+            }}
+          />
         </div>
       </div>
-    </ScrollArea>
+
+      <div className="flex justify-end gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={busy}
+          onClick={() => navigate("/settings/workspace")}
+        >
+          Cancelar
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          disabled={busy || !newName.trim()}
+          onClick={() => void handleCreate()}
+        >
+          <Plus className="size-3.5" />
+          Criar workspace
+        </Button>
+      </div>
+    </SettingsPage>
   );
 }

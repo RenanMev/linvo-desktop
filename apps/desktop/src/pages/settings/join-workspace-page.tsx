@@ -6,9 +6,14 @@ import {
   normalizeInviteCode,
 } from "@linvo/shared";
 
+import {
+  SettingsBack,
+  SettingsError,
+  SettingsHeader,
+  SettingsPage,
+} from "@/components/settings/settings-page";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspace } from "@/context/workspace-context";
 import { AuthApiError } from "@/lib/auth/auth-api";
 import { inviteCopy } from "@/lib/workspace/invite-copy";
@@ -94,54 +99,47 @@ export function JoinWorkspacePage() {
   }
 
   return (
-    <ScrollArea className="h-full">
-      <div className="mx-auto max-w-md space-y-6 px-6 py-6">
-        <div className="space-y-1">
-          <h1 className="text-lg font-semibold tracking-tight">
-            {inviteCopy.joinTitle}
-          </h1>
-          <p className="text-xs text-muted-foreground">{inviteCopy.joinHint}</p>
-        </div>
-
-        <form className="space-y-3" onSubmit={(event) => void handleSubmit(event)}>
-          <label className="block space-y-1.5">
-            <span className="text-[11px] font-medium text-muted-foreground">
-              {inviteCopy.joinField}
-            </span>
-            <Input
-              ref={inputRef}
-              value={displayValue}
-              autoComplete="off"
-              spellCheck={false}
-              disabled={busy || lockRemaining > 0}
-              placeholder="XXXX-XXXX"
-              aria-label={inviteCopy.joinField}
-              className="h-10 font-mono text-sm uppercase tracking-[0.18em]"
-              aria-invalid={Boolean(error)}
-              onChange={(event) => applyRaw(event.target.value)}
-              onPaste={(event) => {
-                event.preventDefault();
-                applyRaw(event.clipboardData.getData("text"));
-              }}
-            />
-          </label>
-
-          {error ? (
-            <p role="alert" className="text-xs text-destructive">
-              {error}
-            </p>
-          ) : null}
-          {info ? (
-            <p role="status" className="text-xs text-muted-foreground">
-              {info}
-            </p>
-          ) : null}
-
-          <Button type="submit" disabled={!canSubmit} className="w-full">
-            {busy ? "Entrando..." : inviteCopy.joinButton}
-          </Button>
-        </form>
+    <SettingsPage className="max-w-md">
+      <div className="space-y-5">
+        <SettingsBack onClick={() => navigate("/settings/workspace")} />
+        <SettingsHeader
+          title={inviteCopy.joinTitle}
+          description={inviteCopy.joinHint}
+        />
       </div>
-    </ScrollArea>
+
+      <form className="space-y-4" onSubmit={(event) => void handleSubmit(event)}>
+        <label className="block space-y-2">
+          <span className="text-sm font-medium">{inviteCopy.joinField}</span>
+          <Input
+            ref={inputRef}
+            value={displayValue}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={busy || lockRemaining > 0}
+            placeholder="XXXX-XXXX"
+            aria-label={inviteCopy.joinField}
+            className="h-11 font-technical text-sm uppercase tracking-[0.18em]"
+            aria-invalid={Boolean(error)}
+            onChange={(event) => applyRaw(event.target.value)}
+            onPaste={(event) => {
+              event.preventDefault();
+              applyRaw(event.clipboardData.getData("text"));
+            }}
+          />
+        </label>
+
+        {error ? <SettingsError message={error} /> : null}
+        {info ? (
+          <p role="status" className="text-[13px] text-muted-foreground">
+            {info}
+          </p>
+        ) : null}
+
+        <Button type="submit" disabled={!canSubmit} className="w-full" size="lg">
+          {busy ? "Entrando..." : inviteCopy.joinButton}
+        </Button>
+      </form>
+    </SettingsPage>
   );
 }

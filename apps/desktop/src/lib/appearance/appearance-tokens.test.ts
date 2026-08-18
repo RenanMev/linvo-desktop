@@ -3,7 +3,10 @@ import { APPEARANCE_DEFAULTS, type AppearancePreferences } from "@linvo/shared";
 
 import {
   applyAppearance,
+  formatRgba,
+  parseRgba,
   resolveCssVars,
+  resolveCustomAccentVars,
   resolveEffectiveTheme,
   resolveHtmlAttrs,
   sanitizePreferences,
@@ -36,6 +39,10 @@ function makeFakeRoot() {
     style: {
       setProperty: (name: string, value: string) => styleProps.set(name, value),
       getPropertyValue: (name: string) => styleProps.get(name) ?? "",
+      removeProperty: (name: string) => {
+        styleProps.delete(name);
+        return "";
+      },
     },
   } as unknown as HTMLElement;
 }
@@ -150,6 +157,51 @@ describe("resolveCssVars", () => {
       comfortable["--chat-message-gap"],
     );
   });
+
+  it("does not inject custom accent vars for preset accents", () => {
+    const vars = resolveCssVars(makePrefs({ accentColor: "blue" }), "dark");
+    expect(vars["--accent-active"]).toBeUndefined();
+  });
+
+  it("injects custom accent vars when accentColor is custom", () => {
+    const vars = resolveCssVars(
+      makePrefs({
+        accentColor: "custom",
+        customAccentRgba: "rgba(10, 20, 30, 0.5)",
+      }),
+      "dark",
+    );
+    expect(vars["--accent-active"]).toBe("rgba(10, 20, 30, 0.5)");
+    expect(vars["--accent-active-foreground"]).toBe("#ffffff");
+    expect(vars["--ring"]).toBe("rgba(10, 20, 30, 0.45)");
+  });
+});
+
+describe("custom accent rgba helpers", () => {
+  it("parses and formats rgba values", () => {
+    expect(parseRgba("rgba(1, 2, 3, 0.25)")).toEqual({
+      r: 1,
+      g: 2,
+      b: 3,
+      a: 0.25,
+    });
+    expect(formatRgba({ r: 1.4, g: 2.6, b: 3, a: 0.2555 })).toBe(
+      "rgba(1, 3, 3, 0.256)",
+    );
+  });
+
+  it("returns null for invalid rgba strings", () => {
+    expect(parseRgba("rgb(1, 2, 3)")).toBeNull();
+    expect(parseRgba("rgba(300, 0, 0, 1)")).toBeNull();
+  });
+
+  it("picks black foreground for light custom accents", () => {
+    expect(
+      resolveCustomAccentVars("rgba(250, 250, 250, 1)")[
+        "--accent-active-foreground"
+      ],
+    ).toBe("#000000");
+  });
 });
 
 describe("sanitizePreferences", () => {
@@ -172,6 +224,22 @@ describe("sanitizePreferences", () => {
   it("clamps an out-of-range panelOpacity instead of discarding it", () => {
     const result = sanitizePreferences({ panelOpacity: 5 });
     expect(result.panelOpacity).toBe(55);
+  });
+
+  it("accepts custom accent and fills missing customAccentRgba from defaults", () => {
+    const result = sanitizePreferences({
+      accentColor: "custom",
+    });
+    expect(result.accentColor).toBe("custom");
+    expect(result.customAccentRgba).toBe(APPEARANCE_DEFAULTS.customAccentRgba);
+  });
+
+  it("falls back invalid customAccentRgba to the default", () => {
+    const result = sanitizePreferences({
+      accentColor: "custom",
+      customAccentRgba: "not-a-color" as never,
+    });
+    expect(result.customAccentRgba).toBe(APPEARANCE_DEFAULTS.customAccentRgba);
   });
 });
 
@@ -204,5 +272,28 @@ describe("applyAppearance", () => {
     expect(root.style.getPropertyValue("--panel-tint")).toBe(
       "rgba(10, 10, 10, 0.8)",
     );
+  });
+
+  it("applies and later clears custom accent style vars", () => {
+    const root = makeFakeRoot();
+    applyAppearance(
+      root,
+      makePrefs({
+        accentColor: "custom",
+        customAccentRgba: "rgba(20, 40, 60, 0.8)",
+      }),
+      { prefersDark: false, prefersReducedMotion: false },
+    );
+    expect(root.getAttribute("data-accent")).toBe("custom");
+    expect(root.style.getPropertyValue("--accent-active")).toBe(
+      "rgba(20, 40, 60, 0.8)",
+    );
+
+    applyAppearance(root, makePrefs({ accentColor: "green" }), {
+      prefersDark: false,
+      prefersReducedMotion: false,
+    });
+    expect(root.getAttribute("data-accent")).toBe("green");
+    expect(root.style.getPropertyValue("--accent-active")).toBe("");
   });
 });

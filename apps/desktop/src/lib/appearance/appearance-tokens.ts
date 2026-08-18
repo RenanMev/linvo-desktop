@@ -1,6 +1,8 @@
 import {
   APPEARANCE_DEFAULTS,
+  DEFAULT_CUSTOM_ACCENT_RGBA,
   appearancePreferencesSchema,
+  isValidCustomAccentRgba,
   type AccentColor,
   type AppearancePreferences,
   type BlurLevel,
@@ -20,6 +22,13 @@ export type ResolvedHtmlAttrs = {
   blur: BlurLevel;
   accent: AccentColor;
   reduceMotion: boolean;
+};
+
+export type RgbaChannels = {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
 };
 
 const PANEL_TINT_RGB: Record<EffectiveTheme, string> = {
@@ -46,11 +55,70 @@ const DENSITY_VARS: Record<UiDensity, Record<string, string>> = {
   },
 };
 
+const ACCENT_STYLE_VARS = [
+  "--accent-active",
+  "--accent-active-foreground",
+  "--selection",
+  "--selection-foreground",
+  "--ring",
+  "--sidebar-ring",
+] as const;
+
+const CUSTOM_ACCENT_RGBA_RE =
+  /^rgba\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(0|1|0?\.\d+)\s*\)$/i;
+
 function clampPanelOpacity(value: number): number {
   if (!Number.isFinite(value)) {
     return APPEARANCE_DEFAULTS.panelOpacity;
   }
   return Math.min(100, Math.max(55, Math.round(value)));
+}
+
+export function parseRgba(value: string): RgbaChannels | null {
+  if (!isValidCustomAccentRgba(value)) {
+    return null;
+  }
+  const match = CUSTOM_ACCENT_RGBA_RE.exec(value);
+  if (!match) {
+    return null;
+  }
+  return {
+    r: Number(match[1]),
+    g: Number(match[2]),
+    b: Number(match[3]),
+    a: Number(match[4]),
+  };
+}
+
+export function formatRgba(channels: RgbaChannels): string {
+  const r = Math.min(255, Math.max(0, Math.round(channels.r)));
+  const g = Math.min(255, Math.max(0, Math.round(channels.g)));
+  const b = Math.min(255, Math.max(0, Math.round(channels.b)));
+  const a = Math.min(1, Math.max(0, Number(channels.a.toFixed(3))));
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
+export function resolveAccentForeground(r: number, g: number, b: number): string {
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.55 ? "#000000" : "#ffffff";
+}
+
+export function resolveCustomAccentVars(
+  rgbaValue: string,
+): Record<(typeof ACCENT_STYLE_VARS)[number], string> {
+  const channels = parseRgba(rgbaValue) ?? parseRgba(DEFAULT_CUSTOM_ACCENT_RGBA)!;
+  const solid = formatRgba({ ...channels, a: channels.a });
+  const foreground = resolveAccentForeground(channels.r, channels.g, channels.b);
+  const ring = `rgba(${channels.r}, ${channels.g}, ${channels.b}, 0.45)`;
+
+  return {
+    "--accent-active": solid,
+    "--accent-active-foreground": foreground,
+    "--selection": solid,
+    "--selection-foreground": foreground,
+    "--ring": ring,
+    "--sidebar-ring": ring,
+  };
 }
 
 /**
@@ -126,13 +194,19 @@ export function resolveCssVars(
   const editorialFontFamily =
     prefs.responseFont === "serif" ? "var(--font-editorial)" : "var(--font-interface)";
 
-  return {
+  const vars: Record<string, string> = {
     "--panel-tint": `rgba(${PANEL_TINT_RGB[effectiveTheme]}, ${opacity})`,
     "--editorial-font-family": editorialFontFamily,
     "--editorial-size": `${prefs.responseFontSize}px`,
     "--editorial-leading": EDITORIAL_LEADING_BY_SIZE[prefs.responseFontSize],
     ...DENSITY_VARS[prefs.uiDensity],
   };
+
+  if (prefs.accentColor === "custom") {
+    Object.assign(vars, resolveCustomAccentVars(prefs.customAccentRgba));
+  }
+
+  return vars;
 }
 
 export function applyAppearance(
@@ -152,5 +226,11 @@ export function applyAppearance(
   const vars = resolveCssVars(safePrefs, effectiveTheme);
   for (const [key, value] of Object.entries(vars)) {
     root.style.setProperty(key, value);
+  }
+
+  if (safePrefs.accentColor !== "custom") {
+    for (const key of ACCENT_STYLE_VARS) {
+      root.style.removeProperty(key);
+    }
   }
 }

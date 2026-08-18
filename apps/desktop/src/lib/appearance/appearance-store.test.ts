@@ -65,6 +65,26 @@ describe("appearance-store", () => {
     expect(loadStoredAppearance()).toBeNull();
   });
 
+  it("fills missing customAccentRgba from schema default", () => {
+    const { customAccentRgba: _customAccentRgba, ...legacyPrefs } = makePrefs({
+      accentColor: "blue",
+    });
+    localStorage.setItem(
+      APPEARANCE_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        prefs: legacyPrefs,
+        pendingSync: false,
+      }),
+    );
+
+    const stored = loadStoredAppearance();
+    expect(stored?.prefs.accentColor).toBe("blue");
+    expect(stored?.prefs.customAccentRgba).toBe(
+      APPEARANCE_DEFAULTS.customAccentRgba,
+    );
+  });
+
   it("clears the stored envelope", () => {
     saveStoredAppearance(makePrefs());
     clearStoredAppearance();

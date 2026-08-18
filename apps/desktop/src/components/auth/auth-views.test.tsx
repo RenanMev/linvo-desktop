@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { LoginView } from "@/components/auth/login-view";
-import { RegisterView } from "@/components/auth/register-view";
 
 describe("LoginView", () => {
   it("renders login form", () => {
@@ -12,7 +11,7 @@ describe("LoginView", () => {
         error={null}
         sessionWarning={null}
         onLogin={vi.fn()}
-        onGoToRegister={vi.fn()}
+        onRegister={vi.fn()}
       />,
     );
 
@@ -26,7 +25,7 @@ describe("LoginView", () => {
         error={null}
         sessionWarning="Não foi possível validar sua sessão"
         onLogin={vi.fn()}
-        onGoToRegister={vi.fn()}
+        onRegister={vi.fn()}
       />,
     );
 
@@ -44,7 +43,7 @@ describe("LoginView", () => {
         error={null}
         sessionWarning={null}
         onLogin={onLogin}
-        onGoToRegister={vi.fn()}
+        onRegister={vi.fn()}
       />,
     );
 
@@ -57,17 +56,20 @@ describe("LoginView", () => {
       password: "Abcdef1!",
     });
   });
-});
 
-describe("RegisterView", () => {
-  it("blocks mismatched passwords", () => {
+  it("blocks mismatched passwords", async () => {
+    const user = userEvent.setup();
+
     render(
-      <RegisterView
+      <LoginView
         error={null}
+        sessionWarning={null}
+        onLogin={vi.fn()}
         onRegister={vi.fn()}
-        onGoToLogin={vi.fn()}
       />,
     );
+
+    await user.click(screen.getByRole("button", { name: "Criar conta" }));
 
     expect(screen.getByRole("button", { name: "Criar conta" })).toBeDisabled();
   });
@@ -76,13 +78,15 @@ describe("RegisterView", () => {
     const user = userEvent.setup();
 
     render(
-      <RegisterView
+      <LoginView
         error={null}
+        sessionWarning={null}
+        onLogin={vi.fn()}
         onRegister={vi.fn()}
-        onGoToLogin={vi.fn()}
       />,
     );
 
+    await user.click(screen.getByRole("button", { name: "Criar conta" }));
     await user.type(screen.getByPlaceholderText("Nome"), "Renan");
     await user.type(screen.getByPlaceholderText("Email"), "renan@example.com");
     await user.type(screen.getByPlaceholderText("Senha"), "Abcdef1!");

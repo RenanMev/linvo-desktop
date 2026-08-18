@@ -20,6 +20,9 @@
         var STORAGE_VERSION = 1;
         var DEFAULT_BLUR = "medium";
         var DEFAULT_ACCENT = "purple";
+        var DEFAULT_CUSTOM_RGBA = "rgba(124, 58, 237, 1)";
+        var RGBA_RE =
+          /^rgba\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(0|1|0?\.\d+)\s*\)$/i;
 
         var prefs = null;
         try {
@@ -35,6 +38,8 @@
         var themeMode = (prefs && prefs.themeMode) || "system";
         var blurLevel = (prefs && prefs.blurLevel) || DEFAULT_BLUR;
         var accentColor = (prefs && prefs.accentColor) || DEFAULT_ACCENT;
+        var customAccentRgba =
+          (prefs && prefs.customAccentRgba) || DEFAULT_CUSTOM_RGBA;
         var reduceMotionPref = prefs ? prefs.reduceMotion : null;
 
         var prefersDark =
@@ -58,6 +63,37 @@
         root.setAttribute("data-blur", blurLevel);
         root.setAttribute("data-accent", accentColor);
         root.setAttribute("data-reduce-motion", String(reduceMotion));
+
+        if (accentColor === "custom") {
+          var match = RGBA_RE.exec(customAccentRgba);
+          if (!match) {
+            match = RGBA_RE.exec(DEFAULT_CUSTOM_RGBA);
+          }
+          if (match) {
+            var r = Number(match[1]);
+            var g = Number(match[2]);
+            var b = Number(match[3]);
+            var a = Number(match[4]);
+            if (
+              r <= 255 &&
+              g <= 255 &&
+              b <= 255 &&
+              a >= 0 &&
+              a <= 1
+            ) {
+              var solid = "rgba(" + r + ", " + g + ", " + b + ", " + a + ")";
+              var luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+              var foreground = luminance > 0.55 ? "#000000" : "#ffffff";
+              var ring = "rgba(" + r + ", " + g + ", " + b + ", 0.45)";
+              root.style.setProperty("--accent-active", solid);
+              root.style.setProperty("--accent-active-foreground", foreground);
+              root.style.setProperty("--selection", solid);
+              root.style.setProperty("--selection-foreground", foreground);
+              root.style.setProperty("--ring", ring);
+              root.style.setProperty("--sidebar-ring", ring);
+            }
+          }
+        }
       })();
     </script>
   </head>
