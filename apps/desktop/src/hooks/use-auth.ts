@@ -60,6 +60,21 @@ export function shouldShowOnboarding(user: UserPublic): boolean {
 export function useAuth() {
   const [state, dispatch] = useReducer(authReducer, initialAuthState);
   const bootstrappedRef = useRef(false);
+  /*
+   * Conta quantas vezes a sessão foi invalidada.
+   *
+   * O boot é uma cadeia de `await`s que não pode ser cancelada, e ele não é o
+   * único a validar a sessão: o painel (oculto) roda `usePanelSession` no mesmo
+   * start. Quando o refresh token já rodou, um dos dois perde a corrida, limpa
+   * os tokens e transmite `unauthorized` — e o boot que já tinha o usuário em
+   * mãos seguia adiante abrindo o painel. Comparar a geração antes de assumir a
+   * sessão é o que impede uma cadeia obsoleta de reabrir o desktop logado.
+   */
+  const authEpochRef = useRef(0);
+
+  const invalidateSession = useCallback(() => {
+    authEpochRef.current += 1;
+  }, []);
 
   const syncWindow = useCallback(async (phase: AuthPhase) => {
     if (phase === "onboarding") {
@@ -70,13 +85,14 @@ export function useAuth() {
   }, []);
 
   const handleUnauthorized = useCallback(() => {
+    invalidateSession();
     clearStoredAppearance();
     void (async () => {
       await notifyDesktopEvent("Sessão expirada. Faça login novamente.");
       await closePanel();
       dispatch({ type: "UNAUTHORIZED" });
     })();
-  }, []);
+  }, [invalidateSession]);
 
   useEffect(() => {
     void applyWindowSurface("auth");
@@ -94,6 +110,27 @@ export function useAuth() {
     bootstrappedRef.current = true;
 
     void (async () => {
+      const epoch = authEpochRef.current;
+      const isStale = () => authEpochRef.current !== epoch;
+
+      /*
+       * Assume a sessão só se ela ainda for a mesma de quando o boot começou.
+       * Depois de `enterSession` o painel já pode estar na tela, então uma
+       * invalidação que chegou no meio precisa fechá-lo — senão o painel vazio
+       * fica atrás da tela de login.
+       */
+      const finishBoot = async (user: UserPublic) => {
+        if (shouldShowOnboarding(user)) {
+          dispatch({ type: "START_ONBOARDING", user });
+          return;
+        }
+        dispatch({ type: "BOOT_SUCCESS", user });
+        await enterSession(user);
+        if (isStale()) {
+          await closePanel();
+        }
+      };
+
       dispatch({ type: "BOOT_START" });
 
       const stored = await getTokens();
@@ -104,23 +141,19 @@ export function useAuth() {
 
       try {
         const user = await meRequest(stored.accessToken);
-        if (shouldShowOnboarding(user)) {
-          dispatch({ type: "START_ONBOARDING", user });
-        } else {
-          dispatch({ type: "BOOT_SUCCESS", user });
-          await enterSession(user);
+        if (isStale()) {
+          return;
         }
+        await finishBoot(user);
       } catch (error) {
         if (error instanceof AuthApiError && error.status === 401) {
           try {
             const tokens = await refreshStoredTokens();
             const user = await meRequest(tokens.accessToken);
-            if (shouldShowOnboarding(user)) {
-              dispatch({ type: "START_ONBOARDING", user });
-            } else {
-              dispatch({ type: "BOOT_SUCCESS", user });
-              await enterSession(user);
+            if (isStale()) {
+              return;
             }
+            await finishBoot(user);
             return;
           } catch (refreshError) {
             if (refreshError instanceof AuthNetworkError) {
@@ -153,6 +186,15 @@ export function useAuth() {
     if (state.phase === "checking" || state.phase === "floating") {
       return;
     }
+    /*
+     * Tela de login e painel não coexistem. Quem invalida a sessão já chama
+     * `closePanel`, mas o `hide` pode chegar antes do `show` de um `panel_open`
+     * em voo — e aí o painel fica na tela atrás do login. Reconciliar pela fase
+     * fecha o painel independentemente da ordem em que as duas chamadas caíram.
+     */
+    if (state.phase === "unauthenticated") {
+      void closePanel();
+    }
     void syncWindow(state.phase);
   }, [state.phase, syncWindow]);
 
@@ -174,6 +216,7 @@ export function useAuth() {
     let unlisten: (() => void) | undefined;
 
     void listenAuthSync((payload) => {
+      invalidateSession();
       if (payload.type === "logout" && state.user) {
         clearOnboardingProgress(state.user.id);
       }
@@ -189,7 +232,7 @@ export function useAuth() {
     return () => {
       unlisten?.();
     };
-  }, [state.user]);
+  }, [invalidateSession, state.user]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -258,6 +301,7 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(async () => {
+    invalidateSession();
     if (state.user) {
       clearOnboardingProgress(state.user.id);
     }
@@ -272,7 +316,7 @@ export function useAuth() {
     await emitAuthSync("logout");
     await closePanel();
     dispatch({ type: "LOGOUT" });
-  }, [state.user]);
+  }, [invalidateSession, state.user]);
 
   const completeOnboarding = useCallback(
     async (route = "/chat") => {
