@@ -11,7 +11,42 @@ export const accentColorSchema = z.enum([
   "green",
   "amber",
   "rose",
+  "custom",
 ]);
+
+export const DEFAULT_CUSTOM_ACCENT_RGBA = "rgba(124, 58, 237, 1)";
+
+const CUSTOM_ACCENT_RGBA_RE =
+  /^rgba\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(0|1|0?\.\d+)\s*\)$/i;
+
+export function isValidCustomAccentRgba(value: string): boolean {
+  const match = CUSTOM_ACCENT_RGBA_RE.exec(value);
+  if (!match) {
+    return false;
+  }
+  const r = Number(match[1]);
+  const g = Number(match[2]);
+  const b = Number(match[3]);
+  const a = Number(match[4]);
+  return (
+    Number.isFinite(r) &&
+    Number.isFinite(g) &&
+    Number.isFinite(b) &&
+    Number.isFinite(a) &&
+    r >= 0 &&
+    r <= 255 &&
+    g >= 0 &&
+    g <= 255 &&
+    b >= 0 &&
+    b <= 255 &&
+    a >= 0 &&
+    a <= 1
+  );
+}
+
+export const customAccentRgbaSchema = z
+  .string()
+  .refine(isValidCustomAccentRgba, { message: "Invalid rgba color" });
 
 export const responseFontSchema = z.enum(["serif", "interface"]);
 
@@ -28,6 +63,7 @@ export const appearancePreferencesSchema = z.object({
   panelOpacity: z.number().int().min(55).max(100),
   blurLevel: blurLevelSchema,
   accentColor: accentColorSchema,
+  customAccentRgba: customAccentRgbaSchema.default(DEFAULT_CUSTOM_ACCENT_RGBA),
   responseFont: responseFontSchema,
   responseFontSize: responseFontSizeSchema,
   uiDensity: uiDensitySchema,
@@ -44,6 +80,7 @@ export const APPEARANCE_DEFAULTS = {
   panelOpacity: 72,
   blurLevel: "medium",
   accentColor: "purple",
+  customAccentRgba: DEFAULT_CUSTOM_ACCENT_RGBA,
   responseFont: "serif",
   responseFontSize: 17,
   uiDensity: "comfortable",

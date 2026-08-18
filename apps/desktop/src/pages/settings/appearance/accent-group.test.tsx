@@ -34,7 +34,7 @@ function mockAppearance(
 }
 
 describe("AccentGroup", () => {
-  it("renders the six accent options with the current one marked active", () => {
+  it("renders the preset accents plus Custom with the current one marked active", () => {
     mockAppearance({ accentColor: "purple" });
     render(<AccentGroup />);
 
@@ -46,7 +46,11 @@ describe("AccentGroup", () => {
       "aria-checked",
       "false",
     );
-    expect(screen.getAllByRole("radio")).toHaveLength(6);
+    expect(screen.getByRole("radio", { name: "Custom" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
+    expect(screen.getAllByRole("radio")).toHaveLength(7);
   });
 
   it("calls setPreference when another accent is clicked", async () => {
@@ -66,6 +70,49 @@ describe("AccentGroup", () => {
     expect(screen.getByRole("radio", { name: "Rosa" })).toHaveAttribute(
       "aria-checked",
       "true",
+    );
+  });
+
+  it("shows the RGBA picker when Custom is active", () => {
+    mockAppearance({ accentColor: "custom" });
+    render(<AccentGroup />);
+
+    expect(screen.getByRole("radio", { name: "Custom" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(screen.getByLabelText("R")).toBeInTheDocument();
+    expect(screen.getByLabelText("G")).toBeInTheDocument();
+    expect(screen.getByLabelText("B")).toBeInTheDocument();
+    expect(screen.getByLabelText("A")).toBeInTheDocument();
+  });
+
+  it("selects Custom when the Custom swatch is clicked", async () => {
+    const user = userEvent.setup();
+    const setPreference = mockAppearance({ accentColor: "purple" });
+    render(<AccentGroup />);
+
+    await user.click(screen.getByRole("radio", { name: "Custom" }));
+
+    expect(setPreference).toHaveBeenCalledWith("accentColor", "custom");
+  });
+
+  it("updates customAccentRgba when an RGBA channel is committed", async () => {
+    const user = userEvent.setup();
+    const setPreference = mockAppearance({
+      accentColor: "custom",
+      customAccentRgba: "rgba(124, 58, 237, 1)",
+    });
+    render(<AccentGroup />);
+
+    const red = screen.getByLabelText("R");
+    await user.clear(red);
+    await user.type(red, "10");
+    await user.tab();
+
+    expect(setPreference).toHaveBeenCalledWith(
+      "customAccentRgba",
+      "rgba(10, 58, 237, 1)",
     );
   });
 });
