@@ -24,7 +24,6 @@ import {
 import { NavLink, useLocation, useNavigate } from "react-router";
 
 import { LinvoLogo } from "@/components/linvo-logo";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -99,8 +98,20 @@ const chatExploreItems: NavItem[] = [
 ];
 
 const sidebarSectionX = "px-3";
-const sidebarHeaderY = "py-3";
-const sidebarBlockBottom = "pb-3";
+const sidebarHeaderY = "pt-3.5 pb-2";
+const sidebarBlockBottom = "pb-2";
+const sidebarRowX = "px-2.5";
+const navRowBase = `flex w-full items-center gap-2.5 rounded-lg ${sidebarRowX} py-1.5 text-[13px] transition-colors duration-150`;
+const navRowIdle =
+  "text-sidebar-foreground/65 [&_svg]:opacity-45 hover:bg-surface-hover hover:text-sidebar-foreground hover:[&_svg]:opacity-80";
+const navRowActive = "nav-pill-active font-medium [&_svg]:opacity-100";
+const collapsedIconBase =
+  "inline-flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-150";
+const collapsedIconIdle =
+  "text-sidebar-foreground/65 [&_svg]:opacity-45 hover:bg-surface-hover hover:text-sidebar-foreground hover:[&_svg]:opacity-90";
+const navIcon = "size-3.5 shrink-0";
+const searchInputClass =
+  "h-8 rounded-lg border-transparent bg-surface-raise-1 pl-8 text-xs shadow-none hover:border-transparent hover:bg-surface-raise-2 focus-visible:translate-y-0 focus-visible:border-hairline focus-visible:bg-surface-raise-2 focus-visible:ring-0";
 
 function formatConversationDate(isoDate: string): string {
   const date = new Date(isoDate);
@@ -125,23 +136,43 @@ function accountInitials(name: string): string {
   return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
 }
 
-/*
- * Goteira única da sidebar: o container dá px-3 (12px) e toda linha dá px-2.5
- * (10px), então ícone começa em 22px e texto em 48px — do header ao rodapé.
- * Qualquer bloco novo deve usar `sidebarRowX` em vez de um padding próprio.
- */
-const sidebarRowX = "px-2.5";
-const navRowBase = `flex w-full items-center gap-2.5 rounded-lg ${sidebarRowX} py-1.5 text-xs transition-colors duration-150`;
-const navRowIdle =
-  "text-sidebar-foreground/70 [&_svg]:opacity-50 hover:bg-surface-hover hover:text-sidebar-foreground hover:[&_svg]:opacity-80";
-const navRowActive =
-  "nav-pill-active font-medium [&_svg]:opacity-100";
+function SoonHint() {
+  return (
+    <span className="font-technical text-[9px] font-medium tracking-wide text-muted-foreground/70">
+      Em breve
+    </span>
+  );
+}
 
-const collapsedIconBase =
-  "inline-flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-150";
-const collapsedIconIdle =
-  "text-sidebar-foreground/70 [&_svg]:opacity-50 hover:bg-surface-hover hover:text-sidebar-foreground hover:[&_svg]:opacity-90";
-const navIcon = "size-4 shrink-0";
+function SidebarSearch({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="relative">
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className={searchInputClass}
+      />
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <p className="mb-1 px-2.5 font-technical text-[10px] font-medium tracking-wide text-muted-foreground/80">
+      {children}
+    </p>
+  );
+}
 
 function SidebarNavRow({
   item,
@@ -157,7 +188,7 @@ function SidebarNavRow({
       <div
         className={cn(
           navRowBase,
-          "cursor-default justify-between text-sidebar-foreground/35 [&_svg]:opacity-50",
+          "cursor-default justify-between text-sidebar-foreground/35 [&_svg]:opacity-40",
         )}
         aria-disabled="true"
       >
@@ -165,9 +196,7 @@ function SidebarNavRow({
           <Icon className={navIcon} />
           {item.label}
         </span>
-        <span className="rounded-full border border-hairline px-1.5 py-0.5 font-technical text-[9px] font-medium tracking-wide text-muted-foreground">
-          Em breve
-        </span>
+        <SoonHint />
       </div>
     );
   }
@@ -260,7 +289,6 @@ function CollapsedSettingsNavItem({
 
 type PanelSidebarProps = {
   session: PanelSession;
-  /** Controlado pelo shell: o botão que alterna isto vive na titlebar. */
   collapsed: boolean;
 };
 
@@ -321,14 +349,14 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
   return (
     <aside
       className={cn(
-        "relative flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-r border-hairline bg-surface-raise-1 text-sidebar-foreground",
+        "relative flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-r border-hairline bg-sidebar text-sidebar-foreground",
         "transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width]",
-        collapsed ? "w-14" : "w-60",
+        collapsed ? "w-14" : "w-64",
       )}
     >
       <div
         className={cn(
-          "absolute inset-0 flex flex-col items-center gap-1 overflow-hidden px-1.5 py-2.5 transition-opacity duration-200",
+          "absolute inset-0 flex flex-col items-center gap-1 overflow-hidden px-1.5 py-3 transition-opacity duration-200",
           collapsed
             ? "z-10 opacity-100"
             : "pointer-events-none z-0 opacity-0",
@@ -342,18 +370,18 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
               title={session.user.name}
               tabIndex={collapsedTabIndex}
               onClick={() => navigate("/settings/account")}
-              className="grid size-8 shrink-0 place-items-center rounded-full border border-hairline bg-surface-raise-2 font-technical text-[10px] font-semibold text-sidebar-accent-foreground transition-opacity hover:opacity-90"
+              className="grid size-8 shrink-0 place-items-center rounded-lg border border-hairline bg-surface-raise-2 font-technical text-[10px] font-semibold text-sidebar-accent-foreground transition-opacity hover:opacity-90"
             >
               {accountInitials(session.user.name)}
             </button>
-            <div className="my-0.5 h-px w-8 shrink-0 bg-surface-raise-2" />
+            <div className="my-1 h-px w-6 shrink-0 bg-hairline" />
             <CollapsedIconButton
               title="Voltar ao chat"
               icon={ArrowLeft}
               tabIndex={collapsedTabIndex}
               onClick={() => navigate("/chat")}
             />
-            <div className="mt-0.5 flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="mt-0.5 flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {allSettingsItems.map((item) => (
                 <CollapsedSettingsNavItem
                   key={item.label}
@@ -362,7 +390,7 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
                 />
               ))}
             </div>
-            <div className="my-0.5 h-px w-8 shrink-0 bg-surface-raise-2" />
+            <div className="my-1 h-px w-6 shrink-0 bg-hairline" />
             <CollapsedIconButton
               title="Central de ajuda"
               icon={LifeBuoy}
@@ -377,18 +405,18 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
               title="Linvo"
               tabIndex={collapsedTabIndex}
               onClick={() => navigate("/chat")}
-              className="grid size-8 shrink-0 place-items-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground transition-opacity hover:opacity-90"
+              className="grid size-8 shrink-0 place-items-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground transition-opacity hover:opacity-90"
             >
               <LinvoLogo className="size-4 invert dark:invert-0" />
             </button>
-            <div className="my-0.5 h-px w-8 shrink-0 bg-surface-raise-2" />
+            <div className="my-1 h-px w-6 shrink-0 bg-hairline" />
             <CollapsedIconButton
               title="Nova conversa"
               icon={MessageSquarePlus}
               tabIndex={collapsedTabIndex}
               onClick={() => void createConversation()}
             />
-            <div className="mt-0.5 flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="mt-0.5 flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {!isLoading &&
                 filteredConversations.slice(0, 8).map((conversation) => (
                   <button
@@ -409,7 +437,7 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
                   </button>
                 ))}
             </div>
-            <div className="my-0.5 h-px w-8 shrink-0 bg-surface-raise-2" />
+            <div className="my-1 h-px w-6 shrink-0 bg-hairline" />
             {chatExploreItems.map((item) => (
               <CollapsedIconButton
                 key={item.label}
@@ -443,12 +471,17 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
                 sidebarHeaderY,
               )}
             >
-              <div className={cn("flex min-w-0 items-center gap-2.5", sidebarRowX)}>
-                <span className="grid size-8 shrink-0 place-items-center rounded-full border border-hairline bg-surface-raise-2 font-technical text-[10px] font-semibold text-sidebar-accent-foreground">
+              <div
+                className={cn(
+                  "flex min-w-0 items-center gap-2.5 py-1",
+                  sidebarRowX,
+                )}
+              >
+                <span className="grid size-7 shrink-0 place-items-center rounded-lg border border-hairline bg-surface-raise-2 font-technical text-[10px] font-semibold text-sidebar-accent-foreground">
                   {accountInitials(session.user.name)}
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold leading-tight">
+                  <p className="truncate text-[13px] font-medium leading-tight">
                     {session.user.name}
                   </p>
                   <p className="truncate text-[11px] text-muted-foreground">
@@ -470,20 +503,16 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
             </div>
 
             <div className={cn(sidebarSectionX, sidebarBlockBottom)}>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Buscar configurações"
-                  className="h-8 rounded-lg border-hairline bg-surface-raise-1 pl-9 text-xs"
-                />
-              </div>
+              <SidebarSearch
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Buscar configurações"
+              />
             </div>
 
             <nav
               className={cn(
-                "scrollbar-elegant scrollbar-sidebar min-h-0 flex-1 space-y-5 overflow-y-auto pb-2",
+                "scrollbar-elegant scrollbar-sidebar min-h-0 flex-1 space-y-4 overflow-y-auto pb-3",
                 sidebarSectionX,
               )}
               aria-label="Seções de configurações"
@@ -496,9 +525,7 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
                 filteredSettingsGroups.map((group) => (
                   <div key={group.id} className="space-y-0.5">
                     {group.label ? (
-                      <p className="mb-1.5 px-2.5 font-technical text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                        {group.label}
-                      </p>
+                      <SectionLabel>{group.label}</SectionLabel>
                     ) : null}
                     {group.items.map((item) => (
                       <SidebarNavRow
@@ -512,25 +539,18 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
               )}
             </nav>
 
-            <div
-              className={cn(
-                "border-t border-hairline py-3",
-                sidebarSectionX,
-              )}
-            >
+            <div className={cn("py-3", sidebarSectionX)}>
               <div
                 className={cn(
                   navRowBase,
-                  "cursor-default justify-between text-sidebar-foreground/45",
+                  "cursor-default justify-between text-sidebar-foreground/40",
                 )}
               >
                 <span className="flex items-center gap-2.5">
                   <LifeBuoy className={navIcon} />
                   Central de ajuda
                 </span>
-                <span className="rounded-full border border-hairline px-1.5 py-0.5 font-technical text-[9px] font-medium tracking-wide text-muted-foreground">
-                  Em breve
-                </span>
+                <SoonHint />
               </div>
             </div>
           </>
@@ -556,7 +576,7 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
                     />
                   }
                 >
-                  <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-sidebar-primary text-[10px] font-bold text-sidebar-primary-foreground">
+                  <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-lg bg-sidebar-primary text-[10px] font-semibold text-sidebar-primary-foreground">
                     {activeWorkspaceImageSrc ? (
                       <img
                         src={activeWorkspaceImageSrc}
@@ -567,7 +587,7 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
                       (activeWorkspace?.name ?? "L").slice(0, 1).toUpperCase()
                     )}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-none">
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-tight">
                     {activeWorkspace?.name ?? "Linvo"}
                   </span>
                   <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
@@ -598,40 +618,28 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
             </div>
 
             <div className={cn(sidebarSectionX, sidebarBlockBottom)}>
-              <Button
+              <button
                 type="button"
-                variant="secondary"
-                size="sm"
-                className={cn("h-8 w-full justify-start gap-2.5 text-xs", sidebarRowX)}
+                className={cn(navRowBase, navRowIdle)}
                 onClick={() => void createConversation()}
               >
-                <MessageSquarePlus className="size-4 opacity-70" />
+                <MessageSquarePlus className={navIcon} />
                 Nova conversa
-              </Button>
+              </button>
             </div>
 
             <div className={cn(sidebarSectionX, sidebarBlockBottom)}>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Buscar conversas"
-                  className="h-8 rounded-lg border-hairline bg-surface-raise-1 pl-9 text-xs"
-                />
-              </div>
+              <SidebarSearch
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Buscar conversas"
+              />
             </div>
 
             <div className={cn("flex min-h-0 flex-1 flex-col", sidebarSectionX)}>
-              <p className="mb-1.5 px-2.5 font-technical text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                Conversas
-              </p>
+              <SectionLabel>Conversas</SectionLabel>
               <nav
-                // -mr-3/pr-3 joga a scrollbar (7px, ocupa espaço) para dentro da
-                // goteira do container: sem isso as linhas terminam ~9px antes
-                // das dos outros blocos e o item ativo fica mais curto que os
-                // do rodapé.
-                className="scrollbar-elegant scrollbar-sidebar -mr-3 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-3"
+                className="scrollbar-elegant scrollbar-sidebar -mr-3 min-h-0 flex-1 space-y-0.5 overflow-y-auto"
                 aria-label="Conversas"
               >
                 {isLoading ? (
@@ -649,7 +657,7 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
                     <div
                       key={conversation.id}
                       className={cn(
-                        "group relative flex items-stretch rounded-lg transition-colors duration-150",
+                        "group relative flex items-center rounded-lg transition-colors duration-150",
                         activeId === conversation.id
                           ? "nav-pill-active font-medium"
                           : "text-sidebar-foreground/70 hover:bg-surface-hover hover:text-sidebar-foreground",
@@ -657,23 +665,15 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
                     >
                       <button
                         type="button"
+                        title={`${conversation.title} · ${formatConversationDate(conversation.updatedAt)}`}
                         onClick={() => selectConversation(conversation.id)}
                         className={cn(
-                          "flex min-w-0 flex-1 flex-col py-1.5 text-left text-xs",
+                          "min-w-0 flex-1 truncate py-1.5 text-left text-[13px]",
                           sidebarRowX,
-                          // Depois de sidebarRowX: o twMerge mantém a última
-                          // classe do mesmo eixo. Reserva a coluna do botão de
-                          // apagar nas duas linhas — antes só o título a
-                          // evitava e a data passava por baixo do ícone.
                           "pr-7",
                         )}
                       >
-                        <span className="truncate">
-                          {conversation.title}
-                        </span>
-                        <span className="font-technical text-[10px] tracking-wide opacity-55">
-                          {formatConversationDate(conversation.updatedAt)}
-                        </span>
+                        {conversation.title}
                       </button>
                       <button
                         type="button"
@@ -699,12 +699,7 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
               </nav>
             </div>
 
-            <div
-              className={cn(
-                "space-y-0.5 border-t border-hairline py-3",
-                sidebarSectionX,
-              )}
-            >
+            <div className={cn("space-y-0.5 py-3", sidebarSectionX)}>
               {chatExploreItems.map((item) => (
                 <SidebarNavRow key={item.label} item={item} />
               ))}

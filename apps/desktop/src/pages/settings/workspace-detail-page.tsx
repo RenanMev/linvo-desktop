@@ -3,76 +3,72 @@ import { useNavigate, useOutletContext, useParams } from "react-router";
 import type {
   BusinessRule,
   WorkspacePermission,
-  WorkspaceRole,
 } from "@linvo/shared";
 import {
-  ArrowLeft,
   ArrowRight,
   Building2,
-  Check,
   ClipboardCheck,
   ImagePlus,
-  Plus,
   ScrollText,
   Trash2,
   Video,
 } from "lucide-react";
 
 import type { PanelOutletContext } from "@/components/panel/panel-shell";
+import {
+  SettingsBack,
+  SettingsEmpty,
+  SettingsError,
+  SettingsPage,
+  SettingsSection,
+} from "@/components/settings/settings-page";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspace } from "@/context/workspace-context";
 import { useWorkspaceFileBlob } from "@/hooks/use-workspace-file-blob";
 import { AuthApiError } from "@/lib/auth/auth-api";
 import { cn } from "@/lib/utils";
 import * as workspaceApi from "@/lib/workspace/workspace-api";
 import { resolveWorkspaceImageUrl } from "@/lib/workspace/workspace-api";
+import {
+  workspaceInitial,
+  workspaceRoleLabel,
+} from "@/lib/workspace/workspace-display";
+import { rulesCopy } from "@/lib/workspace/workspace-rules-copy";
 import { WorkspacePeopleSection } from "@/pages/settings/workspace-people-section";
+import { WorkspaceRulesPanel } from "@/pages/settings/workspace-rules-panel";
 
-function workspaceInitial(name: string): string {
-  const trimmed = name.trim();
-  return trimmed ? trimmed.slice(0, 1).toUpperCase() : "?";
-}
-
-function roleLabel(role: WorkspaceRole): string {
-  switch (role) {
-    case "OWNER":
-      return "Proprietário";
-    case "ADMIN":
-      return "Administrador";
-    case "MEMBER":
-      return "Membro";
-    default: {
-      const _exhaustive: never = role;
-      return _exhaustive;
-    }
-  }
-}
-
-function SectionHeading({
+function DestinationRow({
+  icon: Icon,
   title,
   description,
-  count,
+  actionLabel,
+  onClick,
 }: {
+  icon: typeof ClipboardCheck;
   title: string;
-  description?: string;
-  count?: number;
+  description: string;
+  actionLabel: string;
+  onClick: () => void;
 }) {
   return (
-    <div className="flex items-end justify-between gap-3">
-      <div className="space-y-0.5">
-        <h2 className="text-sm font-medium">{title}</h2>
-        {description ? (
-          <p className="text-[11px] text-muted-foreground">{description}</p>
-        ) : null}
-      </div>
-      {typeof count === "number" ? (
-        <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
-          {count}
+    <button
+      type="button"
+      aria-label={actionLabel}
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left transition-colors hover:bg-surface-hover"
+    >
+      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-surface-raise-2 text-muted-foreground">
+        <Icon className="size-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-medium">{title}</span>
+        <span className="block text-[12px] text-muted-foreground">
+          {description}
         </span>
-      ) : null}
-    </div>
+      </span>
+      <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
+    </button>
   );
 }
 
@@ -96,8 +92,6 @@ export function WorkspaceDetailPage() {
   const isOwner = workspace?.role === "OWNER";
   const isLastWorkspace = workspaces.length <= 1;
 
-  // Deliberadamente não usa o `can` do contexto: aquele responde pelo workspace
-  // ativo, e esta tela edita o workspace da rota, que pode ser outro.
   const can = useCallback(
     (permission: WorkspacePermission) =>
       workspace?.permissions.includes(permission) ?? false,
@@ -112,8 +106,7 @@ export function WorkspaceDetailPage() {
   const [renameValue, setRenameValue] = useState(workspace?.name ?? "");
   const [confirmName, setConfirmName] = useState("");
   const [rules, setRules] = useState<BusinessRule[]>([]);
-  const [ruleTitle, setRuleTitle] = useState("");
-  const [ruleContent, setRuleContent] = useState("");
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -123,8 +116,6 @@ export function WorkspaceDetailPage() {
   }, [workspace?.name]);
 
   useEffect(() => {
-    // A listagem exige `rules:read` no servidor; sem a permissão a chamada só
-    // renderizaria um erro para uma seção que nem devia estar na tela.
     if (!workspace || !canReadRules) {
       setRules([]);
       return;
@@ -190,18 +181,13 @@ export function WorkspaceDetailPage() {
     }
   }
 
-  async function handleCreateRule() {
-    if (!workspace || !ruleTitle.trim() || !ruleContent.trim()) return;
+  async function handleCreateRule(input: { title: string; content: string }) {
+    if (!workspace) return;
     setBusy(true);
     setError(null);
     try {
-      const created = await workspaceApi.createBusinessRule(workspace.id, {
-        title: ruleTitle.trim(),
-        content: ruleContent.trim(),
-      });
+      const created = await workspaceApi.createBusinessRule(workspace.id, input);
       setRules((prev) => [...prev, created]);
-      setRuleTitle("");
-      setRuleContent("");
     } catch {
       setError("Não foi possível criar a regra");
     } finally {
@@ -260,52 +246,58 @@ export function WorkspaceDetailPage() {
 
   if (!workspace) {
     return (
-      <ScrollArea className="h-full">
-        <div className="mx-auto max-w-2xl space-y-4 px-6 py-6">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="-ml-2 text-muted-foreground"
-            onClick={() => navigate("/settings/workspace")}
-          >
-            <ArrowLeft className="size-3.5" />
-            Voltar
-          </Button>
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-10 text-center">
-            <Building2 className="size-5 text-muted-foreground/70" />
-            <p className="text-xs font-medium">Workspace não encontrado</p>
-            <p className="max-w-xs text-[11px] text-muted-foreground">
-              Ele pode ter sido removido ou você não tem mais acesso.
-            </p>
-          </div>
-        </div>
-      </ScrollArea>
+      <SettingsPage>
+        <SettingsBack onClick={() => navigate("/settings/workspace")} />
+        <SettingsEmpty
+          icon={<Building2 className="size-5 text-muted-foreground/70" />}
+          title="Workspace não encontrado"
+          description="Ele pode ter sido removido ou você não tem mais acesso."
+        />
+      </SettingsPage>
     );
   }
 
   return (
-    <ScrollArea className="h-full">
-      <div className="mx-auto max-w-2xl space-y-8 px-6 py-6">
-        <div className="space-y-3">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="-ml-2 text-muted-foreground"
-            onClick={() => navigate("/settings/workspace")}
-          >
-            <ArrowLeft className="size-3.5" />
-            Voltar
-          </Button>
+    <SettingsPage>
+      <div className="space-y-5">
+        <SettingsBack onClick={() => navigate("/settings/workspace")} />
 
-          <div className="flex items-start gap-3">
+        <div className="flex items-start gap-3.5">
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(event) =>
+              void handleUploadImage(event.target.files?.[0] ?? null)
+            }
+          />
+          {canUpdate ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => imageInputRef.current?.click()}
+              aria-label={
+                workspace.imageUrl ? "Alterar foto" : "Adicionar foto"
+              }
+              className="group relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-raise-2 text-sm font-semibold"
+            >
+              {imageSrc ? (
+                <img src={imageSrc} alt="" className="size-full object-cover" />
+              ) : (
+                workspaceInitial(workspace.name)
+              )}
+              <span className="absolute inset-0 grid place-items-center bg-foreground/50 text-background opacity-0 transition-opacity group-hover:opacity-100">
+                <ImagePlus className="size-4" />
+              </span>
+            </button>
+          ) : (
             <span
               className={cn(
-                "grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl border text-sm font-bold",
+                "grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg text-sm font-semibold",
                 isActive
-                  ? "border-primary/30 bg-primary text-primary-foreground"
-                  : "border-hairline bg-muted/40 text-foreground",
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                  : "bg-surface-raise-2 text-foreground",
               )}
             >
               {imageSrc ? (
@@ -314,97 +306,41 @@ export function WorkspaceDetailPage() {
                 workspaceInitial(workspace.name)
               )}
             </span>
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
+          )}
+
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
                 <h1 className="truncate text-lg font-semibold tracking-tight">
                   {workspace.name}
                 </h1>
-                {isActive ? (
-                  <span className="inline-flex items-center gap-0.5 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-foreground">
-                    <Check className="size-2.5" />
-                    Ativo
-                  </span>
-                ) : null}
+                <p className="text-[13px] text-muted-foreground">
+                  {workspaceRoleLabel(workspace.role)}
+                  {isActive ? " · Ativo" : ""}
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                {roleLabel(workspace.role)} · configure foto, nome e regras de
-                negócio.
-              </p>
-            </div>
-            {!isActive ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                disabled={busy}
-                onClick={() => void handleActivate()}
-              >
-                Ativar
-              </Button>
-            ) : null}
-          </div>
-        </div>
-
-        {error ? (
-          <div className="rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2.5">
-            <p className="text-xs text-destructive">{error}</p>
-          </div>
-        ) : null}
-
-        {session.user ? (
-          <WorkspacePeopleSection
-            workspaceId={workspace.id}
-            isOwner={isOwner}
-            canManage={can("members:manage")}
-            canManageInvites={can("invites:manage")}
-            currentUserId={session.user.id}
-            // As permissões do próprio usuário podem ter mudado junto — sem
-            // recarregar a lista de workspaces, esta tela continuaria
-            // renderizando os controles pelo estado antigo.
-            onMembershipChanged={() => void refresh({ includeHidden: true })}
-          />
-        ) : null}
-
-        <section className="space-y-3">
-          <SectionHeading
-            title="Identidade"
-            description="Nome e imagem usados na interface."
-          />
-
-          <div className="rounded-xl border border-hairline bg-muted/30 p-4">
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={(event) =>
-                void handleUploadImage(event.target.files?.[0] ?? null)
-              }
-            />
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              {canUpdate ? (
+              {!isActive ? (
                 <Button
                   type="button"
                   size="sm"
-                  variant="secondary"
+                  variant="outline"
                   disabled={busy}
-                  className="shrink-0"
-                  onClick={() => imageInputRef.current?.click()}
+                  onClick={() => void handleActivate()}
                 >
-                  <ImagePlus className="size-3.5" />
-                  {workspace.imageUrl ? "Alterar foto" : "Adicionar foto"}
+                  Ativar
                 </Button>
               ) : null}
-              <Input
-                value={renameValue}
-                onChange={(event) => setRenameValue(event.target.value)}
-                placeholder="Nome do workspace"
-                className="h-8 min-w-0 flex-1 text-xs"
-                aria-label="Renomear workspace"
-                readOnly={!canUpdate}
-                disabled={!canUpdate}
-              />
-              {canUpdate ? (
+            </div>
+
+            {canUpdate ? (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Input
+                  value={renameValue}
+                  onChange={(event) => setRenameValue(event.target.value)}
+                  placeholder="Nome do workspace"
+                  className="h-8 min-w-0 flex-1 text-xs"
+                  aria-label="Renomear workspace"
+                />
                 <Button
                   type="button"
                   size="sm"
@@ -414,218 +350,131 @@ export function WorkspaceDetailPage() {
                 >
                   Salvar
                 </Button>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
+
             {canUpdate && workspace.imageUrl ? (
-              <Button
+              <button
                 type="button"
-                size="sm"
-                variant="ghost"
                 disabled={busy}
-                className="mt-2 h-7 px-2 text-[11px] text-muted-foreground"
+                className="text-[12px] text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => void handleRemoveImage()}
               >
                 Remover foto
-              </Button>
+              </button>
             ) : null}
           </div>
-        </section>
+        </div>
+      </div>
 
-        {can("discovery:manage") ? (
-          <section className="space-y-3">
-            <SectionHeading
-              title="Rule Review"
-              description="Extraia candidatos de documentos e revise antes de promover."
-            />
-            <div className="rounded-xl border border-hairline bg-muted/30 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
-                  Envie documentos para o assistente sugerir novas regras. Cada
-                  candidato passa por revisão antes de entrar em vigor.
-                </p>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="shrink-0"
-                  onClick={() =>
-                    navigate(`/settings/workspace/${workspace.id}/rule-review`)
-                  }
-                >
-                  <ClipboardCheck className="size-3.5" />
-                  Abrir Rule Review
-                  <ArrowRight className="size-3.5" />
-                </Button>
-              </div>
-            </div>
-          </section>
-        ) : null}
+      {error ? <SettingsError message={error} /> : null}
 
-        <section className="space-y-3">
-          <SectionHeading
-            title="Procedures"
-            description="Grave a tela, revise o markdown gerado e publique procedimentos."
-          />
-          <div className="rounded-xl border border-hairline bg-muted/30 p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
-                Capture um fluxo na tela, revise o procedimento e consulte
-                depois via /slug no chat.
-              </p>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                className="shrink-0"
-                onClick={() =>
-                  navigate(`/settings/workspace/${workspace.id}/procedures`)
-                }
-              >
-                <Video className="size-3.5" />
-                Abrir Procedures
-                <ArrowRight className="size-3.5" />
-              </Button>
-            </div>
-          </div>
-        </section>
-
+      <div className="space-y-0.5">
         {canReadRules ? (
-          <section className="space-y-3">
-            <SectionHeading
-              title="Regras de negócio"
-              description="Instruções que o assistente deve seguir neste workspace."
-              count={rules.length}
-            />
+          <DestinationRow
+            icon={ScrollText}
+            title={rulesCopy.catalogTitle}
+            description={
+              rules.length === 0
+                ? rulesCopy.catalogEmpty
+                : rules.length === 1
+                  ? rulesCopy.catalogOne
+                  : rulesCopy.catalogMany(rules.length)
+            }
+            actionLabel={rulesCopy.catalogOpen}
+            onClick={() => setRulesOpen(true)}
+          />
+        ) : null}
+        {can("discovery:manage") ? (
+          <DestinationRow
+            icon={ClipboardCheck}
+            title={rulesCopy.extractTitle}
+            description={rulesCopy.extractRowHint}
+            actionLabel={rulesCopy.extractOpen}
+            onClick={() =>
+              navigate(`/settings/workspace/${workspace.id}/rule-review`)
+            }
+          />
+        ) : null}
+        <DestinationRow
+          icon={Video}
+          title="Procedures"
+          description="Grave a tela, revise e publique procedimentos."
+          actionLabel="Abrir Procedures"
+          onClick={() =>
+            navigate(`/settings/workspace/${workspace.id}/procedures`)
+          }
+        />
+      </div>
 
-            {rules.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-7 text-center">
-                <ScrollText className="size-5 text-muted-foreground/70" />
-                <p className="text-xs font-medium">Nenhuma regra cadastrada</p>
-                <p className="max-w-xs text-[11px] text-muted-foreground">
-                  Adicione regras para orientar as respostas do assistente.
-                </p>
-              </div>
+      {session.user ? (
+        <WorkspacePeopleSection
+          workspaceId={workspace.id}
+          isOwner={isOwner}
+          canManage={can("members:manage")}
+          canManageInvites={can("invites:manage")}
+          currentUserId={session.user.id}
+          onMembershipChanged={() => void refresh({ includeHidden: true })}
+        />
+      ) : null}
+
+      {rulesOpen && canReadRules ? (
+        <WorkspaceRulesPanel
+          rules={rules}
+          busy={busy}
+          canWrite={canWriteRules}
+          canDelete={canDeleteRules}
+          onClose={() => setRulesOpen(false)}
+          onDelete={handleDeleteRule}
+          onCreate={handleCreateRule}
+        />
+      ) : null}
+
+      {can("workspace:delete") ? (
+        <SettingsSection
+          title="Zona de perigo"
+          description="Apagar remove dados, regras e conversas deste workspace."
+        >
+          <div className="space-y-3 rounded-lg border border-destructive/30 px-3 py-3">
+            {isLastWorkspace ? (
+              <p className="text-[13px] text-muted-foreground">
+                Não é possível apagar o único workspace. Crie outro antes de
+                remover este.
+              </p>
             ) : (
-              <div className="space-y-2">
-                {rules.map((rule, index) => (
-                  <div
-                    key={rule.id}
-                    className="rounded-xl border border-hairline bg-muted/40 p-3"
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-md bg-neutral-deep text-[10px] font-medium tabular-nums text-muted-foreground ring-1 ring-border/60">
-                        {index + 1}
-                      </span>
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <p className="text-xs font-medium">{rule.title}</p>
-                        <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground">
-                          {rule.content}
-                        </p>
-                      </div>
-                      {canDeleteRules ? (
-                        <Button
-                          type="button"
-                          size="icon-xs"
-                          variant="ghost"
-                          disabled={busy}
-                          aria-label={`Remover regra ${rule.title}`}
-                          className="text-muted-foreground hover:text-destructive"
-                          onClick={() => void handleDeleteRule(rule.id)}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {canWriteRules ? (
-              <div className="space-y-2.5 rounded-xl border border-hairline bg-muted/20 p-3">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Nova regra
+              <>
+                <p className="text-[13px] text-muted-foreground">
+                  Digite{" "}
+                  <span className="font-medium text-foreground">
+                    {workspace.name}
+                  </span>{" "}
+                  para confirmar.
                 </p>
-                <Input
-                  value={ruleTitle}
-                  onChange={(event) => setRuleTitle(event.target.value)}
-                  placeholder="Título da regra"
-                  className="h-8 text-xs"
-                />
-                <textarea
-                  value={ruleContent}
-                  onChange={(event) => setRuleContent(event.target.value)}
-                  placeholder="Descreva a regra de negócio..."
-                  rows={4}
-                  className={cn(
-                    "min-h-24 w-full resize-y rounded-lg border border-hairline bg-neutral-deep px-3 py-2 text-xs leading-relaxed shadow-xs outline-none",
-                    "placeholder:text-muted-foreground",
-                    "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                  )}
-                />
-                <div className="flex justify-end">
+                <div className="flex gap-2">
+                  <Input
+                    value={confirmName}
+                    onChange={(event) => setConfirmName(event.target.value)}
+                    placeholder="Nome do workspace"
+                    className="h-8 text-xs"
+                    aria-label="Confirmar nome do workspace"
+                    autoComplete="off"
+                  />
                   <Button
                     type="button"
                     size="sm"
-                    disabled={busy || !ruleTitle.trim() || !ruleContent.trim()}
-                    onClick={() => void handleCreateRule()}
+                    variant="destructive"
+                    disabled={busy || !canDelete}
+                    onClick={() => void handleDeleteWorkspace()}
                   >
-                    <Plus className="size-3.5" />
-                    Adicionar regra
+                    <Trash2 className="size-3.5" />
+                    Apagar
                   </Button>
                 </div>
-              </div>
-            ) : null}
-          </section>
-        ) : null}
-
-        {can("workspace:delete") ? (
-          <section className="space-y-3">
-            <SectionHeading
-              title="Zona de perigo"
-              description="Apagar remove permanentemente dados, regras e conversas deste workspace."
-            />
-            <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
-              {isLastWorkspace ? (
-                <p className="text-xs text-muted-foreground">
-                  Não é possível apagar o único workspace. Crie outro antes de
-                  remover este.
-                </p>
-              ) : (
-                <>
-                  <p className="text-xs text-muted-foreground">
-                    Digite{" "}
-                    <span className="font-medium text-foreground">
-                      {workspace.name}
-                    </span>{" "}
-                    para confirmar.
-                  </p>
-                  <div className="flex gap-2">
-                    <Input
-                      value={confirmName}
-                      onChange={(event) => setConfirmName(event.target.value)}
-                      placeholder="Nome do workspace"
-                      className="h-8 text-xs"
-                      aria-label="Confirmar nome do workspace"
-                      autoComplete="off"
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="destructive"
-                      disabled={busy || !canDelete}
-                      onClick={() => void handleDeleteWorkspace()}
-                    >
-                      <Trash2 className="size-3.5" />
-                      Apagar
-                    </Button>
-                  </div>
-                </>
-              )}
-            </div>
-          </section>
-        ) : null}
-      </div>
-    </ScrollArea>
+              </>
+            )}
+          </div>
+        </SettingsSection>
+      ) : null}
+    </SettingsPage>
   );
 }

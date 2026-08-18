@@ -7,7 +7,6 @@ import type {
   RuleDiscoverySessionSummary,
 } from "@linvo/shared";
 import {
-  ArrowLeft,
   BookOpen,
   Check,
   ChevronRight,
@@ -22,13 +21,19 @@ import {
   X,
 } from "lucide-react";
 
+import {
+  SettingsBack,
+  SettingsEmpty,
+  SettingsHeader,
+  SettingsPage,
+} from "@/components/settings/settings-page";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { RuleReviewReasoningPanel } from "@/pages/settings/rule-review-reasoning-panel";
 import { useWorkspace } from "@/context/workspace-context";
 import { AuthApiError } from "@/lib/auth/auth-api";
 import { cn } from "@/lib/utils";
 import * as ruleDiscoveryApi from "@/lib/workspace/rule-discovery-api";
+import { rulesCopy } from "@/lib/workspace/workspace-rules-copy";
 
 export const ACCEPTED_TYPES =
   "text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -42,7 +47,7 @@ function sessionStatusLabel(
     case "PROCESSING":
       return "Processando";
     case "READY":
-      return "Pronta";
+      return "Concluída";
     case "FAILED":
       return "Falhou";
     case "CANCELLED":
@@ -57,7 +62,7 @@ function sessionStatusLabel(
 function candidateCategoryLabel(category: RuleCandidate["category"]): string {
   switch (category) {
     case "BUSINESS_RULE":
-      return "Regra de negócio";
+      return "Regra";
     case "RESPONSE_PATTERN":
       return "Padrão de resposta";
     case "FAQ_POLICY":
@@ -127,11 +132,9 @@ function SectionHeading({
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="space-y-0.5">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {title}
-        </h2>
+        <h2 className="text-sm font-medium">{title}</h2>
         {description ? (
-          <p className="text-[11px] text-muted-foreground">{description}</p>
+          <p className="text-[13px] text-muted-foreground">{description}</p>
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -464,50 +467,28 @@ export function RuleReviewPage() {
 
   if (!workspace) {
     return (
-      <ScrollArea className="h-full">
-        <div className="mx-auto max-w-2xl space-y-4 px-6 py-6">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="-ml-2 text-muted-foreground"
-            onClick={() => navigate("/settings/workspace")}
-          >
-            <ArrowLeft className="size-3.5" />
-            Voltar
-          </Button>
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-10 text-center">
-            <ClipboardCheck className="size-5 text-muted-foreground/70" />
-            <p className="text-xs font-medium">Workspace não encontrado</p>
-          </div>
-        </div>
-      </ScrollArea>
+      <SettingsPage>
+        <SettingsBack onClick={() => navigate("/settings/workspace")} />
+        <SettingsEmpty
+          icon={<ClipboardCheck className="size-5 text-muted-foreground/70" />}
+          title="Workspace não encontrado"
+        />
+      </SettingsPage>
     );
   }
 
   if (!canManageDiscovery) {
     return (
-      <ScrollArea className="h-full">
-        <div className="mx-auto max-w-2xl space-y-4 px-6 py-6">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="-ml-2 text-muted-foreground"
-            onClick={() => navigate(`/settings/workspace/${workspace.id}`)}
-          >
-            <ArrowLeft className="size-3.5" />
-            Voltar
-          </Button>
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-10 text-center">
-            <ClipboardCheck className="size-5 text-muted-foreground/70" />
-            <p className="text-xs font-medium">Acesso restrito ao proprietário</p>
-            <p className="max-w-xs text-[11px] text-muted-foreground">
-              Apenas o owner pode revisar regras descobertas neste workspace.
-            </p>
-          </div>
-        </div>
-      </ScrollArea>
+      <SettingsPage>
+        <SettingsBack
+          onClick={() => navigate(`/settings/workspace/${workspace.id}`)}
+        />
+        <SettingsEmpty
+          icon={<ClipboardCheck className="size-5 text-muted-foreground/70" />}
+          title={rulesCopy.extractRestrictedTitle}
+          description={rulesCopy.extractRestrictedHint}
+        />
+      </SettingsPage>
     );
   }
 
@@ -515,28 +496,16 @@ export function RuleReviewPage() {
     sessionDetail?.candidates.filter((c) => c.status === "PENDING").length ?? 0;
 
   return (
-    <ScrollArea className="h-full">
-      <div className="mx-auto flex w-full max-w-[780px] flex-col gap-9 px-6 py-8">
-        <div className="space-y-3">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="-ml-2 text-muted-foreground"
-            onClick={() => navigate(`/settings/workspace/${workspace.id}`)}
-          >
-            <ArrowLeft className="size-3.5" />
-            Voltar
-          </Button>
-
-          <div className="space-y-2">
-            <h1 className="text-lg font-semibold tracking-tight">Rule Review</h1>
-            <p className="max-w-lg text-xs leading-relaxed text-muted-foreground">
-              Envie documentos, acompanhe o raciocínio da IA e revise candidatos
-              antes de promover para regras ou knowledge.
-            </p>
-          </div>
-        </div>
+    <SettingsPage className="max-w-3xl">
+      <div className="space-y-5">
+        <SettingsBack
+          onClick={() => navigate(`/settings/workspace/${workspace.id}`)}
+        />
+        <SettingsHeader
+          title={rulesCopy.extractTitle}
+          description={rulesCopy.extractDescription}
+        />
+      </div>
 
         {error ? (
           <div className="flex items-start justify-between gap-3 rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2.5">
@@ -554,10 +523,10 @@ export function RuleReviewPage() {
 
         <section className="space-y-3">
           <SectionHeading
-            title="Modo da IA"
-            description="Vale para o próximo upload e para a sessão aberta."
+            title="Como a IA decide"
+            description="Vale para o próximo envio e para a análise aberta."
           />
-          <div className="rounded-xl border border-hairline bg-muted/40 p-4">
+          <div className="rounded-lg bg-surface-raise-1 p-4">
             <div className="flex flex-col gap-6 sm:flex-row sm:gap-7">
               <div className="min-w-0 flex-1">
                 <label className="mb-2 block font-technical text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -636,8 +605,8 @@ export function RuleReviewPage() {
         </section>
 
         <section className="space-y-3">
-          <SectionHeading title="Upload" />
-          <div className="rounded-xl border border-hairline bg-muted/40 p-4">
+          <SectionHeading title="Documentos" />
+          <div>
             <input
               ref={fileInputRef}
               type="file"
@@ -700,13 +669,13 @@ export function RuleReviewPage() {
         </section>
 
         <section className="space-y-3">
-          <SectionHeading title="Sessões recentes" count={sessions.length} />
+          <SectionHeading title="Análises" count={sessions.length} />
           {sessions.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-8 text-center">
+            <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-hairline px-4 py-8 text-center">
               <FileText className="size-5 text-muted-foreground/70" />
-              <p className="text-xs font-medium">Nenhuma sessão ainda</p>
-              <p className="max-w-xs text-[11px] text-muted-foreground">
-                Envie um documento acima para a IA começar a extrair candidatos.
+              <p className="text-sm font-medium">Nenhuma análise ainda</p>
+              <p className="max-w-xs text-[13px] text-muted-foreground">
+                Envie um documento para a IA sugerir regras.
               </p>
             </div>
           ) : (
@@ -725,10 +694,10 @@ export function RuleReviewPage() {
                       type="button"
                       onClick={() => setSelectedSessionId(session.id)}
                       className={cn(
-                        "group flex min-w-0 flex-1 items-center justify-between gap-4 rounded-xl border px-4 py-3 text-left transition-colors",
+                        "group flex min-w-0 flex-1 items-center justify-between gap-4 rounded-lg px-2.5 py-2.5 text-left transition-colors",
                         selected
-                          ? "border-hairline-strong bg-surface-raise-2"
-                          : "border-hairline bg-muted/40 hover:bg-surface-hover",
+                          ? "bg-surface-raise-2"
+                          : "hover:bg-surface-hover",
                       )}
                     >
                       <span className="font-technical text-xs text-foreground">
@@ -790,8 +759,8 @@ export function RuleReviewPage() {
 
             <section className="space-y-4">
               <SectionHeading
-                title="Checklist de candidatos"
-                description="Ajuste destinos e aceite, negue ou desfaça promoções."
+                title="Sugestões"
+                description="Ajuste o destino e aceite ou recuse cada uma."
                 count={sessionDetail.candidates.length}
                 action={
                   pendingCount > 0 ? (
@@ -804,9 +773,9 @@ export function RuleReviewPage() {
 
               {sessionDetail.candidates.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-8 text-center">
-                  <p className="text-xs font-medium">Nenhum candidato ainda</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    Eles aparecem aqui conforme a IA classifica o documento.
+                  <p className="text-sm font-medium">Nenhuma sugestão ainda</p>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground">
+                    Elas aparecem aqui conforme a IA lê o documento.
                   </p>
                 </div>
               ) : (
@@ -826,7 +795,7 @@ export function RuleReviewPage() {
                       <article
                         key={candidate.id}
                         className={cn(
-                          "rounded-xl border border-hairline bg-muted/40 p-4 transition-opacity",
+                          "rounded-lg bg-surface-raise-1 p-4 transition-opacity",
                           !isPending && "opacity-70",
                         )}
                       >
@@ -972,14 +941,13 @@ export function RuleReviewPage() {
         ) : sessions.length > 0 ? (
           <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-10 text-center">
             <Sparkles className="size-5 text-muted-foreground/70" />
-            <p className="text-xs font-medium">Selecione uma sessão</p>
-            <p className="max-w-xs text-[11px] text-muted-foreground">
-              O raciocínio e o checklist aparecem aqui quando você abre uma
-              análise.
+            <p className="text-sm font-medium">Abra uma análise</p>
+            <p className="max-w-xs text-[13px] text-muted-foreground">
+              O raciocínio e as sugestões aparecem quando você escolhe uma
+              extração.
             </p>
           </div>
         ) : null}
-      </div>
-    </ScrollArea>
+    </SettingsPage>
   );
 }

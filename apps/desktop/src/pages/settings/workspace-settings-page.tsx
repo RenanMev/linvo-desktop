@@ -1,40 +1,29 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import type { Workspace, WorkspaceRole } from "@linvo/shared";
-import { Building2, Check, KeyRound, Plus, Settings } from "lucide-react";
+import type { Workspace } from "@linvo/shared";
+import { Building2, KeyRound, Plus } from "lucide-react";
 
+import {
+  SettingsEmpty,
+  SettingsError,
+  SettingsHeader,
+  SettingsPage,
+} from "@/components/settings/settings-page";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspace } from "@/context/workspace-context";
 import { useWorkspaceFileBlob } from "@/hooks/use-workspace-file-blob";
 import { inviteCopy } from "@/lib/workspace/invite-copy";
+import {
+  workspaceInitial,
+  workspaceRoleLabel,
+} from "@/lib/workspace/workspace-display";
 import {
   listWorkspaces,
   resolveWorkspaceImageUrl,
 } from "@/lib/workspace/workspace-api";
 import { cn } from "@/lib/utils";
 
-function workspaceInitial(name: string): string {
-  const trimmed = name.trim();
-  return trimmed ? trimmed.slice(0, 1).toUpperCase() : "?";
-}
-
-function roleLabel(role: WorkspaceRole): string {
-  switch (role) {
-    case "OWNER":
-      return "Proprietário";
-    case "ADMIN":
-      return "Administrador";
-    case "MEMBER":
-      return "Membro";
-    default: {
-      const _exhaustive: never = role;
-      return _exhaustive;
-    }
-  }
-}
-
-function WorkspaceCard({
+function WorkspaceRow({
   workspace,
   active,
   busy,
@@ -50,88 +39,65 @@ function WorkspaceCard({
   const imageUrl = resolveWorkspaceImageUrl(workspace.imageUrl);
   const { blobUrl: imageSrc } = useWorkspaceFileBlob(imageUrl);
   const isPersonal = workspace.hidden === true;
+  const meta = isPersonal
+    ? inviteCopy.personalWorkspace
+    : workspaceRoleLabel(workspace.role);
 
   return (
     <div
       className={cn(
-        "group relative flex w-[15rem] flex-col overflow-hidden rounded-xl border p-4 transition-colors",
-        active
-          ? "border-foreground/25 bg-foreground/[0.05]"
-          : "border-hairline bg-muted/30 hover:border-hairline-strong hover:bg-muted/45",
+        "group flex items-center gap-3 rounded-lg px-2.5 py-2.5 transition-colors",
+        active ? "bg-surface-raise-1" : "hover:bg-surface-hover",
       )}
     >
-      <div className="mb-4 flex items-start justify-end">
-        <label
-          className={cn(
-            "inline-flex size-5.5 cursor-pointer items-center justify-center rounded-md border shadow-xs transition-colors",
-            active
-              ? "border-primary/40 bg-primary text-primary-foreground"
-              : "border-hairline bg-neutral-deep text-transparent hover:border-hairline-strong",
-            busy && "pointer-events-none opacity-60",
-          )}
-          title={active ? "Workspace ativo" : "Ativar workspace"}
-        >
-          <input
-            type="checkbox"
-            className="sr-only"
-            checked={active}
-            disabled={busy || active}
-            onChange={() => {
-              if (!active) onActivate();
-            }}
-            aria-label={
-              active ? `${workspace.name} ativo` : `Ativar ${workspace.name}`
-            }
-          />
-          <Check className="size-3" strokeWidth={2.5} />
-        </label>
-      </div>
-
-      <div
-        className={cn(
-          "mb-3.5 grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl border text-base font-semibold",
-          active
-            ? "border-primary/30 bg-primary text-primary-foreground"
-            : "border-hairline bg-muted/50 text-muted-foreground",
-        )}
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onOpenSettings}
+        aria-label={`Configurar ${workspace.name}`}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left"
       >
-        {imageSrc ? (
-          <img src={imageSrc} alt="" className="size-full object-cover" />
-        ) : (
-          workspaceInitial(workspace.name)
-        )}
-      </div>
-
-      <div className="min-w-0 space-y-1">
-        <p className="truncate text-xs font-medium">{workspace.name}</p>
-        <p className="truncate text-[10px] text-muted-foreground">
-          {isPersonal ? inviteCopy.personalWorkspace : roleLabel(workspace.role)}
-          {active ? (
-            <>
-              {" · "}
-              <span className="inline-flex items-center gap-1 text-foreground">
-                <span className="size-1 rounded-full bg-foreground" />
-                Ativo
-              </span>
-            </>
-          ) : null}
-        </p>
-      </div>
-
-      <div className="mt-4 flex justify-end border-t border-hairline pt-3.5">
+        <span
+          className={cn(
+            "grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg text-xs font-semibold",
+            active
+              ? "bg-sidebar-primary text-sidebar-primary-foreground"
+              : "bg-surface-raise-2 text-muted-foreground",
+          )}
+        >
+          {imageSrc ? (
+            <img src={imageSrc} alt="" className="size-full object-cover" />
+          ) : (
+            workspaceInitial(workspace.name)
+          )}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-medium">
+            {workspace.name}
+          </span>
+          <span className="block truncate text-[12px] text-muted-foreground">
+            {meta}
+            {active ? " · Ativo" : ""}
+          </span>
+        </span>
+      </button>
+      {active ? (
+        <span className="shrink-0 font-technical text-[10px] tracking-wide text-muted-foreground">
+          Ativo
+        </span>
+      ) : (
         <Button
           type="button"
-          size="icon-xs"
-          variant="secondary"
+          size="sm"
+          variant="ghost"
           disabled={busy}
-          aria-label={`Configurar ${workspace.name}`}
-          title="Configurar"
-          className="border border-hairline bg-neutral-deep shadow-xs hover:bg-neutral-deep"
-          onClick={onOpenSettings}
+          className="shrink-0 text-muted-foreground"
+          aria-label={`Ativar ${workspace.name}`}
+          onClick={onActivate}
         >
-          <Settings className="size-3.5" />
+          Ativar
         </Button>
-      </div>
+      )}
     </div>
   );
 }
@@ -167,8 +133,6 @@ export function WorkspaceSettingsPage() {
     };
   }, []);
 
-  const activeCount = activeWorkspace ? 1 : 0;
-
   async function handleActivate(workspaceId: string) {
     setBusy(true);
     setLocalError(null);
@@ -182,105 +146,69 @@ export function WorkspaceSettingsPage() {
   }
 
   return (
-    <ScrollArea className="h-full">
-      <div className="mx-auto max-w-2xl space-y-6 px-6 py-6">
-        <div className="flex items-start gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-hairline bg-muted/40">
-            <Building2 className="size-4 text-muted-foreground" />
-          </span>
-          <div className="min-w-0 flex-1 space-y-1">
-            <h1 className="text-lg font-semibold tracking-tight">Workspace</h1>
-            <p className="text-xs text-muted-foreground">
-              Ative o contexto do assistente ou abra as configurações de cada
-              workspace.
-            </p>
-          </div>
-        </div>
+    <SettingsPage>
+      <SettingsHeader
+        title="Workspace"
+        description="Escolha o contexto do assistente ou abra as configurações de cada um."
+        actions={
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => navigate("/settings/workspace/join")}
+            >
+              <KeyRound className="size-3.5" />
+              {inviteCopy.joinTitle}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => navigate("/settings/workspace/new")}
+            >
+              <Plus className="size-3.5" />
+              Novo workspace
+            </Button>
+          </>
+        }
+      />
 
-        {localError ? (
-          <div className="rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2.5">
-            <p className="text-xs text-destructive">{localError}</p>
-          </div>
-        ) : null}
+      {localError ? <SettingsError message={localError} /> : null}
 
-        <div className="flex flex-wrap gap-2">
+      {isLoading ? (
+        <p className="px-2.5 text-[13px] text-muted-foreground">Carregando...</p>
+      ) : workspaces.length === 0 ? (
+        <SettingsEmpty
+          icon={<Building2 className="size-5 text-muted-foreground/70" />}
+          title="Nenhum workspace ainda"
+          description="Crie o primeiro para organizar regras e contexto da empresa."
+        >
           <Button
             type="button"
             size="sm"
-            variant="secondary"
-            onClick={() => navigate("/settings/workspace/join")}
+            onClick={() => navigate("/settings/workspace/new")}
           >
-            <KeyRound className="size-3.5" />
-            {inviteCopy.joinTitle}
+            <Plus className="size-3.5" />
+            Criar workspace
           </Button>
+        </SettingsEmpty>
+      ) : (
+        <div className="space-y-0.5">
+          {workspaces.map((workspace) => (
+            <WorkspaceRow
+              key={workspace.id}
+              workspace={workspace}
+              active={activeWorkspace?.id === workspace.id}
+              busy={busy}
+              onActivate={() => void handleActivate(workspace.id)}
+              onOpenSettings={() =>
+                navigate(`/settings/workspace/${workspace.id}`)
+              }
+            />
+          ))}
         </div>
-
-        {isLoading ? (
-          <p className="text-xs text-muted-foreground">Carregando...</p>
-        ) : (
-          <section className="space-y-3">
-            <div className="flex items-end justify-between gap-3">
-              <div className="space-y-0.5">
-                <h2 className="text-sm font-medium">Seus workspaces</h2>
-                <p className="text-[11px] text-muted-foreground">
-                  Marque para ativar · engrenagem para configurar.
-                </p>
-              </div>
-              <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-                {activeCount} ativo{activeCount === 1 ? "" : "s"}
-              </span>
-            </div>
-
-            {workspaces.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-hairline bg-muted/20 px-4 py-10 text-center">
-                <Building2 className="size-5 text-muted-foreground/70" />
-                <div className="space-y-1">
-                  <p className="text-xs font-medium">Nenhum workspace ainda</p>
-                  <p className="max-w-xs text-[11px] text-muted-foreground">
-                    Crie o primeiro para organizar regras e contexto da empresa.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => navigate("/settings/workspace/new")}
-                >
-                  <Plus className="size-3.5" />
-                  Criar workspace
-                </Button>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-3">
-                {workspaces.map((workspace) => (
-                  <WorkspaceCard
-                    key={workspace.id}
-                    workspace={workspace}
-                    active={activeWorkspace?.id === workspace.id}
-                    busy={busy}
-                    onActivate={() => void handleActivate(workspace.id)}
-                    onOpenSettings={() =>
-                      navigate(`/settings/workspace/${workspace.id}`)
-                    }
-                  />
-                ))}
-
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => navigate("/settings/workspace/new")}
-                  className="flex min-h-[10.75rem] w-[15rem] flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed border-hairline bg-muted/20 text-muted-foreground transition-colors hover:border-hairline-strong hover:bg-muted/40 hover:text-foreground"
-                  aria-label="Criar workspace"
-                >
-                  <span className="grid size-8 place-items-center rounded-full border border-hairline">
-                    <Plus className="size-4" />
-                  </span>
-                  <span className="text-xs font-medium">Novo workspace</span>
-                </button>
-              </div>
-            )}
-          </section>
-        )}
-      </div>
-    </ScrollArea>
+      )}
+    </SettingsPage>
   );
 }

@@ -6,6 +6,7 @@ import { MemoryRouter, Outlet, Route, Routes } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WorkspaceDetailPage } from "@/pages/settings/workspace-detail-page";
+import * as workspaceApi from "@/lib/workspace/workspace-api";
 
 const ownerWorkspace = {
   id: "ws-1",
@@ -100,35 +101,36 @@ describe("WorkspaceDetailPage rule review navigation", () => {
       disconnect() {}
     }
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+    vi.mocked(workspaceApi.listBusinessRules).mockResolvedValue([]);
   });
 
-  it("shows Rule Review link for OWNER", async () => {
+  it("shows extract-from-documents link for OWNER", async () => {
     mockWorkspace(ownerWorkspace);
     renderPage();
 
     expect(
-      await screen.findByRole("button", { name: "Abrir Rule Review" }),
+      await screen.findByRole("button", { name: "Extrair de documentos" }),
     ).toBeInTheDocument();
   });
 
-  it("navigates to rule review route for OWNER", async () => {
+  it("navigates to extract route for OWNER", async () => {
     const user = userEvent.setup();
     mockWorkspace(ownerWorkspace);
     renderPage();
     await user.click(
-      await screen.findByRole("button", { name: "Abrir Rule Review" }),
+      await screen.findByRole("button", { name: "Extrair de documentos" }),
     );
 
     expect(await screen.findByText("Rule Review Route")).toBeInTheDocument();
   });
 
-  it("hides Rule Review link for MEMBER", async () => {
+  it("hides extract link for MEMBER", async () => {
     mockWorkspace(memberWorkspace);
     renderPage();
 
-    expect(await screen.findByText("Regras de negócio")).toBeInTheDocument();
+    expect(await screen.findByText("Regras")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Abrir Rule Review" }),
+      screen.queryByRole("button", { name: "Extrair de documentos" }),
     ).toBeNull();
   });
 
@@ -141,5 +143,37 @@ describe("WorkspaceDetailPage rule review navigation", () => {
       await screen.findByRole("button", { name: "Abrir Procedures" }),
     );
     expect(await screen.findByText("Procedures Route")).toBeInTheDocument();
+  });
+
+  it("opens rules in a dialog and expands content on click", async () => {
+    const user = userEvent.setup();
+    vi.mocked(workspaceApi.listBusinessRules).mockResolvedValue([
+      {
+        id: "rule-1",
+        workspaceId: "ws-1",
+        title: "Tom de voz",
+        content: "Responda com calma.",
+        priority: 0,
+        active: true,
+        createdAt: "2026-07-20T20:00:00.000Z",
+        updatedAt: "2026-07-20T20:00:00.000Z",
+      },
+    ]);
+    mockWorkspace(ownerWorkspace);
+    renderPage();
+
+    expect(await screen.findByText("1 regra")).toBeInTheDocument();
+    expect(screen.queryByText("Responda com calma.")).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Abrir regras" }),
+    );
+
+    expect(screen.getByRole("dialog", { name: "Regras" })).toBeInTheDocument();
+    expect(screen.getByText("Tom de voz")).toBeInTheDocument();
+    expect(screen.queryByText("Responda com calma.")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Ver regra Tom de voz" }));
+    expect(screen.getByText("Responda com calma.")).toBeInTheDocument();
   });
 });

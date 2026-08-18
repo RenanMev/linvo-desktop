@@ -8,6 +8,10 @@ import {
 } from "@linvo/shared";
 
 import { InviteCodePanel } from "@/components/settings/invite-code-panel";
+import {
+  SettingsError,
+  SettingsSection,
+} from "@/components/settings/settings-page";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/context/workspace-context";
 import { useInviteCode } from "@/hooks/use-invite-code";
@@ -241,23 +245,17 @@ export function WorkspacePeopleSection({
   const showCount = members.length > 1;
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-end justify-between gap-3">
-        <div className="space-y-0.5">
-          <h2 className="text-sm font-medium">{inviteCopy.section}</h2>
-          {showCount ? (
-            <p className="text-[11px] text-muted-foreground">
-              {inviteCopy.memberCount(members.length)}
-            </p>
-          ) : null}
-        </div>
+    <SettingsSection
+      title={inviteCopy.section}
+      description={showCount ? inviteCopy.memberCount(members.length) : undefined}
+      action={
         <Button
           type="button"
           size="sm"
           variant="ghost"
           disabled={refreshing}
           aria-label="Atualizar pessoas"
-          className="h-7 px-2 text-[11px] text-muted-foreground"
+          className="h-7 px-2 text-[12px] text-muted-foreground"
           onClick={() => void handleManualRefresh()}
         >
           <RefreshCw
@@ -265,29 +263,23 @@ export function WorkspacePeopleSection({
           />
           Atualizar
         </Button>
-      </div>
-
-      {error ? (
-        <div className="rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2.5">
-          <p className="text-xs text-destructive">{error}</p>
-        </div>
-      ) : null}
+      }
+    >
+      {error ? <SettingsError message={error} /> : null}
 
       {statusMessage ? (
-        <p role="status" className="text-xs text-muted-foreground">
+        <p role="status" className="text-[13px] text-muted-foreground">
           {statusMessage}
         </p>
       ) : null}
 
       {loading ? (
-        <p className="text-xs text-muted-foreground">Carregando...</p>
+        <p className="px-2.5 text-[13px] text-muted-foreground">Carregando...</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-0.5">
           {members.map((member) => {
             const isSelf = member.userId === currentUserId;
             const isTargetOwner = member.role === "OWNER";
-            // O owner é intocável e ninguém edita a si mesmo — as duas regras
-            // são as mesmas que o servidor aplica.
             const editable = canManage && !isSelf && !isTargetOwner;
             const confirming = confirmUserId === member.userId;
             const expanded = expandedUserId === member.userId;
@@ -296,22 +288,25 @@ export function WorkspacePeopleSection({
             return (
               <div
                 key={member.userId}
-                className="rounded-xl border border-hairline bg-muted/40 p-3"
+                className={cn(
+                  "rounded-lg px-2.5 py-2.5 transition-colors",
+                  expanded ? "bg-surface-raise-1" : "hover:bg-surface-hover",
+                )}
               >
                 <div className="flex items-start gap-3">
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <p className="truncate text-xs font-medium">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <p className="truncate text-[13px] font-medium">
                       {member.name}
                       {isSelf ? (
-                        <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">
+                        <span className="ml-1.5 text-[12px] font-normal text-muted-foreground">
                           você
                         </span>
                       ) : null}
                     </p>
-                    <p className="truncate text-[11px] text-muted-foreground">
+                    <p className="truncate text-[12px] text-muted-foreground">
                       {member.email}
                     </p>
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="font-technical text-[10px] tracking-wide text-muted-foreground">
                       {memberRoleLabel(member.role)} ·{" "}
                       {formatJoinedAt(member.joinedAt)}
                     </p>
@@ -325,7 +320,7 @@ export function WorkspacePeopleSection({
                         variant="ghost"
                         aria-expanded={expanded}
                         aria-label={`Permissões de ${member.name}`}
-                        className="h-7 px-2 text-[11px] text-muted-foreground"
+                        className="h-7 px-2 text-[12px] text-muted-foreground"
                         onClick={() =>
                           setExpandedUserId(expanded ? null : member.userId)
                         }
@@ -343,7 +338,7 @@ export function WorkspacePeopleSection({
                     {editable ? (
                       confirming ? (
                         <div className="flex max-w-[12rem] flex-col items-end gap-1.5">
-                          <p className="text-right text-[11px] text-muted-foreground">
+                          <p className="text-right text-[12px] text-muted-foreground">
                             {inviteCopy.removeConfirm(member.name)}
                           </p>
                           <div className="flex gap-1.5">
@@ -383,9 +378,9 @@ export function WorkspacePeopleSection({
                 </div>
 
                 {expanded && editable ? (
-                  <div className="mt-3 space-y-3 border-t border-hairline pt-3">
+                  <div className="mt-3 space-y-3 pt-3">
                     <div className="space-y-1.5">
-                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <p className="font-technical text-[10px] font-medium tracking-wide text-muted-foreground">
                         Papel
                       </p>
                       <div className="flex gap-1.5">
@@ -400,7 +395,7 @@ export function WorkspacePeopleSection({
                                 : "ghost"
                             }
                             disabled={busy}
-                            className="h-7 px-2.5 text-[11px]"
+                            className="h-7 px-2.5 text-[12px]"
                             onClick={() =>
                               void handleRoleChange(member, option.value)
                             }
@@ -420,10 +415,10 @@ export function WorkspacePeopleSection({
                     />
 
                     {isOwner ? (
-                      <div className="border-t border-hairline pt-3">
+                      <div className="pt-1">
                         {transferUserId === member.userId ? (
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <p className="text-[11px] text-muted-foreground">
+                            <p className="text-[12px] text-muted-foreground">
                               Passar a posse para {member.name}? Você vira
                               administrador.
                             </p>
@@ -453,7 +448,7 @@ export function WorkspacePeopleSection({
                             type="button"
                             size="sm"
                             variant="ghost"
-                            className="h-7 px-2 text-[11px] text-muted-foreground"
+                            className="h-7 px-2 text-[12px] text-muted-foreground"
                             onClick={() => setTransferUserId(member.userId)}
                           >
                             Transferir posse
@@ -470,10 +465,10 @@ export function WorkspacePeopleSection({
       )}
 
       {!loading && !isOwner && members.length > 1 ? (
-        <div className="rounded-xl border border-hairline bg-muted/20 p-3">
+        <div className="px-2.5 py-2">
           {confirmLeave ? (
             <div className="flex flex-wrap items-center gap-1.5">
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[12px] text-muted-foreground">
                 Sair deste workspace? Você perde acesso ao conteúdo dele.
               </p>
               <Button
@@ -500,7 +495,7 @@ export function WorkspacePeopleSection({
               type="button"
               size="sm"
               variant="ghost"
-              className="h-7 px-2 text-[11px] text-muted-foreground hover:text-destructive"
+              className="h-7 px-2 text-[12px] text-muted-foreground hover:text-destructive"
               onClick={() => setConfirmLeave(true)}
             >
               Sair do workspace
@@ -510,6 +505,6 @@ export function WorkspacePeopleSection({
       ) : null}
 
       {canManageInvites ? <InviteCodePanel invite={invite} /> : null}
-    </section>
+    </SettingsSection>
   );
 }

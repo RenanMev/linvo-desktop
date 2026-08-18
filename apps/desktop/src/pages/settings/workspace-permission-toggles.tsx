@@ -17,7 +17,7 @@ const PERMISSION_LABELS: Record<WorkspacePermission, string> = {
   "invites:manage": "Gerenciar convites",
   "workspace:update": "Editar nome e foto",
   "workspace:delete": "Apagar workspace",
-  "discovery:manage": "Rule Review",
+  "discovery:manage": "Extrair de documentos",
   "procedures:read": "Ver procedures",
   "procedures:write": "Criar e editar procedures",
   "procedures:delete": "Apagar procedures",
@@ -27,7 +27,7 @@ const PERMISSION_LABELS: Record<WorkspacePermission, string> = {
 
 const GROUPS: { title: string; permissions: WorkspacePermission[] }[] = [
   {
-    title: "Regras de negócio",
+    title: "Regras",
     permissions: ["rules:read", "rules:write", "rules:delete"],
   },
   {
@@ -115,7 +115,7 @@ export function WorkspacePermissionToggles({
     <div className="space-y-3">
       {GROUPS.map((group) => (
         <div key={group.title} className="space-y-1.5">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="font-technical text-[10px] font-medium tracking-wide text-muted-foreground">
             {group.title}
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -137,14 +137,12 @@ export function WorkspacePermissionToggles({
                     disabled={disabled}
                     onClick={() => onToggle(permission)}
                     className={cn(
-                      "rounded-lg border px-2 py-1 text-[11px] transition-colors",
+                      "rounded-lg px-2 py-1 text-[12px] transition-colors",
                       "disabled:cursor-not-allowed disabled:opacity-50",
                       active
-                        ? "border-primary/40 bg-primary/10 text-foreground"
-                        : "border-hairline bg-muted/30 text-muted-foreground",
-                      // Um ponto marca o que foge da matriz base do papel, para
-                      // o admin distinguir "veio do papel" de "eu mudei".
-                      overridden && "ring-1 ring-primary/30",
+                        ? "bg-foreground text-background"
+                        : "bg-surface-raise-1 text-muted-foreground hover:bg-surface-hover hover:text-foreground",
+                      overridden && "ring-1 ring-hairline-strong",
                     )}
                     title={
                       base.includes(permission)

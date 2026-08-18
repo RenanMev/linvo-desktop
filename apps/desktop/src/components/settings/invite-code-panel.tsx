@@ -48,16 +48,16 @@ export function InviteCodePanel({
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-hairline bg-muted/30 p-4">
+    <div className="space-y-3 rounded-lg bg-surface-raise-1 px-3 py-3">
       <div className="space-y-0.5">
-        <p className="text-xs font-medium">{inviteCopy.joinField}</p>
+        <p className="text-[13px] font-medium">{inviteCopy.joinField}</p>
         {uiState === "empty" ? (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-[12px] text-muted-foreground">
             {inviteCopy.generateHint}
           </p>
         ) : null}
         {uiState === "active" || uiState === "active-without-value" ? (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-[12px] text-muted-foreground">
             {inviteCopy.generateWillInvalidate}
           </p>
         ) : null}
@@ -67,11 +67,11 @@ export function InviteCodePanel({
         <div className="space-y-3">
           <p
             role="status"
-            className="font-mono text-2xl font-semibold tracking-[0.2em] text-foreground"
+            className="font-technical text-2xl font-medium tracking-[0.18em] text-foreground"
           >
             {formatInviteCode(plaintextCode)}
           </p>
-          <p className="text-[11px] tabular-nums text-muted-foreground">
+          <p className="text-[12px] tabular-nums text-muted-foreground">
             {inviteCopy.expiresIn(countdown)}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -122,7 +122,7 @@ export function InviteCodePanel({
 
       {uiState === "active-without-value" ? (
         <div className="space-y-3">
-          <p role="status" className="text-xs text-muted-foreground">
+          <p role="status" className="text-[13px] text-muted-foreground">
             {inviteCopy.activeWithoutValue(countdown)}
           </p>
           <Button
@@ -138,7 +138,7 @@ export function InviteCodePanel({
 
       {uiState === "expired" ? (
         <div className="space-y-3">
-          <p role="status" className="text-xs text-muted-foreground">
+          <p role="status" className="text-[13px] text-muted-foreground">
             {inviteCopy.expired}
           </p>
           <Button
@@ -153,7 +153,7 @@ export function InviteCodePanel({
       ) : null}
 
       {uiState === "redeemed" ? (
-        <p role="status" className="text-xs text-foreground">
+        <p role="status" className="text-[13px] text-foreground">
           {inviteCopy.redeemed(redeemerName ?? "Alguém")}
         </p>
       ) : null}
@@ -170,13 +170,13 @@ export function InviteCodePanel({
       ) : null}
 
       {uiState === "at-capacity" || atCapacity ? (
-        <p role="status" className="text-xs text-muted-foreground">
+        <p role="status" className="text-[13px] text-muted-foreground">
           {inviteCopy.atCapacity}
         </p>
       ) : null}
 
       {error ? (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-[13px] text-destructive">
           {error}
         </p>
       ) : null}
