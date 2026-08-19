@@ -29,6 +29,7 @@ describe("FloatingIslandShell", () => {
         morph={morph}
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={onMorphComplete}
+        visualWidth={168}
       />,
     );
 
@@ -62,6 +63,7 @@ describe("FloatingIslandShell", () => {
         }}
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={vi.fn()}
+        visualWidth={168}
       />,
     );
 
@@ -100,6 +102,7 @@ describe("FloatingIslandShell", () => {
         }}
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={vi.fn()}
+        visualWidth={168}
       />,
     );
 
@@ -126,6 +129,7 @@ describe("FloatingIslandShell", () => {
         }}
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={vi.fn()}
+        visualWidth={168}
       />,
     );
 
@@ -143,6 +147,7 @@ describe("FloatingIslandShell", () => {
         morph={null}
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={vi.fn()}
+        visualWidth={168}
       />,
     );
 
@@ -169,6 +174,7 @@ describe("FloatingIslandShell", () => {
         }}
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={onMorphComplete}
+        visualWidth={168}
       />,
     );
 

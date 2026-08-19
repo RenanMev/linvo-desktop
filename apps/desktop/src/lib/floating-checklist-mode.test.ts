@@ -24,7 +24,7 @@ describe("floating-checklist-mode positions", () => {
     expect(plan.finalPosition).toEqual({ x: 0, y: 0 });
   });
 
-  it("resizes without a pre-move when the bar is already visible, centering on the bar", () => {
+  it("resizes without a pre-move when the bar is already visible, keeping the origin", () => {
     const plan = resolveChecklistExpandPosition({
       currentPosition: { x: 100, y: 80 },
       currentSize: { width: 140, height: 40 },
@@ -33,9 +33,9 @@ describe("floating-checklist-mode positions", () => {
     });
 
     expect(plan.moveFirst).toBeNull();
-    // Centro da barra (100 + 140/2 = 170) vira o centro do checklist; só o
-    // eixo vertical, que não caberia acima do topo, é grudado na borda.
-    expect(plan.finalPosition).toEqual({ x: 26, y: 0 });
+    // A janela cresce a partir do próprio canto: nenhum dos eixos se desloca,
+    // e o checklist ainda cabe na tela a partir de (100, 80).
+    expect(plan.finalPosition).toEqual({ x: 100, y: 80 });
   });
 
   it("clamps final checklist bounds to the monitor", () => {

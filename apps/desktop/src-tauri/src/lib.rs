@@ -262,6 +262,87 @@ fn set_window_bounds(window: WebviewWindow, to: Bounds) -> Result<(), String> {
     requeue_bounds(&window, to)
 }
 
+#[cfg(windows)]
+#[tauri::command]
+fn set_window_region(
+    window: WebviewWindow,
+    region: Option<Bounds>,
+    radius: Option<u32>,
+) -> Result<(), String> {
+    // `SetWindowRgn` mora em user32, mas o windows-sys o expõe em Graphics::Gdi
+    // junto do resto da API de regiões — não em UI::WindowsAndMessaging.
+    use windows_sys::Win32::Graphics::Gdi::{CreateRoundRectRgn, SetWindowRgn};
+
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+
+    let hrgn = match region {
+        Some(rect) => {
+            // Limites exclusivos, sem `+1`: é melhor a região ficar um pixel
+            // dentro do desenho do que um pixel fora. Fora dela a janela expõe
+            // o fundo padrão do WebView2 (branco), que vira uma linha clara em
+            // volta da pílula; dentro, no máximo se perde uma fatia da borda.
+            let diameter = i32::try_from(radius.unwrap_or(0)).unwrap_or(0) * 2;
+            unsafe {
+                CreateRoundRectRgn(
+                    rect.x,
+                    rect.y,
+                    rect.x + rect.width as i32,
+                    rect.y + rect.height as i32,
+                    diameter,
+                    diameter,
+                )
+            }
+        }
+        None => std::ptr::null_mut(),
+    };
+
+    // A janela assume a posse da região; deletá-la aqui invalidaria o handle.
+    let ok = unsafe { SetWindowRgn(hwnd.0 as _, hrgn, 1) };
+    if ok == 0 {
+        return Err("SetWindowRgn failed".into());
+    }
+
+    hide_dwm_border(hwnd.0 as _);
+    Ok(())
+}
+
+/// Desliga o realce que o Windows 11 desenha na borda da janela ativa.
+///
+/// Só o `DWMWA_BORDER_COLOR`: é o atributo que descreve exatamente esse realce.
+/// `DWMWA_NCRENDERING_POLICY` e `DWMWA_WINDOW_CORNER_PREFERENCE` já foram
+/// tentados aqui e não resolveram o sintoma — desligar a renderização
+/// não-cliente inteira é largo demais para o problema e mexe no comportamento
+/// geral da janela, então não vale manter no escuro.
+#[cfg(windows)]
+fn hide_dwm_border(hwnd: windows_sys::Win32::Foundation::HWND) {
+    use windows_sys::Win32::Graphics::Dwm::{
+        DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_COLOR_NONE,
+    };
+
+    let color = DWMWA_COLOR_NONE;
+    // Ignorado em silêncio em versões que não conhecem o atributo.
+    unsafe {
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_BORDER_COLOR as u32,
+            &color as *const _ as *const core::ffi::c_void,
+            core::mem::size_of_val(&color) as u32,
+        );
+    }
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn set_window_region(
+    _window: WebviewWindow,
+    _region: Option<Bounds>,
+    _radius: Option<u32>,
+) -> Result<(), String> {
+    // Só o Windows precisa do recorte: é lá que a faixa transparente capta
+    // cliques. Nas outras plataformas o comando existe para o front não ramificar.
+    Ok(())
+}
+
 #[tauri::command]
 fn monitor_work_area(window: WebviewWindow) -> Result<Bounds, String> {
     let monitor = window
@@ -309,6 +390,14 @@ pub fn run() {
             if let Some(panel) = app.get_webview_window("panel") {
                 panel::init_native_blur(&panel);
             }
+            // A ilha já nasce recortada pelo front; tirar o realce da borda aqui
+            // evita ele aparecer no primeiro foco, antes do primeiro recorte.
+            #[cfg(windows)]
+            if let Some(main) = app.get_webview_window("main") {
+                if let Ok(handle) = main.hwnd() {
+                    hide_dwm_border(handle.0 as _);
+                }
+            }
             // Desliga o fade de show/hide das janelas e deixa o overlay fora de
             // qualquer captura. Precisa rodar aqui: as quatro janelas são
             // criadas pelo `tauri.conf.json`, antes deste ponto.
@@ -318,6 +407,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             animate_window_bounds,
             set_window_bounds,
+            set_window_region,
             monitor_work_area,
             app::app_quit,
             auth::auth_set_tokens,

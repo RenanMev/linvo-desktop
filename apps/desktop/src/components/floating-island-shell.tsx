@@ -29,6 +29,7 @@ export type FloatingIslandMode =
 export type FloatingIslandMorph = {
   id: number;
   active: boolean;
+  settled?: boolean;
   fromMode: FloatingIslandMode;
   toMode: FloatingIslandMode;
   geometry: IslandMorphGeometry;
@@ -39,10 +40,20 @@ type FloatingIslandShellProps = {
   morph: FloatingIslandMorph | null;
   renderMode: (mode: FloatingIslandMode) => ReactNode;
   onMorphComplete: (id: number) => void;
+  /**
+   * Largura do desenho do modo atual, em px lógicos. A janela é sempre mais
+   * larga (ver `ISLAND_WINDOW_WIDTH`); é esta medida que impede a pílula de
+   * esticar até as bordas quando não há morph em curso.
+   */
+  visualWidth: number;
 };
 
 type IslandStyle = CSSProperties & {
   "--island-morph-duration"?: string;
+};
+
+type StageStyle = CSSProperties & {
+  "--island-visual-width"?: string;
 };
 
 function isCompactShape(mode: FloatingIslandMode): boolean {
@@ -54,6 +65,22 @@ function contentRectStyle(
   geometry: IslandMorphGeometry,
 ): CSSProperties {
   return resolveIslandPlacement(rect, geometry);
+}
+
+function shouldRenderContentLayer(
+  phase: "source" | "target" | "stable",
+  morph: FloatingIslandMorph | null,
+): boolean {
+  if (!morph) {
+    return true;
+  }
+  if (morph.settled) {
+    return phase === "stable";
+  }
+  if (!morph.active) {
+    return phase === "source";
+  }
+  return false;
 }
 
 type SurfaceLayer = {
@@ -124,22 +151,47 @@ function resolveSurfaceLayers(
     : [compactLayer, expandedLayer];
 }
 
+function resolveSettledSurfaceLayer(
+  geometry: IslandMorphGeometry,
+  mode: FloatingIslandMode,
+  fromMode: FloatingIslandMode,
+): SurfaceLayer {
+  const layers = resolveSurfaceLayers(geometry, mode, fromMode);
+  const winningShape = isCompactShape(mode) ? "compact" : "expanded";
+  const layer = layers.find((entry) => entry.shape === winningShape);
+  if (!layer) {
+    return layers[0]!;
+  }
+  return {
+    ...layer,
+    style: {
+      ...layer.style,
+      transition: "none",
+    },
+  };
+}
+
 export function FloatingIslandShell({
   mode,
   morph,
   renderMode,
   onMorphComplete,
+  visualWidth,
 }: FloatingIslandShellProps) {
   const completedIdRef = useRef<number | null>(null);
+  const isSettled = morph?.settled === true;
   const displayedMode = morph
-    ? morph.active
+    ? morph.settled || morph.active
       ? morph.toMode
       : morph.fromMode
     : mode;
   const displayedShape = isCompactShape(displayedMode) ? "compact" : "expanded";
-  const surfaceLayers = morph
-    ? resolveSurfaceLayers(morph.geometry, displayedMode, morph.fromMode)
-    : null;
+  const settledSurface =
+    isSettled && morph ? resolveSettledSurfaceLayer(morph.geometry, mode, morph.fromMode) : null;
+  const surfaceLayers =
+    morph && !isSettled
+      ? resolveSurfaceLayers(morph.geometry, displayedMode, morph.fromMode)
+      : null;
 
   function completeMorph(id: number) {
     if (completedIdRef.current === id) {
@@ -176,11 +228,24 @@ export function FloatingIslandShell({
       event.currentTarget === event.target &&
       event.propertyName === "transform"
     ) {
-      completeMorph(morph.id);
+      /*
+       * Um frame só. No colapso este callback é o que libera o `SetWindowPos`,
+       * e a essa altura o CSS já desenhou a pílula: cada frame extra aqui é um
+       * frame de janela expandida e transparente com o desktop em volta.
+       */
+      window.requestAnimationFrame(() => completeMorph(morph.id));
     }
   }
 
-  const contentLayers = morph
+  const contentLayers = morph?.settled
+    ? [
+        {
+          mode,
+          rect: null,
+          phase: "stable" as const,
+        },
+      ]
+    : morph
     ? [
         {
           mode: morph.fromMode,
@@ -201,13 +266,31 @@ export function FloatingIslandShell({
         },
       ];
 
+  const stageStyle: StageStyle = {
+    "--island-visual-width": `${visualWidth}px`,
+  };
+
   return (
     <div
       className="floating-island-stage h-full w-full"
-      data-morphing={morph ? "true" : "false"}
-      aria-busy={morph ? "true" : undefined}
+      style={stageStyle}
+      data-morphing={morph && !isSettled ? "true" : "false"}
+      aria-busy={morph && !isSettled ? "true" : undefined}
     >
-      {surfaceLayers ? (
+      {settledSurface ? (
+        <div
+          aria-hidden="true"
+          data-testid="floating-island-surface"
+          data-shape={displayedShape}
+          data-settled="true"
+          data-active="false"
+          className={cn(
+            "floating-island-surface text-card-foreground",
+            settledSurface.shape === "compact" ? "floating-pill" : "window-shell",
+          )}
+          style={settledSurface.style}
+        />
+      ) : surfaceLayers ? (
         surfaceLayers.map((layer) => (
           <div
             key={layer.shape}
@@ -260,15 +343,17 @@ export function FloatingIslandShell({
           )}
           data-phase={layer.phase}
           data-active={morph?.active ? "true" : "false"}
-          aria-hidden={morph ? "true" : undefined}
-          inert={morph ? true : undefined}
+          aria-hidden={morph && !morph.settled ? "true" : undefined}
+          inert={morph && !morph.settled ? true : undefined}
           style={
             layer.rect && morph
               ? contentRectStyle(layer.rect, morph.geometry)
               : undefined
           }
         >
-          {renderMode(layer.mode)}
+          {shouldRenderContentLayer(layer.phase, morph)
+            ? renderMode(layer.mode)
+            : null}
         </div>
       ))}
     </div>

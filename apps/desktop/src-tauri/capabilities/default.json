@@ -39,6 +39,7 @@
     "allow-chat-clear-cache",
     "allow-animate-window-bounds",
     "allow-set-window-bounds",
+    "allow-set-window-region",
     "allow-monitor-work-area",
     "allow-panel-open",
     "allow-panel-close",

@@ -1,6 +1,7 @@
 import type { UserPublic } from "@linvo/shared";
 import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import { EdgeHandle } from "@/components/edge-handle";
 import { FloatingBar } from "@/components/floating-bar";
@@ -28,11 +29,19 @@ import {
 } from "@/lib/floating-quick-menu-mode";
 import {
   hasMeaningfulMorph,
+  ISLAND_EXPANDED_RADIUS_PX,
   ISLAND_MORPH_DURATION_MS,
   ISLAND_MORPH_WATCHDOG_MS,
   ISLAND_PAINT_WATCHDOG_MS,
   type IslandMorphGeometry,
 } from "@/lib/floating-island-transition";
+import { applyIslandWindowRegion } from "@/lib/window-region";
+import { islandLog, sampleViewportFrames } from "@/lib/island-debug";
+import {
+  CHECKLIST_SIZE,
+  COMPACT_SIZE,
+  QUICK_MENU_SIZE,
+} from "@/lib/window-mode";
 import { releaseMinWindowSize } from "@/lib/window-animation";
 import { NO_ANCHOR, type EdgeAnchor } from "@/lib/window-anchor";
 import {
@@ -56,6 +65,31 @@ type CloseQuickMenuOptions = {
 };
 const QUICK_MENU_MIN_SIZE = { width: 320, height: 360 };
 const QUICK_MENU_CLOSE_DEADLINE_MS = 600;
+
+/**
+ * Desenho de cada modo. A janela é sempre `ISLAND_WINDOW_WIDTH` de largura; é
+ * isto que mantém a pílula com 168px em vez de esticar até a borda.
+ */
+function visualSizeForMode(mode: WindowMode) {
+  if (mode === "quick-menu") return QUICK_MENU_SIZE;
+  if (mode === "checklist") return CHECKLIST_SIZE;
+  return COMPACT_SIZE;
+}
+
+function visualWidthForMode(mode: WindowMode): number {
+  return visualSizeForMode(mode).width;
+}
+
+/** Pílula é totalmente arredondada; painéis usam o raio da ilha. */
+function visualRadiusForMode(mode: WindowMode): number {
+  return isCompactMode(mode)
+    ? visualSizeForMode(mode).height / 2
+    : ISLAND_EXPANDED_RADIUS_PX;
+}
+
+function isCompactMode(mode: WindowMode): boolean {
+  return mode === "compact" || mode === "edge-collapsed";
+}
 
 async function withDeadline<T>(task: Promise<T>, timeoutMs: number): Promise<T> {
   let timeoutId = 0;
@@ -162,7 +196,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   /*
    * A promise do `set_window_bounds` confirma o SetWindowPos, mas o WebView2
    * ainda pode estar com o layout do viewport anterior. Esperar o `resize` e
-   * dois frames depois dele separa o commit nativo da primeira mudanÃ§a de
+   * dois frames depois dele separa o commit nativo da primeira mudança de
    * transform/opacity do CSS. Sem essa barreira os dois commits podem cair no
    * mesmo frame e a janela transparente revela o desktop por um instante.
    */
@@ -189,22 +223,56 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
         resolve();
       };
 
+      /*
+       * Um frame só, não dois.
+       *
+       * O segundo `requestAnimationFrame` custava 18-85ms medidos (frames caem
+       * enquanto o WebView refaz o layout do painel), e nesse intervalo a janela
+       * já está expandida com só a pílula pintada e parada — o desktop aparece
+       * em volta antes de a animação sequer começar. Um frame basta para o
+       * commit nativo não coalescer com a primeira mudança de transform.
+       */
       const queuePaintFrames = () => {
         if (framesQueued || !matchesTargetViewport()) return;
         framesQueued = true;
-        firstFrame = window.requestAnimationFrame(() => {
-          secondFrame = window.requestAnimationFrame(finish);
-        });
+        firstFrame = window.requestAnimationFrame(finish);
       };
 
       const onResize = () => {
         queuePaintFrames();
       };
 
-      const timeoutId = window.setTimeout(finish, 180);
+      const timeoutId = window.setTimeout(() => {
+        islandLog("viewport-paint:WATCHDOG-EXPIRED", {
+          wanted: geometry.viewport,
+          got: { w: window.innerWidth, h: window.innerHeight },
+        });
+        finish();
+      }, 180);
       window.addEventListener("resize", onResize);
-      // O evento pode ter chegado entre o commit nativo e a inscriÃ§Ã£o acima.
+      // O evento pode ter chegado entre o commit nativo e a inscrição acima.
       queuePaintFrames();
+    });
+  }
+
+  function settleIslandMorph(nextMode: WindowMode, options?: { panelReady?: boolean }) {
+    flushSync(() => {
+      setWindowMode(nextMode);
+      if (options?.panelReady) {
+        setPanelReady(true);
+      }
+      const current = islandMorphRef.current;
+      if (!current) {
+        return;
+      }
+      const settled: FloatingIslandMorph = {
+        ...current,
+        active: false,
+        settled: true,
+      };
+      islandMorphRef.current = settled;
+      setIslandMorph(settled);
+      islandLog("morph:settle", { id: settled.id, mode: nextMode });
     });
   }
 
@@ -213,6 +281,10 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     fromMode: WindowMode,
     toMode: WindowMode,
   ) {
+    if (islandMorphRef.current?.settled) {
+      clearIslandMorph();
+    }
+
     if (!hasMeaningfulMorph(geometry)) {
       clearIslandMorph();
       return;
@@ -227,6 +299,14 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     };
     islandMorphRef.current = nextMorph;
     setIslandMorph(nextMorph);
+    islandLog("morph:prepare", {
+      id: nextMorph.id,
+      from: fromMode,
+      to: toMode,
+      geomViewport: geometry.viewport,
+      fromRect: geometry.from,
+      toRect: geometry.to,
+    });
 
     /*
      * O estado inicial precisa estar pintado antes de ativar, senão o browser
@@ -264,6 +344,11 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     const activeMorph = { ...current, active: true };
     islandMorphRef.current = activeMorph;
     setIslandMorph(activeMorph);
+    islandLog("morph:start", { id: current.id });
+    sampleViewportFrames(
+      `morph-${current.id}-${current.fromMode}->${current.toMode}`,
+      ISLAND_MORPH_DURATION_MS + ISLAND_MORPH_WATCHDOG_MS,
+    );
     return promise;
   }
 
@@ -327,9 +412,10 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
           },
         });
         await waitForIslandMorph();
-        clearIslandMorph();
         if (!cancelled && modeIntentRef.current === "checklist") {
-          setWindowMode("checklist");
+          await waitForIslandPaint();
+          settleIslandMorph("checklist");
+          await waitForIslandPaint();
         }
       } finally {
         if (!cancelled) {
@@ -350,12 +436,17 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
           await prepareIslandMorph(geometry, "checklist", "compact");
           await startIslandMorph();
         },
-      })
-        .then(() => {
+        onAfterCommit: async () => {
           if (!cancelled && modeIntentRef.current === "compact") {
-            setWindowMode("compact");
+            await waitForIslandPaint();
+            settleIslandMorph("compact");
+            await waitForIslandPaint();
+          }
+        },
+      })
+        .then(async () => {
+          if (!cancelled && modeIntentRef.current === "compact") {
             setChecklist(null);
-            clearIslandMorph();
           }
         })
         .catch(() => {
@@ -394,18 +485,24 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
           await prepareIslandMorph(geometry, "checklist", "compact");
           await startIslandMorph();
         },
+        onAfterCommit: async () => {
+          if (modeIntentRef.current === "compact") {
+            await waitForIslandPaint();
+            settleIslandMorph("compact");
+            await waitForIslandPaint();
+          }
+        },
       });
       if (modeIntentRef.current === "compact") {
         restoreChatFocusRef.current = true;
-        setWindowMode("compact");
         setChecklist(null);
       }
     } catch {
       if (modeIntentRef.current === "compact") {
         modeIntentRef.current = "checklist";
       }
-    } finally {
       clearIslandMorph();
+    } finally {
       finishTransition();
     }
   }
@@ -420,6 +517,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     modeIntentRef.current = "quick-menu";
     startTransition();
     try {
+      setPanelReady(false);
       await expandFloatingToQuickMenu({
         onPrepare: async (geometry) => {
           await prepareIslandMorph(geometry, "compact", "quick-menu");
@@ -428,28 +526,26 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
           await waitForIslandViewportPaint(geometry);
         },
         onResizeStart: () => {
-          if (modeIntentRef.current === "quick-menu") {
-            void startIslandMorph();
-          }
+          void startIslandMorph();
         },
       });
       await waitForIslandMorph();
       if (modeIntentRef.current === "quick-menu") {
-        clearIslandMorph();
-        setWindowMode("quick-menu");
-        setPanelReady(true);
+        await waitForIslandPaint();
+        settleIslandMorph("quick-menu", { panelReady: true });
+        await waitForIslandPaint();
       } else {
-        clearIslandMorph();
         setCaptureAndSendPending(false);
       }
     } catch {
-      clearIslandMorph();
       if (modeIntentRef.current === "quick-menu") {
         modeIntentRef.current = "compact";
         setPanelReady(false);
         setWindowMode("compact");
         setCaptureAndSendPending(false);
       }
+      clearIslandMorph();
+      void ensureCompactWindowBounds().catch(() => undefined);
     } finally {
       finishTransition();
     }
@@ -471,9 +567,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   ): Promise<void> {
     const quickMenuIsVisibleOrTransitioning =
       windowModeRef.current === "quick-menu" ||
-      modeIntentRef.current === "quick-menu" ||
-      islandMorphRef.current?.fromMode === "quick-menu" ||
-      islandMorphRef.current?.toMode === "quick-menu";
+      modeIntentRef.current === "quick-menu";
 
     if (
       !options.preserveIntent &&
@@ -505,17 +599,22 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
         setPanelReady(false);
         await withDeadline(
           collapseQuickMenuToFloating({
-            onBeforeCommit: async (geometry) => {
-              if (quickMenuCloseAttemptRef.current !== closeAttempt) return;
-              await prepareIslandMorph(geometry, "quick-menu", "compact");
-              if (quickMenuCloseAttemptRef.current !== closeAttempt) {
-                clearIslandMorph();
-                return;
-              }
-              await startIslandMorph();
-            },
             shouldCommit: () =>
               quickMenuCloseAttemptRef.current === closeAttempt,
+            onBeforeCommit: async (geometry) => {
+              await prepareIslandMorph(geometry, "quick-menu", "compact");
+              await startIslandMorph();
+            },
+            onAfterCommit: async () => {
+              if (
+                quickMenuCloseAttemptRef.current === closeAttempt &&
+                modeIntentRef.current === "compact"
+              ) {
+                await waitForIslandPaint();
+                settleIslandMorph("compact");
+                await waitForIslandPaint();
+              }
+            },
           }),
           QUICK_MENU_CLOSE_DEADLINE_MS,
         );
@@ -528,10 +627,12 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
         if (quickMenuCloseAttemptRef.current === closeAttempt) {
           quickMenuCloseAttemptRef.current += 1;
         }
-        setWindowMode("compact");
+        if (windowModeRef.current !== "compact") {
+          setWindowMode("compact");
+        }
+        clearIslandMorph();
         setPanelReady(false);
         setCaptureAndSendPending(false);
-        clearIslandMorph();
         setQuickMenuClosing(false);
       }
     })();
@@ -687,6 +788,40 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     };
   }, []);
 
+  /*
+   * A região é recortada em pixels físicos, derivados da escala do monitor onde
+   * a janela estava quando foi aplicada. Com dois monitores de DPI diferente, ao
+   * arrastar a janela o Windows a redimensiona para o novo DPI e a região antiga
+   * passa a ser menor que a janela — a pílula aparece cortada. Reaplicar no
+   * evento de escala realinha os dois.
+   */
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void getCurrentWindow()
+      .onScaleChanged(({ payload }) => {
+        const mode = windowModeRef.current;
+        void applyIslandWindowRegion({
+          visual: visualSizeForMode(mode),
+          scaleFactor: payload.scaleFactor,
+          radius: visualRadiusForMode(mode),
+        }).catch(() => undefined);
+      })
+      .then((dispose) => {
+        if (disposed) {
+          dispose();
+        } else {
+          unlisten = dispose;
+        }
+      });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
   useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | undefined;
@@ -718,6 +853,10 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   }, []);
 
   useEffect(() => {
+    if (transitioning || (islandMorph && !islandMorph.settled)) {
+      return;
+    }
+
     let cancelled = false;
     const win = getCurrentWindow();
 
@@ -752,7 +891,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     return () => {
       cancelled = true;
     };
-  }, [windowMode]);
+  }, [windowMode, transitioning, islandMorph]);
 
   /*
    * Rede de segurança do morph: os bounds nativos e o CSS são aplicados em
@@ -766,7 +905,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
       !floatingReady ||
       windowMode !== "compact" ||
       transitioning ||
-      islandMorph
+      (islandMorph && !islandMorph.settled)
     ) {
       return;
     }
@@ -854,6 +993,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
       morph={islandMorph}
       renderMode={renderIslandMode}
       onMorphComplete={completeIslandMorph}
+      visualWidth={visualWidthForMode(windowMode)}
     />
   );
 }

@@ -1,20 +1,25 @@
 import {
   applyWindowBoundsImmediate,
-  applyWindowBoundsWithFallback,
   logicalToPhysical,
   readWindowBounds,
   releaseMinWindowSize,
 } from "@/lib/window-animation";
 import {
+  ISLAND_EXPANDED_RADIUS_PX,
   resolveCollapseMorphGeometry,
   resolveExpandMorphGeometry,
+  withCenteredVisualRects,
   type IslandCollapseHooks,
   type IslandExpandHooks,
   type IslandMorphGeometry,
   type PreparedIslandWindowTransition,
 } from "@/lib/floating-island-transition";
 import type { EdgeAnchor } from "@/lib/window-anchor";
-import { COMPACT_SIZE, QUICK_MENU_SIZE } from "@/lib/window-mode";
+import {
+  COMPACT_SIZE,
+  QUICK_MENU_SIZE,
+  windowSizeForVisual,
+} from "@/lib/window-mode";
 import {
   clampToMonitor,
   type MonitorInfo,
@@ -39,6 +44,10 @@ import {
   resolveExpandPlan,
 } from "@/lib/window-transition";
 import { readWorkArea } from "@/lib/window-work-area";
+import {
+  applyIslandMorphRegion,
+  applyIslandWindowRegion,
+} from "@/lib/window-region";
 
 /**
  * A janela não é animada: vai ao tamanho final num único `SetWindowPos` e a
@@ -128,11 +137,10 @@ export async function expandFloatingToQuickMenu(
       (plan.moveFirst.x !== current.position.x ||
         plan.moveFirst.y !== current.position.y)
     ) {
-      await applyWindowBoundsWithFallback(
-        win,
-        { position: plan.moveFirst, size: current.size },
-        { durationMs: 180 },
-      );
+      await applyWindowBoundsImmediate(win, {
+        position: plan.moveFirst,
+        size: current.size,
+      });
     }
 
     const sameSize =
@@ -150,10 +158,22 @@ export async function expandFloatingToQuickMenu(
       position: plan.finalPosition,
       size: targetSize,
     };
-    const geometry = resolveExpandMorphGeometry({
-      sourceBounds,
-      targetBounds,
+    const geometry = withCenteredVisualRects(
+      resolveExpandMorphGeometry({
+        sourceBounds,
+        targetBounds,
+        scaleFactor: scale,
+      }),
+      COMPACT_SIZE.width,
+      QUICK_MENU_SIZE.width,
+    );
+
+    // Região do morph: larga o bastante para o painel crescer sem recorte, mas
+    // ainda arredondada — sem região o Windows desenha a moldura do retângulo.
+    await applyIslandMorphRegion({
+      maxHeight: QUICK_MENU_SIZE.height,
       scaleFactor: scale,
+      radius: ISLAND_EXPANDED_RADIUS_PX,
     });
 
     await options.onPrepare?.(geometry);
@@ -186,7 +206,7 @@ export async function prepareQuickMenuCollapse(): Promise<PreparedQuickMenuColla
   return enqueueWindowAnimation(async () => {
     const win = getCurrentWindow();
     const scale = await win.scaleFactor();
-    const targetSize = logicalToPhysical(COMPACT_SIZE, scale);
+    const targetSize = logicalToPhysical(windowSizeForVisual(COMPACT_SIZE), scale);
     const current = await readWindowBounds(win);
     const monitorInfo = await readWorkArea();
     const anchor = loadSavedAnchor() ?? undefined;
@@ -209,15 +229,32 @@ export async function prepareQuickMenuCollapse(): Promise<PreparedQuickMenuColla
           anchor,
         });
 
+    /*
+     * Solta o mínimo e o resize AQUI, antes da animação, não no commit.
+     *
+     * As duas chamadas são invisíveis (não mudam um pixel), mas custam ~150ms
+     * de IPC somadas. No commit elas ficavam entre o fim da animação e o
+     * `SetWindowPos`, e nesse intervalo a janela seguia expandida e
+     * transparente com só a pílula pintada — o desktop aparecia em volta dela.
+     * Medido em ~240ms de buraco; ver `island-debug`.
+     */
+    await releaseMinWindowSize(win);
+    await win.setResizable(false);
+
     // O CSS recebe esta geometria antes do único commit nativo de bounds.
     const targetBounds = { position, size: targetSize };
     return {
       targetBounds,
-      geometry: resolveCollapseMorphGeometry({
-        sourceBounds: current,
-        targetBounds,
-        scaleFactor: scale,
-      }),
+      scaleFactor: scale,
+      geometry: withCenteredVisualRects(
+        resolveCollapseMorphGeometry({
+          sourceBounds: current,
+          targetBounds,
+          scaleFactor: scale,
+        }),
+        QUICK_MENU_SIZE.width,
+        COMPACT_SIZE.width,
+      ),
     };
   });
 }
@@ -227,9 +264,22 @@ export async function commitQuickMenuCollapse(
 ): Promise<void> {
   return enqueueWindowAnimation(async () => {
     const win = getCurrentWindow();
-    // Windows otherwise constrains SetWindowPos to the expanded minimum.
-    await releaseMinWindowSize(win);
-    await win.setResizable(false);
+    /*
+     * Recorte antes do resize, e com a escala já lida no prepare.
+     *
+     * Aqui a animação de CSS já terminou — a pílula está desenhada no tamanho
+     * final — então recortar na pílula não corta nada visível. Fazer isto
+     * depois deixava a janela encolhida e sem recorte pelo tempo do IPC
+     * (~160ms medidos), e é nesse retângulo cru que o Windows desenha a moldura.
+     *
+     * O mínimo e o resizable já foram soltos no prepare, então não sobra
+     * nenhum IPC entre o fim da animação e o SetWindowPos.
+     */
+    await applyIslandWindowRegion({
+      visual: COMPACT_SIZE,
+      scaleFactor: transition.scaleFactor,
+      radius: COMPACT_SIZE.height / 2,
+    });
     await applyWindowBoundsImmediate(win, transition.targetBounds);
     clearRestoreOrigin("quick-menu");
     saveSavedPosition(transition.targetBounds.position);

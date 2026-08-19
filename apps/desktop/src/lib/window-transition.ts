@@ -12,36 +12,34 @@ import {
 import { EDGE_MARGIN } from "@/lib/window-storage";
 
 /**
- * Redimensiona mantendo o centro, eixo por eixo.
+ * Redimensiona preservando a origem da janela.
  *
- * Duas regras importantes, ambas por eixo e nunca "tudo ou nada":
+ * A janela cresce e encolhe a partir do próprio canto superior esquerdo: o
+ * painel abre alinhado à borda esquerda da pílula, não centralizado nela.
  *
- * 1. No eixo ancorado a janela cola na borda; no eixo livre ela cresce/encolhe
- *    a partir do centro. `applyAnchor` sozinho deixava o eixo livre parado na
- *    posição anterior — com a barra no topo, o painel (mais largo que a pílula)
- *    abria todo para a direita em vez de centralizado sob ela.
- * 2. O clamp é aplicado por eixo no fim. A versão anterior descartava a
- *    centralização inteira quando o resultado não caberia na tela, então perto
- *    do topo o eixo horizontal também perdia o alinhamento.
+ * Centralizar exigia mover a janela no mesmo `SetWindowPos` que a redimensiona
+ * (132px físicos para a esquerda, medidos), e a ilha só ficava parada na tela
+ * porque o CSS cancelava esse deslocamento via `left: calc(% - px)`. Essa
+ * compensação depende de o WebView refazer o layout no mesmo frame do resize;
+ * quando ele apresentava um frame com o layout antigo já na posição nova, a
+ * pílula saltava ~131px para o lado. Sem movimento não há o que compensar, e a
+ * classe inteira desse artefato desaparece.
  *
- * Expand e collapse usam esta mesma função, o que as torna inversas exatas —
- * é o que evita a pílula voltar num lugar diferente ao fechar o chat.
+ * O clamp continua por eixo no fim, e expand e collapse seguem usando esta
+ * mesma função — o que as mantém inversas exatas, e é o que faz a pílula voltar
+ * exatamente de onde saiu.
  */
-function resizeAroundCenter(input: {
+function resizeFromOrigin(input: {
   currentPosition: Position;
   currentSize: Size;
   targetSize: Size;
   monitor: MonitorInfo;
   anchor?: EdgeAnchor;
 }): Position {
-  const { currentPosition, currentSize, targetSize, monitor, anchor } = input;
+  const { currentPosition, targetSize, monitor, anchor } = input;
 
-  let x = Math.round(
-    currentPosition.x + (currentSize.width - targetSize.width) / 2,
-  );
-  let y = Math.round(
-    currentPosition.y + (currentSize.height - targetSize.height) / 2,
-  );
+  let x = currentPosition.x;
+  let y = currentPosition.y;
 
   if (anchor?.horizontal === "left") {
     x = monitor.position.x;
@@ -82,7 +80,7 @@ export function resolveExpandPlan(input: {
     : clampToMonitor(currentPosition, currentSize, monitor);
 
   const basePosition = moveFirst ?? currentPosition;
-  const finalPosition = resizeAroundCenter({
+  const finalPosition = resizeFromOrigin({
     currentPosition: basePosition,
     currentSize,
     targetSize,
@@ -106,7 +104,7 @@ export function resolveCollapsePosition(input: {
   }
   if (currentSize) {
     // Mesma regra do expand — garante que a pílula volte exatamente de onde saiu.
-    return resizeAroundCenter({
+    return resizeFromOrigin({
       currentPosition,
       currentSize,
       targetSize,
