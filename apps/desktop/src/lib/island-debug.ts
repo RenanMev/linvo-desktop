@@ -25,6 +25,13 @@ type IslandDebugWindow = Window & {
  * (modo, posição) e com ele metade dos cenários que queremos observar.
  */
 export function islandDebugEnabled(): boolean {
+  // A lane `unit` roda em Node, sem `window`: as funções de janela são chamadas
+  // de lá com os mocks do Tauri, e sem esta guarda a instrumentação derruba o
+  // teste inteiro.
+  if (typeof window === "undefined") {
+    return false;
+  }
+
   const override = (window as IslandDebugWindow).__islandDebug;
   if (typeof override === "boolean") {
     return override;

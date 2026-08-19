@@ -33,7 +33,8 @@ describe("enterFloatingMode", () => {
     expect(invokeMock).toHaveBeenCalledWith(
       "animate_window_bounds",
       expect.objectContaining({
-        to: expect.objectContaining({ width: 168, height: 34 }),
+        // Largura da janela (fixa em todos os modos), altura da pílula.
+        to: expect.objectContaining({ width: 380, height: 34 }),
       }),
     );
     expect(setSizeMock).toHaveBeenCalled();
