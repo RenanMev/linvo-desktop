@@ -24,7 +24,7 @@ describe("window-transition positions", () => {
     expect(plan.finalPosition).toEqual({ x: 0, y: 0 });
   });
 
-  it("expands from the center when the target fits around the current bar", () => {
+  it("expands from its own origin when the target fits around the current bar", () => {
     const plan = resolveExpandPlan({
       currentPosition: { x: 400, y: 300 },
       currentSize: { width: 140, height: 40 },
@@ -33,10 +33,8 @@ describe("window-transition positions", () => {
     });
 
     expect(plan.moveFirst).toBeNull();
-    expect(plan.finalPosition).toEqual({
-      x: 400 + Math.round((140 - 288) / 2),
-      y: 300 + Math.round((40 - 420) / 2),
-    });
+    // Sem deslocamento: a janela cresce a partir do canto onde já estava.
+    expect(plan.finalPosition).toEqual({ x: 400, y: 300 });
   });
 
   it("clamps final bounds to the monitor", () => {
@@ -67,7 +65,7 @@ describe("window-transition positions", () => {
     ).toEqual({ x: 120, y: 40 });
   });
 
-  it("collapses toward the center when current size is known and compact fits", () => {
+  it("collapses back to its own origin when current size is known and compact fits", () => {
     expect(
       resolveCollapsePosition({
         currentPosition: { x: 400, y: 220 },
@@ -75,10 +73,7 @@ describe("window-transition positions", () => {
         targetSize: { width: 168, height: 34 },
         monitor,
       }),
-    ).toEqual({
-      x: 400 + Math.round((380 - 168) / 2),
-      y: 220 + Math.round((520 - 34) / 2),
-    });
+    ).toEqual({ x: 400, y: 220 });
   });
 
   it("recomputes top-center collapse position when compact no longer fits", () => {
@@ -137,7 +132,7 @@ describe("window-transition positions", () => {
     expect(position.x).toBe(1920 - 168);
   });
 
-  it("centers horizontally under a top-docked bar instead of opening to one side", () => {
+  it("keeps the origin under a top-docked bar while staying flush to the top", () => {
     const barPosition = { x: 876, y: 0 };
     const barSize = { width: 168, height: 34 };
     const panelSize = { width: 380, height: 520 };
@@ -151,11 +146,8 @@ describe("window-transition positions", () => {
       anchor,
     });
 
-    // Cresce para baixo colado no topo, mas centralizado no eixo livre.
-    expect(plan.finalPosition).toEqual({
-      x: 876 + Math.round((168 - 380) / 2),
-      y: 0,
-    });
+    // Cresce para baixo colado no topo; o eixo livre não se desloca.
+    expect(plan.finalPosition).toEqual({ x: 876, y: 0 });
   });
 
   it("collapses a top-docked panel back to the exact bar position", () => {
@@ -205,7 +197,7 @@ describe("window-transition positions", () => {
     ).toEqual(barPosition);
   });
 
-  it("ignores anchor when it is empty on both axes and grows from center", () => {
+  it("ignores anchor when it is empty on both axes and grows from the origin", () => {
     const plan = resolveExpandPlan({
       currentPosition: { x: 400, y: 300 },
       currentSize: { width: 140, height: 40 },
@@ -214,9 +206,6 @@ describe("window-transition positions", () => {
       anchor: { horizontal: null, vertical: null },
     });
 
-    expect(plan.finalPosition).toEqual({
-      x: 400 + Math.round((140 - 288) / 2),
-      y: 300 + Math.round((40 - 420) / 2),
-    });
+    expect(plan.finalPosition).toEqual({ x: 400, y: 300 });
   });
 });

@@ -11,13 +11,14 @@ import {
   logicalToPhysical,
   readWindowBounds,
 } from "@/lib/window-animation";
-import { COMPACT_SIZE } from "@/lib/window-mode";
+import { COMPACT_SIZE, windowSizeForVisual } from "@/lib/window-mode";
 import {
   clampToMonitor,
   computeTopCenter,
   type Position,
 } from "@/lib/window-position";
 import { updateTaskbarVisibility } from "@/lib/app-windows";
+import { applyIslandWindowRegion } from "@/lib/window-region";
 import { EDGE_MARGIN, loadSavedPosition } from "@/lib/window-storage";
 
 async function resolveCompactPosition(
@@ -51,7 +52,7 @@ export async function enterFloatingMode(): Promise<void> {
   const config = configForSurfaceMode("compact");
   const win = getCurrentWindow();
   const scale = await win.scaleFactor();
-  const targetSize = logicalToPhysical(COMPACT_SIZE, scale);
+  const targetSize = logicalToPhysical(windowSizeForVisual(COMPACT_SIZE), scale);
   const targetPosition = await resolveCompactPosition(targetSize);
 
   await applyWindowBoundsWithFallback(win, {
@@ -69,6 +70,14 @@ export async function enterFloatingMode(): Promise<void> {
   await win.setPosition(
     new PhysicalPosition(targetPosition.x, targetPosition.y),
   );
+
+  // A janela nasce com a largura do painel; sem o recorte a faixa transparente
+  // ao lado da pílula captaria cliques do desktop.
+  await applyIslandWindowRegion({
+    visual: COMPACT_SIZE,
+    scaleFactor: scale,
+    radius: COMPACT_SIZE.height / 2,
+  });
 
   await updateTaskbarVisibility(true);
   await win.show();

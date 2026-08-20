@@ -11,6 +11,7 @@ import {
 } from "@/lib/window-anchor";
 import {
   COMPACT_SIZE,
+  windowSizeForVisual,
   EDGE_HANDLE_LENGTH,
   EDGE_HANDLE_THICKNESS,
 } from "@/lib/window-mode";
@@ -33,6 +34,7 @@ import {
   resolveCollapsePosition,
 } from "@/lib/window-transition";
 import { readWorkArea } from "@/lib/window-work-area";
+import { applyIslandWindowRegion } from "@/lib/window-region";
 
 export const EDGE_COLLAPSE_DURATION_MS = 180;
 export const EDGE_EXPAND_DURATION_MS = 200;
@@ -148,6 +150,17 @@ export async function collapseToEdge(): Promise<EdgeAnchor | null> {
       { durationMs: EDGE_COLLAPSE_DURATION_MS },
     );
 
+    // O handle é mais estreito que a janela: recorta para as faixas laterais
+    // transparentes não captarem cliques da borda da tela.
+    await applyIslandWindowRegion({
+      visual: {
+        width: targetSize.width / scale,
+        height: targetSize.height / scale,
+      },
+      scaleFactor: scale,
+      radius: 0,
+    });
+
     saveSavedPosition(position);
     return anchor;
   });
@@ -157,7 +170,7 @@ export async function expandFromEdge(): Promise<void> {
   return enqueueWindowAnimation(async () => {
     const win = getCurrentWindow();
     const scale = await win.scaleFactor();
-    const targetSize = logicalToPhysical(COMPACT_SIZE, scale);
+    const targetSize = logicalToPhysical(windowSizeForVisual(COMPACT_SIZE), scale);
     const current = await readWindowBounds(win);
     const workArea = await readWorkArea();
     const anchor = loadSavedAnchor() ?? undefined;
@@ -188,6 +201,12 @@ export async function expandFromEdge(): Promise<void> {
       { position, size: targetSize },
       { durationMs: EDGE_EXPAND_DURATION_MS },
     );
+
+    await applyIslandWindowRegion({
+      visual: COMPACT_SIZE,
+      scaleFactor: scale,
+      radius: COMPACT_SIZE.height / 2,
+    });
 
     saveSavedPosition(position);
   });

@@ -7,3 +7,8 @@ commands.allow = ["animate_window_bounds"]
 identifier = "allow-set-window-bounds"
 description = "Allows applying window position and size in a single step, without animating"
 commands.allow = ["set_window_bounds"]
+
+[[permission]]
+identifier = "allow-set-window-region"
+description = "Allows clipping the window's paint and hit-test area to a rounded rectangle"
+commands.allow = ["set_window_region"]

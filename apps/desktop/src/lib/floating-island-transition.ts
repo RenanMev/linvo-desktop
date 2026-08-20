@@ -1,7 +1,7 @@
 import type { Position, Size } from "@/lib/window-position";
 
-export const ISLAND_MORPH_DURATION_MS = 260;
-export const ISLAND_MORPH_WATCHDOG_MS = 80;
+export const ISLAND_MORPH_DURATION_MS = 170;
+export const ISLAND_MORPH_WATCHDOG_MS = 60;
 export const ISLAND_PAINT_WATCHDOG_MS = 80;
 export const ISLAND_GUTTER_PX = 1;
 export const ISLAND_EXPANDED_RADIUS_PX = 14;
@@ -24,6 +24,13 @@ export type IslandMorphGeometry = {
 export type PreparedIslandWindowTransition = {
   geometry: IslandMorphGeometry;
   targetBounds: WindowBounds;
+  /**
+   * Escala já lida no prepare. Carregada até o commit para o recorte da região
+   * não precisar de outro round-trip de IPC no meio da transição — era ele que
+   * deixava a janela ~160ms encolhida e ainda sem recorte, tempo suficiente para
+   * o Windows desenhar a moldura em volta do retângulo.
+   */
+  scaleFactor: number;
 };
 
 export type IslandExpandHooks = {
@@ -40,6 +47,11 @@ export type IslandExpandHooks = {
 export type IslandCollapseHooks = {
   /** Run the local CSS collapse before compact native bounds are committed. */
   onBeforeCommit?: (geometry: IslandMorphGeometry) => Promise<void> | void;
+  /**
+   * Runs after native bounds shrink. Use this to settle React into the target
+   * mode once the WebView viewport matches the compact shell.
+   */
+  onAfterCommit?: (geometry: IslandMorphGeometry) => Promise<void> | void;
   /** Prevent a delayed transition from committing after it was superseded. */
   shouldCommit?: () => boolean;
 };
@@ -98,6 +110,32 @@ export function resolveCollapseMorphGeometry(input: {
     },
     from: localRect(sourceBounds, sourceBounds.position, scaleFactor),
     to: localRect(targetBounds, sourceBounds.position, scaleFactor),
+  };
+}
+
+/**
+ * Substitui os retângulos da janela pelos retângulos do desenho, centralizados.
+ *
+ * A janela tem sempre a mesma largura em todos os modos, então os retângulos que
+ * saem de `resolve*MorphGeometry` descrevem a janela, não a forma visível: sem
+ * isto a pílula animaria com a largura inteira do painel. O eixo vertical não
+ * muda — a altura da janela já é a altura do desenho.
+ */
+export function withCenteredVisualRects(
+  geometry: IslandMorphGeometry,
+  fromVisualWidth: number,
+  toVisualWidth: number,
+): IslandMorphGeometry {
+  const center = (rect: IslandRect, visualWidth: number): IslandRect => ({
+    ...rect,
+    x: rect.x + Math.round((rect.width - visualWidth) / 2),
+    width: visualWidth,
+  });
+
+  return {
+    viewport: geometry.viewport,
+    from: center(geometry.from, fromVisualWidth),
+    to: center(geometry.to, toVisualWidth),
   };
 }
 

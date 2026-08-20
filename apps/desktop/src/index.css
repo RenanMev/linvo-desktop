@@ -128,12 +128,12 @@
 
   /* Motion da ilha flutuante: uma curva única para shell e conteúdo. */
   --island-gutter: 1px;
-  --motion-duration-island: 260ms;
+  --motion-duration-island: 170ms;
   /* Cross-fade das superfícies: some antes do fim do transform, para nunca
      mostrar a borda da forma que está saindo já muito esticada. */
-  --motion-duration-island-fade: 140ms;
-  --motion-duration-island-content: 150ms;
-  --motion-delay-island-content: 55ms;
+  --motion-duration-island-fade: 90ms;
+  --motion-duration-island-content: 100ms;
+  --motion-delay-island-content: 35ms;
   --motion-distance-island-content: 6px;
   --motion-distance-island-content-exit: -2px;
   --motion-ease-island: cubic-bezier(0.2, 0.82, 0.2, 1);
@@ -528,14 +528,22 @@
     box-shadow: var(--shadow-inner-light);
   }
 
-  /* Barra flutuante: pílula fina de superfície sólida */
+  /*
+   * Barra flutuante: pílula fina de superfície sólida.
+   *
+   * A borda é um anel INSET, não `border`. A janela é recortada por
+   * `SetWindowRgn` exatamente no retângulo desta superfície (ver
+   * `window-region.ts`), e uma `border` mora no pixel mais externo do elemento —
+   * bem em cima da linha de corte. Em escala fracionária (1,25) esse pixel é
+   * raspado e a borda some em partes do contorno. O anel inset fica um pixel
+   * para dentro do recorte e sobrevive em qualquer DPI.
+   */
   .floating-pill {
     background-color: var(--color-neutral-raised);
-    border: 1px solid var(--pill-hairline);
-    box-shadow: var(--shadow-inner-light);
-    transition:
-      border-color 200ms ease-out,
-      box-shadow 200ms ease-out;
+    box-shadow:
+      inset 0 0 0 1px var(--pill-hairline),
+      var(--shadow-inner-light);
+    transition: box-shadow 200ms ease-out;
   }
 
   /*
@@ -544,7 +552,9 @@
    * nos próprios botões, inset (ver `floating-bar.tsx`).
    */
   .floating-pill:hover {
-    border-color: var(--hairline-strong);
+    box-shadow:
+      inset 0 0 0 1px var(--hairline-strong),
+      var(--shadow-inner-light);
   }
 
   .floating-island-stage {
@@ -583,9 +593,17 @@
    * transicionar isso fazia a pílula encolher e voltar no fim de cada
    * transição. Só as cores seguem animando, para o hover não ficar seco.
    */
+  /*
+   * A janela tem sempre a largura do painel, então o estado estável não pode
+   * ocupá-la inteira: a pílula esticaria de 168 para 380px. A forma visível é
+   * centralizada por `--island-visual-width`, e o que sobra nas laterais é
+   * recortado da própria janela por `set_window_region`.
+   */
   .floating-island-surface-stable {
-    inset: var(--island-gutter);
-    width: auto;
+    top: var(--island-gutter);
+    bottom: var(--island-gutter);
+    left: calc(50% - var(--island-visual-width, 100%) / 2 + var(--island-gutter));
+    width: calc(var(--island-visual-width, 100%) - var(--island-gutter) * 2);
     height: auto;
     transform: none;
     opacity: 1;
@@ -600,6 +618,20 @@
     transition: none;
   }
 
+  /*
+   * Mesmo motivo do `.floating-pill`: a superfície expandida também é recortada
+   * pela região da janela, então a `border` de `.window-shell` cairia sobre a
+   * linha de corte. Escopado à ilha de propósito — `.window-shell` também veste
+   * containers de layout (auth, onboarding, checklist), onde trocar `border` por
+   * sombra mudaria o box-model.
+   */
+  .floating-island-surface.window-shell {
+    border: none;
+    box-shadow:
+      inset 0 0 0 1px var(--hairline),
+      var(--shadow-inner-light);
+  }
+
   .floating-island-content {
     position: absolute;
     z-index: 1;
@@ -609,7 +641,10 @@
   }
 
   .floating-island-content[data-phase="stable"] {
-    inset: var(--island-gutter);
+    top: var(--island-gutter);
+    bottom: var(--island-gutter);
+    left: calc(50% - var(--island-visual-width, 100%) / 2 + var(--island-gutter));
+    width: calc(var(--island-visual-width, 100%) - var(--island-gutter) * 2);
   }
 
   /*

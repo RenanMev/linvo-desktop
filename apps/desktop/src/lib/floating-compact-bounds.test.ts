@@ -4,7 +4,11 @@ import {
   ensureCompactWindowBounds,
   isCompactWindowSize,
 } from "@/lib/floating-compact-bounds";
-import { COMPACT_SIZE, QUICK_MENU_SIZE } from "@/lib/window-mode";
+import {
+  COMPACT_SIZE,
+  QUICK_MENU_SIZE,
+  windowSizeForVisual,
+} from "@/lib/window-mode";
 import { loadSavedPosition } from "@/lib/window-storage";
 import {
   invokeMock,
@@ -52,7 +56,7 @@ describe("ensureCompactWindowBounds", () => {
     windowMock.scaleFactor.mockResolvedValue(1);
     mockBounds({
       position: { x: 0, y: 0 },
-      size: { ...COMPACT_SIZE },
+      size: windowSizeForVisual(COMPACT_SIZE),
     });
   });
 
@@ -61,7 +65,7 @@ describe("ensureCompactWindowBounds", () => {
     expect(boundsCalls()).toHaveLength(0);
   });
 
-  it("shrinks a window left expanded, centering the pill on the panel", async () => {
+  it("shrinks a window left expanded, keeping the window origin", async () => {
     mockBounds({
       position: { x: 400, y: 200 },
       size: { ...QUICK_MENU_SIZE },
@@ -69,14 +73,16 @@ describe("ensureCompactWindowBounds", () => {
 
     await expect(ensureCompactWindowBounds()).resolves.toBe(true);
 
+    // Sem deslocamento: encolher preserva o canto, e a largura da janela é a
+    // mesma nos dois modos — só a altura muda.
     expect(boundsCalls()).toEqual([
       [
         "set_window_bounds",
         {
           to: {
-            x: 400 + Math.round((QUICK_MENU_SIZE.width - COMPACT_SIZE.width) / 2),
-            y: 200 + Math.round((QUICK_MENU_SIZE.height - COMPACT_SIZE.height) / 2),
-            width: COMPACT_SIZE.width,
+            x: 400,
+            y: 200,
+            width: windowSizeForVisual(COMPACT_SIZE).width,
             height: COMPACT_SIZE.height,
           },
         },
@@ -136,9 +142,6 @@ describe("ensureCompactWindowBounds", () => {
 
     await ensureCompactWindowBounds();
 
-    expect(loadSavedPosition()).toEqual({
-      x: 400 + Math.round((QUICK_MENU_SIZE.width - COMPACT_SIZE.width) / 2),
-      y: 200 + Math.round((QUICK_MENU_SIZE.height - COMPACT_SIZE.height) / 2),
-    });
+    expect(loadSavedPosition()).toEqual({ x: 400, y: 200 });
   });
 });

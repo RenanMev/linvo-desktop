@@ -44,6 +44,7 @@ function createWindowMock(label: string) {
     onResized: vi.fn(() => Promise.resolve(() => {})),
     onCloseRequested: vi.fn(() => Promise.resolve(() => {})),
     onFocusChanged: vi.fn(() => Promise.resolve(() => {})),
+    onScaleChanged: vi.fn(() => Promise.resolve(() => {})),
     outerPosition: vi.fn(() => Promise.resolve({ x: 0, y: 0 })),
     outerSize: vi.fn(() => Promise.resolve({ width: 140, height: 40 })),
     scaleFactor: vi.fn(() => Promise.resolve(1)),

@@ -4,7 +4,7 @@ import {
   readWindowBounds,
   releaseMinWindowSize,
 } from "@/lib/window-animation";
-import { COMPACT_SIZE } from "@/lib/window-mode";
+import { COMPACT_SIZE, windowSizeForVisual } from "@/lib/window-mode";
 import { clampToMonitor, type Size } from "@/lib/window-position";
 import {
   clearRestoreOrigin,
@@ -18,6 +18,7 @@ import {
   resolveCollapsePosition,
 } from "@/lib/window-transition";
 import { readWorkArea } from "@/lib/window-work-area";
+import { applyIslandWindowRegion } from "@/lib/window-region";
 
 /**
  * Tolerância de 1px: os bounds físicos vêm de `Math.ceil` sobre a escala do
@@ -64,7 +65,7 @@ export async function ensureCompactWindowBounds(
   return enqueueWindowAnimation(async () => {
     const win = getCurrentWindow();
     const scale = await win.scaleFactor();
-    const targetSize = logicalToPhysical(COMPACT_SIZE, scale);
+    const targetSize = logicalToPhysical(windowSizeForVisual(COMPACT_SIZE), scale);
     const current = await readWindowBounds(win);
 
     if (isCompactWindowSize(current.size, targetSize)) {
@@ -103,6 +104,13 @@ export async function ensureCompactWindowBounds(
     await releaseMinWindowSize(win);
     await win.setResizable(false);
     await applyWindowBoundsImmediate(win, { position, size: targetSize });
+    // A região faz parte do estado compacto: um morph abortado deixa a janela
+    // sem recorte, e sem isto as faixas laterais seguiriam captando cliques.
+    await applyIslandWindowRegion({
+      visual: COMPACT_SIZE,
+      scaleFactor: scale,
+      radius: COMPACT_SIZE.height / 2,
+    });
 
     clearRestoreOrigin("quick-menu");
     clearRestoreOrigin("checklist");

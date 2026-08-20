@@ -1,19 +1,24 @@
 import {
   applyWindowBoundsImmediate,
-  applyWindowBoundsWithFallback,
   logicalToPhysical,
   readWindowBounds,
 } from "@/lib/window-animation";
 import {
+  ISLAND_EXPANDED_RADIUS_PX,
   resolveCollapseMorphGeometry,
   resolveExpandMorphGeometry,
+  withCenteredVisualRects,
   type IslandCollapseHooks,
   type IslandExpandHooks,
   type IslandMorphGeometry,
   type PreparedIslandWindowTransition,
 } from "@/lib/floating-island-transition";
 import type { EdgeAnchor } from "@/lib/window-anchor";
-import { CHECKLIST_SIZE, COMPACT_SIZE } from "@/lib/window-mode";
+import {
+  CHECKLIST_SIZE,
+  COMPACT_SIZE,
+  windowSizeForVisual,
+} from "@/lib/window-mode";
 import {
   clampToMonitor,
   type MonitorInfo,
@@ -34,6 +39,10 @@ import {
   resolveExpandPlan,
 } from "@/lib/window-transition";
 import { readWorkArea } from "@/lib/window-work-area";
+import {
+  applyIslandMorphRegion,
+  applyIslandWindowRegion,
+} from "@/lib/window-region";
 
 export const CHECKLIST_EXPAND_DURATION_MS = 320;
 export const CHECKLIST_COLLAPSE_DURATION_MS = 260;
@@ -69,7 +78,10 @@ export async function expandFloatingToChecklist(
     await win.setFocus();
 
     const scale = await win.scaleFactor();
-    const targetSize = logicalToPhysical(CHECKLIST_SIZE, scale);
+    const targetSize = logicalToPhysical(
+      windowSizeForVisual(CHECKLIST_SIZE),
+      scale,
+    );
     const current = await readWindowBounds(win);
     const monitorInfo = await readWorkArea();
     const anchor = loadSavedAnchor() ?? undefined;
@@ -87,11 +99,10 @@ export async function expandFloatingToChecklist(
       (plan.moveFirst.x !== current.position.x ||
         plan.moveFirst.y !== current.position.y)
     ) {
-      await applyWindowBoundsWithFallback(
-        win,
-        { position: plan.moveFirst, size: current.size },
-        { durationMs: 180 },
-      );
+      await applyWindowBoundsImmediate(win, {
+        position: plan.moveFirst,
+        size: current.size,
+      });
     }
 
     const sameSize =
@@ -109,10 +120,22 @@ export async function expandFloatingToChecklist(
       position: plan.finalPosition,
       size: targetSize,
     };
-    const geometry = resolveExpandMorphGeometry({
-      sourceBounds,
-      targetBounds,
+    const geometry = withCenteredVisualRects(
+      resolveExpandMorphGeometry({
+        sourceBounds,
+        targetBounds,
+        scaleFactor: scale,
+      }),
+      COMPACT_SIZE.width,
+      CHECKLIST_SIZE.width,
+    );
+
+    // Região do morph: sem recorte lateral para o checklist crescer, mas ainda
+    // arredondada — sem região o Windows desenha a moldura do retângulo.
+    await applyIslandMorphRegion({
+      maxHeight: CHECKLIST_SIZE.height,
       scaleFactor: scale,
+      radius: ISLAND_EXPANDED_RADIUS_PX,
     });
 
     await options.onPrepare?.(geometry);
@@ -139,7 +162,10 @@ export async function prepareChecklistCollapse(): Promise<PreparedChecklistColla
   return enqueueWindowAnimation(async () => {
     const win = getCurrentWindow();
     const scale = await win.scaleFactor();
-    const targetSize = logicalToPhysical(COMPACT_SIZE, scale);
+    const targetSize = logicalToPhysical(
+      windowSizeForVisual(COMPACT_SIZE),
+      scale,
+    );
     const current = await readWindowBounds(win);
     const monitorInfo = await readWorkArea();
     const anchor = loadSavedAnchor() ?? undefined;
@@ -165,11 +191,16 @@ export async function prepareChecklistCollapse(): Promise<PreparedChecklistColla
     const targetBounds = { position, size: targetSize };
     return {
       targetBounds,
-      geometry: resolveCollapseMorphGeometry({
-        sourceBounds: current,
-        targetBounds,
-        scaleFactor: scale,
-      }),
+      scaleFactor: scale,
+      geometry: withCenteredVisualRects(
+        resolveCollapseMorphGeometry({
+          sourceBounds: current,
+          targetBounds,
+          scaleFactor: scale,
+        }),
+        CHECKLIST_SIZE.width,
+        COMPACT_SIZE.width,
+      ),
     };
   });
 }
@@ -179,6 +210,19 @@ export async function commitChecklistCollapse(
 ): Promise<void> {
   return enqueueWindowAnimation(async () => {
     const win = getCurrentWindow();
+    /*
+     * Recorte antes do resize, e com a escala já lida no prepare.
+     *
+     * Aqui a animação de CSS já terminou — a pílula está desenhada no tamanho
+     * final — então recortar na pílula não corta nada visível. Fazer isto
+     * depois deixava a janela encolhida e sem recorte pelo tempo do IPC
+     * (~160ms medidos), e é nesse retângulo cru que o Windows desenha a moldura.
+     */
+    await applyIslandWindowRegion({
+      visual: COMPACT_SIZE,
+      scaleFactor: transition.scaleFactor,
+      radius: COMPACT_SIZE.height / 2,
+    });
     await applyWindowBoundsImmediate(win, transition.targetBounds);
     clearRestoreOrigin("checklist");
   });
@@ -191,4 +235,5 @@ export async function collapseChecklistToFloating(
   const transition = await prepareChecklistCollapse();
   await options.onBeforeCommit?.(transition.geometry);
   await commitChecklistCollapse(transition);
+  await options.onAfterCommit?.(transition.geometry);
 }

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -13,7 +13,7 @@ const geometry: FloatingIslandMorph["geometry"] = {
 };
 
 describe("FloatingIslandShell", () => {
-  it("keeps transition content inert and completes from transform transitionend", () => {
+  it("keeps transition content inert and completes from transform transitionend", async () => {
     const onMorphComplete = vi.fn();
     const morph: FloatingIslandMorph = {
       id: 1,
@@ -29,6 +29,7 @@ describe("FloatingIslandShell", () => {
         morph={morph}
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={onMorphComplete}
+        visualWidth={168}
       />,
     );
 
@@ -41,7 +42,10 @@ describe("FloatingIslandShell", () => {
     fireEvent.transitionEnd(screen.getByTestId("floating-island-surface"), {
       propertyName: "transform",
     });
-    expect(onMorphComplete).toHaveBeenCalledWith(1);
+
+    // O commit é adiado um frame para o `SetWindowPos` do colapso não cair no
+    // mesmo frame em que o CSS assenta — daí esperar em vez de checar na hora.
+    await waitFor(() => expect(onMorphComplete).toHaveBeenCalledWith(1));
   });
 
   /*
@@ -62,6 +66,7 @@ describe("FloatingIslandShell", () => {
         }}
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={vi.fn()}
+        visualWidth={168}
       />,
     );
 
@@ -100,6 +105,7 @@ describe("FloatingIslandShell", () => {
         }}
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={vi.fn()}
+        visualWidth={168}
       />,
     );
 
@@ -126,6 +132,7 @@ describe("FloatingIslandShell", () => {
         }}
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={vi.fn()}
+        visualWidth={168}
       />,
     );
 
@@ -143,6 +150,7 @@ describe("FloatingIslandShell", () => {
         morph={null}
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={vi.fn()}
+        visualWidth={168}
       />,
     );
 
@@ -169,6 +177,7 @@ describe("FloatingIslandShell", () => {
         }}
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={onMorphComplete}
+        visualWidth={168}
       />,
     );
 
