@@ -12,7 +12,11 @@ import {
   expandFloatingToQuickMenu,
 } from "@/lib/floating-quick-menu-mode";
 import type { ChecklistWindowPayload } from "@/lib/checklist-window";
-import { COMPACT_SIZE, QUICK_MENU_SIZE } from "@/lib/window-mode";
+import {
+  COMPACT_SIZE,
+  QUICK_MENU_SIZE,
+  windowSizeForVisual,
+} from "@/lib/window-mode";
 import {
   invokeMock,
   setMinSizeMock,
@@ -622,7 +626,7 @@ describe("BarApp window modes", () => {
       "set_window_bounds",
       expect.objectContaining({
         to: expect.objectContaining({
-          width: COMPACT_SIZE.width,
+          width: windowSizeForVisual(COMPACT_SIZE).width,
           height: COMPACT_SIZE.height,
         }),
       }),
@@ -636,7 +640,7 @@ describe("BarApp window modes", () => {
    * do tamanho do quick menu com a pílula desenhada dentro dela.
    */
   it("shrinks the window back when the expansion aborts after it grew", async () => {
-    windowMock.outerSize.mockResolvedValue({ ...COMPACT_SIZE });
+    windowMock.outerSize.mockResolvedValue(windowSizeForVisual(COMPACT_SIZE));
     vi.mocked(expandFloatingToQuickMenu).mockImplementationOnce(async () => {
       windowMock.outerSize.mockResolvedValue({ ...QUICK_MENU_SIZE });
       throw new Error("expand interrupted");
@@ -659,7 +663,7 @@ describe("BarApp window modes", () => {
         "set_window_bounds",
         expect.objectContaining({
           to: expect.objectContaining({
-            width: COMPACT_SIZE.width,
+            width: windowSizeForVisual(COMPACT_SIZE).width,
             height: COMPACT_SIZE.height,
           }),
         }),

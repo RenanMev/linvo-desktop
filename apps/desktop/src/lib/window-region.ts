@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { ISLAND_GUTTER_PX } from "@/lib/floating-island-transition";
-import { islandLog } from "@/lib/island-debug";
 import type { Size } from "@/lib/window-position";
 import { ISLAND_WINDOW_WIDTH } from "@/lib/window-mode";
 
@@ -60,9 +59,8 @@ export async function applyIslandWindowRegion(input: {
       region,
       radius: Math.max(0, radiusPx),
     });
-    islandLog("region:apply", { region, visual, scaleFactor });
-  } catch (error) {
-    islandLog("region:apply:FAILED", { region, error: String(error) });
+  } catch {
+    // Segue sem recorte.
   }
 }
 

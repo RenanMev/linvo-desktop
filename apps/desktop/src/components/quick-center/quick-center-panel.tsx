@@ -115,8 +115,16 @@ export function QuickCenterPanel({
     clearError: clearCaptureError,
   } = useDisplaySnapshot({ windowLabel: "main" });
 
+  /*
+   * Ativa já na montagem, não só quando `ready`.
+   *
+   * O painel monta assim que a expansão da janela começa e só fica `ready`
+   * quando ela assenta. Sem foco nesse intervalo o Esc cai no `body` e não
+   * chega nem ao `handleContainerKeyDown` nem ao textarea — fechar logo depois
+   * de abrir não funcionava.
+   */
   useFocusTrap(containerRef, {
-    active: ready && !closing,
+    active: !closing,
     initialFocusRef: inputRef,
   });
 

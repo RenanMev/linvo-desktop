@@ -36,7 +36,6 @@ import {
   type IslandMorphGeometry,
 } from "@/lib/floating-island-transition";
 import { applyIslandWindowRegion } from "@/lib/window-region";
-import { islandLog, sampleViewportFrames } from "@/lib/island-debug";
 import {
   CHECKLIST_SIZE,
   COMPACT_SIZE,
@@ -242,13 +241,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
         queuePaintFrames();
       };
 
-      const timeoutId = window.setTimeout(() => {
-        islandLog("viewport-paint:WATCHDOG-EXPIRED", {
-          wanted: geometry.viewport,
-          got: { w: window.innerWidth, h: window.innerHeight },
-        });
-        finish();
-      }, 180);
+      const timeoutId = window.setTimeout(finish, 180);
       window.addEventListener("resize", onResize);
       // O evento pode ter chegado entre o commit nativo e a inscrição acima.
       queuePaintFrames();
@@ -272,7 +265,6 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
       };
       islandMorphRef.current = settled;
       setIslandMorph(settled);
-      islandLog("morph:settle", { id: settled.id, mode: nextMode });
     });
   }
 
@@ -299,14 +291,6 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     };
     islandMorphRef.current = nextMorph;
     setIslandMorph(nextMorph);
-    islandLog("morph:prepare", {
-      id: nextMorph.id,
-      from: fromMode,
-      to: toMode,
-      geomViewport: geometry.viewport,
-      fromRect: geometry.from,
-      toRect: geometry.to,
-    });
 
     /*
      * O estado inicial precisa estar pintado antes de ativar, senão o browser
@@ -344,11 +328,6 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     const activeMorph = { ...current, active: true };
     islandMorphRef.current = activeMorph;
     setIslandMorph(activeMorph);
-    islandLog("morph:start", { id: current.id });
-    sampleViewportFrames(
-      `morph-${current.id}-${current.fromMode}->${current.toMode}`,
-      ISLAND_MORPH_DURATION_MS + ISLAND_MORPH_WATCHDOG_MS,
-    );
     return promise;
   }
 
@@ -517,6 +496,11 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     modeIntentRef.current = "quick-menu";
     startTransition();
     try {
+      // Antes de aguardar a expansão: o painel precisa existir enquanto ela
+      // corre, senão um fecho disparado no meio da transição não encontra nada
+      // para fechar. `panelReady` continua falso até o morph assentar, então ele
+      // ainda não aparece — só existe.
+      setWindowMode("quick-menu");
       setPanelReady(false);
       await expandFloatingToQuickMenu({
         onPrepare: async (geometry) => {
@@ -532,6 +516,15 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
       await waitForIslandMorph();
       if (modeIntentRef.current === "quick-menu") {
         await waitForIslandPaint();
+        /*
+         * Reconfere depois do await: um fecho disparado enquanto ele corria já
+         * trocou a intenção para "compact" e devolveu a janela ao estado
+         * compacto. Assentar aqui reescreveria o modo e o painel voltaria.
+         */
+        if (modeIntentRef.current !== "quick-menu") {
+          setCaptureAndSendPending(false);
+          return;
+        }
         settleIslandMorph("quick-menu", { panelReady: true });
         await waitForIslandPaint();
       } else {

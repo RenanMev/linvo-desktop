@@ -236,7 +236,7 @@ export async function prepareQuickMenuCollapse(): Promise<PreparedQuickMenuColla
      * de IPC somadas. No commit elas ficavam entre o fim da animação e o
      * `SetWindowPos`, e nesse intervalo a janela seguia expandida e
      * transparente com só a pílula pintada — o desktop aparecia em volta dela.
-     * Medido em ~240ms de buraco; ver `island-debug`.
+     * Medido em ~240ms de buraco.
      */
     await releaseMinWindowSize(win);
     await win.setResizable(false);
