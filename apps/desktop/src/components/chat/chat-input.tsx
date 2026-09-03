@@ -57,6 +57,25 @@ type ChatInputProps = {
   selectedModel?: string | null;
   onModelChange?: (modelId: string | null) => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
+  /**
+   * Janela que hospeda este input, para a captura de tela saber de quem se
+   * esconder e para onde devolver o recorte.
+   *
+   * Existe porque o mesmo `ChatInput` roda em duas janelas: o painel grande e
+   * a ilha flutuante (`"main"`). Ficou fixo em `"panel"` enquanto o painel era
+   * o único chat de verdade; a ilha mantinha uma segunda cópia de toda a
+   * plumbing de captura só para poder passar `"main"`.
+   */
+  captureWindowLabel?: string;
+  /**
+   * Dispara o recorte magnético assim que vira `true`, uma única vez.
+   *
+   * É o que faz o botão "Recorte" da pílula continuar sendo um atalho de uma
+   * ação só: ele abre o chat E já inicia a captura. Quem liga isto deve
+   * esperar a ilha assentar — armar durante o morph abriria o overlay de
+   * recorte por cima de uma janela ainda em movimento.
+   */
+  autoStartCapture?: boolean;
 };
 
 export function ChatInput({
@@ -69,7 +88,10 @@ export function ChatInput({
   selectedModel = null,
   onModelChange,
   onOpenProcedureChecklist,
+  captureWindowLabel = "panel",
+  autoStartCapture = false,
 }: ChatInputProps) {
+  const autoCaptureStartedRef = useRef(false);
   const [value, setValue] = useState("");
   const [forceTool, setForceTool] = useState<ForceTool | null>(null);
   const [publishedSlugs, setPublishedSlugs] = useState<string[]>([]);
@@ -97,7 +119,20 @@ export function ChatInput({
     editPending,
     clear: clearPending,
     clearError: clearCaptureError,
-  } = useDisplaySnapshot({ windowLabel: "panel" });
+  } = useDisplaySnapshot({ windowLabel: captureWindowLabel });
+
+  /*
+   * Uma vez só por montagem: `autoStartCapture` continua verdadeiro enquanto
+   * quem chamou não limpar o pedido, e sem a trava cada re-render reabriria o
+   * overlay de recorte.
+   */
+  useEffect(() => {
+    if (!autoStartCapture || disabled || autoCaptureStartedRef.current) {
+      return;
+    }
+    autoCaptureStartedRef.current = true;
+    void startMagneticCapture();
+  }, [autoStartCapture, disabled, startMagneticCapture]);
 
   const hasAttachment = pending?.status === "ready";
   const canSend =

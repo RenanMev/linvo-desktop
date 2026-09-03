@@ -30,6 +30,7 @@ describe("FloatingIslandShell", () => {
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={onMorphComplete}
         visualWidth={168}
+        growth="down"
       />,
     );
 
@@ -67,6 +68,7 @@ describe("FloatingIslandShell", () => {
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={vi.fn()}
         visualWidth={168}
+        growth="down"
       />,
     );
 
@@ -77,7 +79,11 @@ describe("FloatingIslandShell", () => {
 
     expect(pill).toHaveAttribute("data-shape", "compact");
     expect(pillStyle).toContain("width: 166px");
-    expect(pillStyle).toContain("border-radius: 16px");
+    // O raio de repouso, o mesmo do estado parado: com a pílula desenhada
+    // como retângulo arredondado ele já fica bem abaixo do limiar do
+    // "barril", então não precisa mais ser reduzido durante o morph — e não
+    // haver troca é o que evita o pulo de raio ao assentar.
+    expect(pillStyle).toContain("border-radius: 12px");
     expect(pillStyle).toContain("translate3d(0px, 0px, 0) scale(1, 1)");
     expect(pillStyle).toContain("calc(");
 
@@ -106,6 +112,7 @@ describe("FloatingIslandShell", () => {
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={vi.fn()}
         visualWidth={168}
+        growth="down"
       />,
     );
 
@@ -133,6 +140,7 @@ describe("FloatingIslandShell", () => {
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={vi.fn()}
         visualWidth={168}
+        growth="down"
       />,
     );
 
@@ -151,6 +159,7 @@ describe("FloatingIslandShell", () => {
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={vi.fn()}
         visualWidth={168}
+        growth="down"
       />,
     );
 
@@ -158,6 +167,76 @@ describe("FloatingIslandShell", () => {
       1,
     );
     expect(container.querySelector("[inert]")).toBeNull();
+  });
+
+  /*
+   * Regressão: o envelope fixo (ver docs/SDD-ILHA-ENVELOPE.md) faz a janela
+   * ter sempre 568px de altura, mesmo compacta. O estilo estável precisa
+   * posicionar o conteúdo no retângulo da pílula dentro do envelope — não
+   * mais confiar em `top/bottom: gutter` (que presumia janela do tamanho do
+   * modo) — senão os ícones da barra ficam fora da fatia visível recortada.
+   */
+  it("positions the stable content and surface at the mode's own rect, not stretched to the envelope", () => {
+    render(
+      <FloatingIslandShell
+        mode="compact"
+        morph={null}
+        renderMode={(mode) => <span>{mode}</span>}
+        onMorphComplete={vi.fn()}
+        visualWidth={168}
+        growth="down"
+      />,
+    );
+
+    const surfaceStyle =
+      screen.getByTestId("floating-island-surface").getAttribute("style") ?? "";
+    const content = document.querySelector(
+      '.floating-island-content[data-phase="stable"]',
+    );
+    const contentStyle = content?.getAttribute("style") ?? "";
+
+    for (const style of [surfaceStyle, contentStyle]) {
+      expect(style).toContain("left: 115px");
+      expect(style).toContain("top: 25px");
+      expect(style).toContain("width: 198px");
+      expect(style).toContain("height: 36px");
+    }
+  });
+
+  it("shifts the stable rect for the quick-menu panel, and for growth \"up\"", () => {
+    const { rerender } = render(
+      <FloatingIslandShell
+        mode="quick-menu"
+        morph={null}
+        renderMode={(mode) => <span>{mode}</span>}
+        onMorphComplete={vi.fn()}
+        visualWidth={380}
+        growth="down"
+      />,
+    );
+
+    let content = document.querySelector(
+      '.floating-island-content[data-phase="stable"]',
+    );
+    expect(content?.getAttribute("style") ?? "").toContain("top: 25px");
+
+    rerender(
+      <FloatingIslandShell
+        mode="compact"
+        morph={null}
+        renderMode={(mode) => <span>{mode}</span>}
+        onMorphComplete={vi.fn()}
+        visualWidth={168}
+        growth="up"
+      />,
+    );
+
+    content = document.querySelector(
+      '.floating-island-content[data-phase="stable"]',
+    );
+    // Crescendo para cima, a pílula encosta no fundo do envelope (568 - 24 -
+    // 38 = 506), não no topo.
+    expect(content?.getAttribute("style") ?? "").toContain("top: 507px");
   });
 
   it("finishes immediately when reduced motion is enabled", () => {
@@ -178,6 +257,7 @@ describe("FloatingIslandShell", () => {
         renderMode={(mode) => <span>{mode}</span>}
         onMorphComplete={onMorphComplete}
         visualWidth={168}
+        growth="down"
       />,
     );
 

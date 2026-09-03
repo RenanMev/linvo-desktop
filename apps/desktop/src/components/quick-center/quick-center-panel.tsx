@@ -95,7 +95,21 @@ export function QuickCenterPanel({
   const [copied, setCopied] = useState(false);
 
   const prompt = useQuickPrompt();
-  const workspace = useQuickCenterWorkspace(ready);
+  /*
+   * Carrega já na montagem, não em `ready`.
+   *
+   * O painel monta quando o morph de abertura começa e só fica `ready` quando
+   * ele assenta — e desde que o conteúdo passou a ser revelado DURANTE o morph
+   * (ver `clip-path` em `floating-island-shell.tsx`), esse intervalo é
+   * visível. Buscar só em `ready` fazia o nome do workspace aparecer vazio
+   * durante a animação inteira e ser preenchido no quadro em que ela termina:
+   * uma troca de texto bem no fim da abertura.
+   *
+   * É I/O assíncrono, não trabalho de main thread, então antecipá-lo não
+   * disputa quadros com a mola — e o resultado chega antes de a animação
+   * acabar, que é o ponto.
+   */
+  const workspace = useQuickCenterWorkspace(true);
   const {
     pending,
     draft,

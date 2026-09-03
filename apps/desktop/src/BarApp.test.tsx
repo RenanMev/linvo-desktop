@@ -12,11 +12,7 @@ import {
   expandFloatingToQuickMenu,
 } from "@/lib/floating-quick-menu-mode";
 import type { ChecklistWindowPayload } from "@/lib/checklist-window";
-import {
-  COMPACT_SIZE,
-  QUICK_MENU_SIZE,
-  windowSizeForVisual,
-} from "@/lib/window-mode";
+import { ISLAND_ENVELOPE_SIZE } from "@/lib/window-mode";
 import {
   invokeMock,
   setMinSizeMock,
@@ -26,7 +22,7 @@ import {
 } from "@/test/mocks/tauri";
 
 vi.mock("@/hooks/use-floating-bootstrap", () => ({
-  useFloatingBootstrap: () => true,
+  useFloatingBootstrap: () => ({ ready: true, growth: "down" }),
 }));
 
 vi.mock("@/hooks/use-api-health", () => ({
@@ -34,20 +30,44 @@ vi.mock("@/hooks/use-api-health", () => ({
 }));
 
 vi.mock("@/lib/floating-checklist-mode", () => ({
-  expandFloatingToChecklist: vi.fn(() => Promise.resolve()),
-  collapseChecklistToFloating: vi.fn(() => Promise.resolve()),
+  expandFloatingToChecklist: vi.fn(() =>
+    Promise.resolve({
+      viewport: { width: 0, height: 0 },
+      from: { x: 0, y: 0, width: 0, height: 0 },
+      to: { x: 0, y: 0, width: 0, height: 0 },
+    }),
+  ),
+  collapseChecklistToFloating: vi.fn(() =>
+    Promise.resolve({
+      viewport: { width: 0, height: 0 },
+      from: { x: 0, y: 0, width: 0, height: 0 },
+      to: { x: 0, y: 0, width: 0, height: 0 },
+    }),
+  ),
 }));
 
 vi.mock("@/lib/floating-quick-menu-mode", () => ({
-  expandFloatingToQuickMenu: vi.fn(() => Promise.resolve()),
-  collapseQuickMenuToFloating: vi.fn(() => Promise.resolve()),
+  expandFloatingToQuickMenu: vi.fn(() =>
+    Promise.resolve({
+      viewport: { width: 0, height: 0 },
+      from: { x: 0, y: 0, width: 0, height: 0 },
+      to: { x: 0, y: 0, width: 0, height: 0 },
+    }),
+  ),
+  collapseQuickMenuToFloating: vi.fn(() =>
+    Promise.resolve({
+      viewport: { width: 0, height: 0 },
+      from: { x: 0, y: 0, width: 0, height: 0 },
+      to: { x: 0, y: 0, width: 0, height: 0 },
+    }),
+  ),
 }));
 
 vi.mock("@/lib/floating-edge-mode", () => ({
   collapseToEdge: vi.fn(() =>
     Promise.resolve({ horizontal: "right", vertical: null }),
   ),
-  expandFromEdge: vi.fn(() => Promise.resolve()),
+  expandFromEdge: vi.fn(() => Promise.resolve("down")),
 }));
 
 let payloadHandler:
@@ -158,7 +178,7 @@ describe("BarApp window modes", () => {
     await waitFor(() =>
       expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
     );
-    expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Quick Center")).toBeInTheDocument();
   });
 
   it("does not arm auto-capture when Chat opens without Recorte", async () => {
@@ -170,7 +190,7 @@ describe("BarApp window modes", () => {
     await waitFor(() =>
       expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
     );
-    expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Quick Center")).toBeInTheDocument();
     await waitFor(() => expect(setResizableMock).toHaveBeenCalledWith(true));
 
     expect(invokeMock).not.toHaveBeenCalledWith("capture_overlay_open");
@@ -187,7 +207,7 @@ describe("BarApp window modes", () => {
     await waitFor(() =>
       expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
     );
-    expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Quick Center")).toBeInTheDocument();
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith("capture_overlay_open"),
     );
@@ -202,7 +222,7 @@ describe("BarApp window modes", () => {
     await waitFor(() =>
       expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
     );
-    expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Quick Center")).toBeInTheDocument();
   });
 
   it("toggles the quick menu closed with the local shortcut", async () => {
@@ -268,11 +288,8 @@ describe("BarApp window modes", () => {
     await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
     await waitFor(() => screen.getByLabelText("Quick Center"));
 
-    vi.mocked(collapseQuickMenuToFloating).mockImplementationOnce(
-      async (options = {}) => {
-        await options.onBeforeCommit?.(collapseGeometry);
-      },
-    );
+    // BarApp agora prepara e dispara o morph sozinho, antes/depois de chamar
+    // a lib (que só cuida de IPC) — o mock default já basta aqui.
     const requestFrame = vi
       .spyOn(window, "requestAnimationFrame")
       .mockImplementation(() => 1);
@@ -299,9 +316,7 @@ describe("BarApp window modes", () => {
     };
     let finishExpand!: () => void;
     vi.mocked(expandFloatingToQuickMenu).mockImplementationOnce(
-      async (options = {}) => {
-        await options.onPrepare?.(expandGeometry);
-        await options.onResizeStart?.(expandGeometry);
+      async () => {
         await new Promise<void>((resolve) => {
           finishExpand = resolve;
         });
@@ -312,13 +327,16 @@ describe("BarApp window modes", () => {
     render(<BarApp sessionWarning={null} user={user} />);
 
     await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
-    const closeButton = await screen.findByRole("button", {
-      name: "Fechar Quick Center",
-      hidden: true,
-    });
     await waitFor(() => expect(finishExpand).toBeTypeOf("function"));
 
-    fireEvent.click(closeButton);
+    /*
+     * O morph já foi preparado (mesmo tick de `setWindowMode`), mas a
+     * expansão nativa segue presa em `finishExpand` — só a pílula/fonte
+     * está acessível agora (o alvo não renderiza enquanto não assentar), daí
+     * fechar pelo atalho de teclado em vez de clicar num botão que ainda não
+     * existe no DOM.
+     */
+    await userEventInstance.keyboard("{Control>}{Shift>}l{/Shift}{/Control}");
 
     await waitFor(() =>
       expect(collapseQuickMenuToFloating).toHaveBeenCalledTimes(1),
@@ -345,7 +363,7 @@ describe("BarApp window modes", () => {
     await waitFor(() =>
       expect(collapseQuickMenuToFloating).toHaveBeenCalledTimes(1),
     );
-    const chatButton = screen.getByRole("button", { name: "Chat" });
+    const chatButton = await screen.findByRole("button", { name: "Chat" });
     expect(chatButton).not.toHaveFocus();
   });
 
@@ -415,7 +433,7 @@ describe("BarApp window modes", () => {
 
   it("returns to the action when native collapse never resolves", async () => {
     vi.mocked(collapseQuickMenuToFloating).mockReturnValueOnce(
-      new Promise<void>(() => {}),
+      new Promise<never>(() => {}),
     );
     const userEventInstance = userEvent.setup();
     render(<BarApp sessionWarning={null} user={user} />);
@@ -459,8 +477,8 @@ describe("BarApp window modes", () => {
   it("keeps checklist intent when blur races with quick-menu collapse", async () => {
     let finishCollapse!: () => void;
     vi.mocked(collapseQuickMenuToFloating).mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        finishCollapse = resolve;
+      new Promise((resolve) => {
+        finishCollapse = () => resolve(collapseGeometry);
       }),
     );
     const userEventInstance = userEvent.setup();
@@ -581,7 +599,7 @@ describe("BarApp window modes", () => {
     const callOrder: string[] = [];
     vi.mocked(collapseQuickMenuToFloating).mockImplementationOnce(() => {
       callOrder.push("collapse");
-      return Promise.resolve();
+      return Promise.resolve(collapseGeometry);
     });
     vi.mocked(hideAllWindows).mockImplementationOnce(() => {
       callOrder.push("hide");
@@ -626,8 +644,8 @@ describe("BarApp window modes", () => {
       "set_window_bounds",
       expect.objectContaining({
         to: expect.objectContaining({
-          width: windowSizeForVisual(COMPACT_SIZE).width,
-          height: COMPACT_SIZE.height,
+          width: ISLAND_ENVELOPE_SIZE.width,
+          height: ISLAND_ENVELOPE_SIZE.height,
         }),
       }),
     );
@@ -635,14 +653,13 @@ describe("BarApp window modes", () => {
   });
 
   /*
-   * Regressão: o morph aplica bounds nativos e CSS em metades separadas, então
-   * uma expansão que aborta depois de a janela já ter crescido deixava a janela
-   * do tamanho do quick menu com a pílula desenhada dentro dela.
+   * Regressão: desde o envelope fixo (ver docs/SDD-ILHA-ENVELOPE.md) a janela
+   * nunca muda de tamanho ao abrir o quick menu — só a região de recorte.
+   * Uma expansão que aborta antes de assentar deixa a intenção em "compact";
+   * a reconciliação de bounds/região devolve a janela ao envelope normal.
    */
-  it("shrinks the window back when the expansion aborts after it grew", async () => {
-    windowMock.outerSize.mockResolvedValue(windowSizeForVisual(COMPACT_SIZE));
+  it("recovers to compact bounds when the expansion aborts", async () => {
     vi.mocked(expandFloatingToQuickMenu).mockImplementationOnce(async () => {
-      windowMock.outerSize.mockResolvedValue({ ...QUICK_MENU_SIZE });
       throw new Error("expand interrupted");
     });
     const userEventInstance = userEvent.setup();
@@ -650,10 +667,6 @@ describe("BarApp window modes", () => {
 
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument(),
-    );
-    expect(invokeMock).not.toHaveBeenCalledWith(
-      "set_window_bounds",
-      expect.anything(),
     );
 
     await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
@@ -663,12 +676,12 @@ describe("BarApp window modes", () => {
         "set_window_bounds",
         expect.objectContaining({
           to: expect.objectContaining({
-            width: windowSizeForVisual(COMPACT_SIZE).width,
-            height: COMPACT_SIZE.height,
+            width: ISLAND_ENVELOPE_SIZE.width,
+            height: ISLAND_ENVELOPE_SIZE.height,
           }),
         }),
       ),
     );
-    expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Chat" })).toBeInTheDocument();
   });
 });

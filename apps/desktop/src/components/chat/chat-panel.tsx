@@ -26,6 +26,18 @@ type ChatPanelProps = {
   selectedModel?: string | null;
   onModelChange?: (modelId: string | null) => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
+  /** Janela que hospeda o chat — ver `captureWindowLabel` em `ChatInput`. */
+  captureWindowLabel?: string;
+  /** Ver `autoStartCapture` em `ChatInput`. */
+  autoStartCapture?: boolean;
+  /**
+   * Mostra a barra com título da conversa e modelo.
+   *
+   * Desligada na ilha: ela já tem cabeçalho próprio, e as duas empilhadas
+   * davam duas faixas de título — a de cima com o workspace, a de baixo
+   * repetindo "Nova conversa".
+   */
+  showToolbar?: boolean;
 };
 
 export function ChatPanel({
@@ -46,6 +58,9 @@ export function ChatPanel({
   selectedModel = null,
   onModelChange,
   onOpenProcedureChecklist,
+  captureWindowLabel,
+  autoStartCapture,
+  showToolbar = true,
 }: ChatPanelProps) {
   const inputDisabled = disabled || Boolean(pendingToolRequest);
   const activeModel =
@@ -56,11 +71,13 @@ export function ChatPanel({
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <ChatToolbar
-        title={conversationTitle}
-        model={activeModel}
-        isResponding={isResponding}
-      />
+      {showToolbar ? (
+        <ChatToolbar
+          title={conversationTitle}
+          model={activeModel}
+          isResponding={isResponding}
+        />
+      ) : null}
       <div className="min-h-0 flex-1">
         <ChatMessageList
           key={conversationKey ?? "draft"}
@@ -88,6 +105,8 @@ export function ChatPanel({
         selectedModel={selectedModel}
         onModelChange={onModelChange}
         onOpenProcedureChecklist={onOpenProcedureChecklist}
+        {...(captureWindowLabel ? { captureWindowLabel } : {})}
+        {...(autoStartCapture ? { autoStartCapture } : {})}
       />
     </main>
   );

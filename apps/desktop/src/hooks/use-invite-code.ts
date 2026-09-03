@@ -17,7 +17,12 @@ export type InviteCodeUiState =
   | "expired"
   | "at-capacity";
 
-const POLL_MS = 3_000;
+/**
+ * Detecta o resgate do código por outra pessoa. 6s mantém a sensação de
+ * "apareceu na hora" e corta pela metade as requisições de uma tela que fica
+ * aberta enquanto o convite é passado adiante.
+ */
+export const POLL_MS = 6_000;
 const REDEEMED_HOLD_MS = 60_000;
 const BLUR_PAUSE_MS = 30_000;
 

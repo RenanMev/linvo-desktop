@@ -7,10 +7,17 @@ import {
   NO_ANCHOR,
   resolveSnap,
 } from "@/lib/window-anchor";
-import { applyWindowBoundsWithFallback } from "@/lib/window-animation";
+import { applyWindowBoundsWithFallback, logicalToPhysical } from "@/lib/window-animation";
 import { clampToMonitor, computeTopCenter, type Position } from "@/lib/window-position";
 import {
+  COMPACT_SIZE,
+  envelopePositionForPill,
+  pillPositionForEnvelope,
+  type IslandGrowthDirection,
+} from "@/lib/window-mode";
+import {
   EDGE_MARGIN,
+  loadIslandPillPosition,
   loadSavedAnchor,
   loadSavedPosition,
   POSITION_STORAGE_KEY,
@@ -29,6 +36,20 @@ type UseWindowPositionOptions = {
   enabled?: boolean;
   storageKey?: string;
   snapToEdges?: boolean;
+  /**
+   * Quando presente, a janela real é o envelope fixo (ver
+   * `docs/SDD-ILHA-ENVELOPE.md`) e este hook lê, ancora e persiste a posição
+   * da PÍLULA — não a do envelope, que é maior e deslocado dela por um offset
+   * que depende da direção de crescimento retornada aqui. A leitura inicial
+   * usa `loadIslandPillPosition` (com migração da chave legada); as
+   * gravações seguem para `storageKey`, que quem chama deve apontar para
+   * `ISLAND_PILL_POSITION_STORAGE_KEY`.
+   *
+   * Omitido, o hook trata a posição bruta da janela como a própria posição
+   * salva — comportamento de antes do envelope, ainda usado pelo
+   * `ChecklistApp` (janela própria, sem envelope).
+   */
+  pillGrowth?: () => IslandGrowthDirection;
 };
 
 export function useWindowPosition({
@@ -36,9 +57,12 @@ export function useWindowPosition({
   enabled = true,
   storageKey = POSITION_STORAGE_KEY,
   snapToEdges = true,
+  pillGrowth,
 }: UseWindowPositionOptions) {
   const persistRef = useRef(shouldPersist);
   persistRef.current = shouldPersist;
+  const pillGrowthRef = useRef(pillGrowth);
+  pillGrowthRef.current = pillGrowth;
   const hasRestoredRef = useRef(false);
 
   useEffect(() => {
@@ -58,10 +82,14 @@ export function useWindowPosition({
       }
       hasRestoredRef.current = true;
 
+      const growth = pillGrowthRef.current?.();
+      const scale = growth ? await win.scaleFactor() : 1;
       const workArea = await readWorkArea();
       const outer = await win.outerSize();
-      const winSize = { width: outer.width, height: outer.height };
-      const saved = loadSavedPosition(storageKey);
+      const winSize = growth
+        ? logicalToPhysical(COMPACT_SIZE, scale)
+        : { width: outer.width, height: outer.height };
+      const saved = growth ? loadIslandPillPosition(scale) : loadSavedPosition(storageKey);
       const savedAnchor = snapToEdges ? loadSavedAnchor() : null;
 
       let target: Position;
@@ -82,8 +110,12 @@ export function useWindowPosition({
         target = { x: EDGE_MARGIN, y: EDGE_MARGIN };
       }
 
+      const applyTarget = growth
+        ? envelopePositionForPill({ pillPosition: target, growth, scaleFactor: scale })
+        : target;
+
       if (!disposed) {
-        await win.setPosition(new PhysicalPosition(target.x, target.y));
+        await win.setPosition(new PhysicalPosition(applyTarget.x, applyTarget.y));
       }
     }
 
@@ -92,10 +124,17 @@ export function useWindowPosition({
         return;
       }
 
+      const growth = pillGrowthRef.current?.();
+      const scale = growth ? await win.scaleFactor() : 1;
+
       if (!snapToEdges) {
         const position = await win.outerPosition();
         if (!disposed && persistRef.current()) {
-          saveSavedPosition({ x: position.x, y: position.y }, storageKey);
+          const envelopePosition = { x: position.x, y: position.y };
+          const persisted = growth
+            ? pillPositionForEnvelope({ envelopePosition, growth, scaleFactor: scale })
+            : envelopePosition;
+          saveSavedPosition(persisted, storageKey);
         }
         return;
       }
@@ -110,33 +149,41 @@ export function useWindowPosition({
         return;
       }
 
-      const currentPosition = { x: position.x, y: position.y };
-      const currentSize = { width: size.width, height: size.height };
+      const envelopePosition = { x: position.x, y: position.y };
+      const realSize = { width: size.width, height: size.height };
+      const snapPosition = growth
+        ? pillPositionForEnvelope({ envelopePosition, growth, scaleFactor: scale })
+        : envelopePosition;
+      const snapSize = growth ? logicalToPhysical(COMPACT_SIZE, scale) : realSize;
 
       if (!workArea) {
-        saveSavedPosition(currentPosition, storageKey);
+        saveSavedPosition(snapPosition, storageKey);
         saveSavedAnchor(NO_ANCHOR);
         return;
       }
 
       const snap = resolveSnap({
-        position: currentPosition,
-        size: currentSize,
+        position: snapPosition,
+        size: snapSize,
         workArea,
         threshold: SNAP_THRESHOLD,
       });
 
       if (!isAnchored(snap.anchor)) {
-        saveSavedPosition(currentPosition, storageKey);
+        saveSavedPosition(snapPosition, storageKey);
         saveSavedAnchor(NO_ANCHOR);
         return;
       }
+
+      const applyPosition = growth
+        ? envelopePositionForPill({ pillPosition: snap.position, growth, scaleFactor: scale })
+        : snap.position;
 
       suppressed = true;
       try {
         await applyWindowBoundsWithFallback(
           win,
-          { position: snap.position, size: currentSize },
+          { position: applyPosition, size: realSize },
           { durationMs: SNAP_ANIMATION_DURATION_MS },
         );
       } finally {

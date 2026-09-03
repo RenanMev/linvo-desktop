@@ -1,82 +1,94 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import {
-  resolveQuickMenuCollapsePosition,
-  resolveQuickMenuExpandPosition,
-  resolveQuickMenuSize,
+  collapseQuickMenuToFloating,
+  expandFloatingToQuickMenu,
 } from "@/lib/floating-quick-menu-mode";
-import type { MonitorInfo } from "@/lib/window-position";
+import { resolveEnvelopeMorphGeometry } from "@/lib/floating-island-transition";
+import { invokeMock, showMock, windowMock } from "@/test/mocks/tauri";
 
-const monitor: MonitorInfo = {
-  position: { x: 0, y: 0 },
-  size: { width: 1920, height: 1080 },
-};
+function regionCalls() {
+  return invokeMock.mock.calls.filter((call) => call[0] === "set_window_region");
+}
 
-describe("floating-quick-menu-mode positions", () => {
-  it("shrinks the quick menu to the usable area on a small monitor", () => {
-    expect(
-      resolveQuickMenuSize({
-        targetSize: { width: 380, height: 520 },
-        monitor: {
-          position: { x: 0, y: 0 },
-          size: { width: 400, height: 300 },
+function boundsCalls() {
+  return invokeMock.mock.calls.filter((call) => call[0] === "set_window_bounds");
+}
+
+describe("floating-quick-menu-mode", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+    showMock.mockClear();
+    windowMock.unminimize.mockClear();
+    windowMock.setFocus.mockClear();
+    invokeMock.mockImplementation(() => Promise.resolve(undefined));
+    windowMock.scaleFactor.mockResolvedValue(1);
+  });
+
+  it("never touches window bounds: the envelope stays put for the whole morph", async () => {
+    await expandFloatingToQuickMenu("down");
+    await collapseQuickMenuToFloating("down");
+
+    expect(boundsCalls()).toHaveLength(0);
+  });
+
+  it("clips to the union of compact and quick-menu, inflated for the overshoot", async () => {
+    await expandFloatingToQuickMenu("down");
+
+    /*
+     * A união das duas formas em repouso é exatamente o retângulo do
+     * quick-menu (ver window-mode.test.ts) — 380x520. Sobre ela vem
+     * `ISLAND_MORPH_REGION_SLACK_PX` (20px por lado, com clamp no envelope de
+     * 428x568): {4,4,420,560}, que recuado pelo gutter vira o recorte abaixo.
+     *
+     * A folga não é decorativa: a curva de abertura passa ~3,8% do alvo antes
+     * de voltar, e sem ela o recorte cortaria esse pico numa linha reta.
+     */
+    expect(regionCalls()).toEqual([
+      [
+        "set_window_region",
+        {
+          region: { x: 5, y: 5, width: 418, height: 558 },
+          radius: 14,
         },
-        margin: 24,
+      ],
+    ]);
+  });
+
+  it("shows, unminimizes and focuses the window before expanding", async () => {
+    await expandFloatingToQuickMenu("down");
+
+    expect(showMock).toHaveBeenCalled();
+    expect(windowMock.unminimize).toHaveBeenCalled();
+    expect(windowMock.setFocus).toHaveBeenCalled();
+  });
+
+  it("does not touch focus or visibility while collapsing", async () => {
+    await collapseQuickMenuToFloating("down");
+
+    expect(showMock).not.toHaveBeenCalled();
+    expect(windowMock.setFocus).not.toHaveBeenCalled();
+  });
+
+  it("resolves the geometry for expand", async () => {
+    const result = await expandFloatingToQuickMenu("down");
+    expect(result).toEqual(
+      resolveEnvelopeMorphGeometry({
+        fromMode: "compact",
+        toMode: "quick-menu",
+        growth: "down",
       }),
-    ).toEqual({ width: 352, height: 252 });
+    );
   });
 
-  it("moves to visible compact spot first when bar is off-screen", () => {
-    const plan = resolveQuickMenuExpandPosition({
-      currentPosition: { x: -400, y: -200 },
-      currentSize: { width: 140, height: 40 },
-      targetSize: { width: 320, height: 420 },
-      monitor,
-    });
-
-    expect(plan.moveFirst).toEqual({ x: 0, y: 0 });
-    expect(plan.finalPosition).toEqual({ x: 0, y: 0 });
-  });
-
-  it("resizes without a pre-move when the bar is already visible, keeping the origin", () => {
-    const plan = resolveQuickMenuExpandPosition({
-      currentPosition: { x: 100, y: 80 },
-      currentSize: { width: 140, height: 40 },
-      targetSize: { width: 320, height: 420 },
-      monitor,
-    });
-
-    expect(plan.moveFirst).toBeNull();
-    // A janela cresce a partir do próprio canto: nenhum dos eixos se desloca,
-    // e o painel ainda cabe na tela a partir de (100, 80).
-    expect(plan.finalPosition).toEqual({ x: 100, y: 80 });
-  });
-
-  it("clamps final quick-menu bounds to the monitor", () => {
-    const plan = resolveQuickMenuExpandPosition({
-      currentPosition: { x: 1800, y: 900 },
-      currentSize: { width: 140, height: 40 },
-      targetSize: { width: 320, height: 420 },
-      monitor,
-    });
-
-    expect(plan.moveFirst).toEqual({
-      x: 1920 - 140,
-      y: 900,
-    });
-    expect(plan.finalPosition).toEqual({
-      x: 1920 - 320,
-      y: 1080 - 420,
-    });
-  });
-
-  it("keeps collapse position when compact still fits", () => {
-    expect(
-      resolveQuickMenuCollapsePosition({
-        currentPosition: { x: 120, y: 40 },
-        targetSize: { width: 140, height: 40 },
-        monitor,
+  it("resolves the mirrored geometry for collapse", async () => {
+    const result = await collapseQuickMenuToFloating("up");
+    expect(result).toEqual(
+      resolveEnvelopeMorphGeometry({
+        fromMode: "quick-menu",
+        toMode: "compact",
+        growth: "up",
       }),
-    ).toEqual({ x: 120, y: 40 });
+    );
   });
 });

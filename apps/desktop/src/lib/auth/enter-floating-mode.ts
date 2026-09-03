@@ -11,21 +11,29 @@ import {
   logicalToPhysical,
   readWindowBounds,
 } from "@/lib/window-animation";
-import { COMPACT_SIZE, windowSizeForVisual } from "@/lib/window-mode";
+import {
+  COMPACT_SIZE,
+  envelopePositionForPill,
+  ISLAND_ENVELOPE_SIZE,
+  resolveIslandGrowthDirection,
+  type IslandGrowthDirection,
+} from "@/lib/window-mode";
 import {
   clampToMonitor,
   computeTopCenter,
   type Position,
 } from "@/lib/window-position";
 import { updateTaskbarVisibility } from "@/lib/app-windows";
-import { applyIslandWindowRegion } from "@/lib/window-region";
-import { EDGE_MARGIN, loadSavedPosition } from "@/lib/window-storage";
+import { applyIslandRegionForMode } from "@/lib/window-region";
+import { EDGE_MARGIN, loadIslandPillPosition } from "@/lib/window-storage";
+import { readWorkArea } from "@/lib/window-work-area";
 
-async function resolveCompactPosition(
+async function resolveCompactPillPosition(
   targetSize: { width: number; height: number },
+  scale: number,
 ): Promise<Position> {
   const monitor = await currentMonitor();
-  const saved = loadSavedPosition();
+  const saved = loadIslandPillPosition(scale);
 
   if (saved && monitor) {
     return clampToMonitor(saved, targetSize, {
@@ -48,16 +56,40 @@ async function resolveCompactPosition(
   return (await readWindowBounds(getCurrentWindow())).position;
 }
 
-export async function enterFloatingMode(): Promise<void> {
+/**
+ * Sai do tamanho de Auth (`AUTH_SIZE`, aplicado no boot da janela `main`) e
+ * entra no envelope fixo da ilha (ver `docs/SDD-ILHA-ENVELOPE.md`).
+ *
+ * A direção de crescimento é resolvida aqui, uma vez, em repouso — nunca
+ * durante um morph — e devolvida para quem chama guardar: todo o resto da
+ * sessão (expandir/colapsar quick menu e checklist, encolher para a borda)
+ * depende de saber se o envelope cresce para baixo ou para cima a partir da
+ * pílula.
+ */
+export async function enterFloatingMode(): Promise<IslandGrowthDirection> {
   const config = configForSurfaceMode("compact");
   const win = getCurrentWindow();
   const scale = await win.scaleFactor();
-  const targetSize = logicalToPhysical(windowSizeForVisual(COMPACT_SIZE), scale);
-  const targetPosition = await resolveCompactPosition(targetSize);
+  const pillTargetSize = logicalToPhysical(COMPACT_SIZE, scale);
+  const pillPosition = await resolveCompactPillPosition(pillTargetSize, scale);
+
+  const workArea = await readWorkArea();
+  const growth = resolveIslandGrowthDirection({
+    pillPosition,
+    workArea,
+    scaleFactor: scale,
+  });
+
+  const envelopeTargetSize = logicalToPhysical(ISLAND_ENVELOPE_SIZE, scale);
+  const envelopePosition = envelopePositionForPill({
+    pillPosition,
+    growth,
+    scaleFactor: scale,
+  });
 
   await applyWindowBoundsWithFallback(win, {
-    position: targetPosition,
-    size: targetSize,
+    position: envelopePosition,
+    size: envelopeTargetSize,
   });
 
   await win.setDecorations(config.decorations);
@@ -66,20 +98,20 @@ export async function enterFloatingMode(): Promise<void> {
   await win.setResizable(config.resizable);
   await win.setMaximizable(config.maximizable);
 
-  await win.setSize(new PhysicalSize(targetSize.width, targetSize.height));
+  await win.setSize(
+    new PhysicalSize(envelopeTargetSize.width, envelopeTargetSize.height),
+  );
   await win.setPosition(
-    new PhysicalPosition(targetPosition.x, targetPosition.y),
+    new PhysicalPosition(envelopePosition.x, envelopePosition.y),
   );
 
-  // A janela nasce com a largura do painel; sem o recorte a faixa transparente
-  // ao lado da pílula captaria cliques do desktop.
-  await applyIslandWindowRegion({
-    visual: COMPACT_SIZE,
-    scaleFactor: scale,
-    radius: COMPACT_SIZE.height / 2,
-  });
+  // A janela nasce do tamanho do envelope; sem o recorte as faixas
+  // transparentes em volta da pílula captariam cliques do desktop.
+  await applyIslandRegionForMode({ mode: "compact", growth, scaleFactor: scale });
 
   await updateTaskbarVisibility(true);
   await win.show();
   await win.setFocus();
+
+  return growth;
 }
