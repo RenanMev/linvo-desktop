@@ -9,9 +9,11 @@ import {
   QUICK_MENU_SIZE,
   windowSizeForVisual,
 } from "@/lib/window-mode";
-import { loadSavedPosition } from "@/lib/window-storage";
+import { loadSavedPosition, resetWindowStorageCache } from "@/lib/window-storage";
+import { resetDesktopSettingsCache } from "@/lib/desktop-settings-store";
 import {
   invokeMock,
+  resetPluginStoreMock,
   setMinSizeMock,
   setResizableMock,
   windowMock,
@@ -44,6 +46,9 @@ describe("isCompactWindowSize", () => {
 describe("ensureCompactWindowBounds", () => {
   beforeEach(() => {
     localStorage.clear();
+    resetPluginStoreMock();
+    resetDesktopSettingsCache();
+    resetWindowStorageCache();
     invokeMock.mockReset();
     setMinSizeMock.mockClear();
     setResizableMock.mockClear();

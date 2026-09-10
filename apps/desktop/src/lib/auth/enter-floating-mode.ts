@@ -1,11 +1,21 @@
 import {
-  currentMonitor,
   getCurrentWindow,
   PhysicalPosition,
   PhysicalSize,
 } from "@tauri-apps/api/window";
 
 import { configForSurfaceMode } from "@/lib/auth/window-auth";
+import { updateTaskbarVisibility } from "@/lib/app-windows";
+import {
+  hydrateDesktopSettings,
+  loadHideFromCapture,
+} from "@/lib/desktop-settings-store";
+import {
+  overlayChromeStatus,
+  setExcludeFromCapture,
+  setTopmostGuard,
+  showWindowNoActivate,
+} from "@/lib/overlay-chrome";
 import {
   applyWindowBoundsWithFallback,
   logicalToPhysical,
@@ -17,38 +27,36 @@ import {
   computeTopCenter,
   type Position,
 } from "@/lib/window-position";
-import { updateTaskbarVisibility } from "@/lib/app-windows";
 import { applyIslandWindowRegion } from "@/lib/window-region";
-import { EDGE_MARGIN, loadSavedPosition } from "@/lib/window-storage";
+import {
+  EDGE_MARGIN,
+  hydrateWindowStorage,
+  loadSavedPlacement,
+  loadSavedPosition,
+  resolvePlacementMonitor,
+} from "@/lib/window-storage";
 
 async function resolveCompactPosition(
   targetSize: { width: number; height: number },
 ): Promise<Position> {
-  const monitor = await currentMonitor();
   const saved = loadSavedPosition();
+  const monitor = await resolvePlacementMonitor(loadSavedPlacement());
 
   if (saved && monitor) {
-    return clampToMonitor(saved, targetSize, {
-      position: { x: monitor.position.x, y: monitor.position.y },
-      size: { width: monitor.size.width, height: monitor.size.height },
-    });
+    return clampToMonitor(saved, targetSize, monitor);
   }
 
   if (monitor) {
-    return computeTopCenter(
-      {
-        position: { x: monitor.position.x, y: monitor.position.y },
-        size: { width: monitor.size.width, height: monitor.size.height },
-      },
-      targetSize,
-      EDGE_MARGIN,
-    );
+    return computeTopCenter(monitor, targetSize, EDGE_MARGIN);
   }
 
   return (await readWindowBounds(getCurrentWindow())).position;
 }
 
 export async function enterFloatingMode(): Promise<void> {
+  await hydrateWindowStorage();
+  await hydrateDesktopSettings();
+
   const config = configForSurfaceMode("compact");
   const win = getCurrentWindow();
   const scale = await win.scaleFactor();
@@ -61,7 +69,6 @@ export async function enterFloatingMode(): Promise<void> {
   });
 
   await win.setDecorations(config.decorations);
-  await win.setAlwaysOnTop(config.alwaysOnTop);
   await win.setSkipTaskbar(config.skipTaskbar);
   await win.setResizable(config.resizable);
   await win.setMaximizable(config.maximizable);
@@ -71,15 +78,15 @@ export async function enterFloatingMode(): Promise<void> {
     new PhysicalPosition(targetPosition.x, targetPosition.y),
   );
 
-  // A janela nasce com a largura do painel; sem o recorte a faixa transparente
-  // ao lado da pílula captaria cliques do desktop.
   await applyIslandWindowRegion({
     visual: COMPACT_SIZE,
     scaleFactor: scale,
     radius: COMPACT_SIZE.height / 2,
   });
 
+  await setTopmostGuard(true);
+  await setExcludeFromCapture(loadHideFromCapture());
+  await overlayChromeStatus();
   await updateTaskbarVisibility(true);
-  await win.show();
-  await win.setFocus();
+  await showWindowNoActivate();
 }

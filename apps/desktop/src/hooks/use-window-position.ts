@@ -11,6 +11,7 @@ import { applyWindowBoundsWithFallback } from "@/lib/window-animation";
 import { clampToMonitor, computeTopCenter, type Position } from "@/lib/window-position";
 import {
   EDGE_MARGIN,
+  hydrateWindowStorage,
   loadSavedAnchor,
   loadSavedPosition,
   POSITION_STORAGE_KEY,
@@ -58,6 +59,7 @@ export function useWindowPosition({
       }
       hasRestoredRef.current = true;
 
+      await hydrateWindowStorage();
       const workArea = await readWorkArea();
       const outer = await win.outerSize();
       const winSize = { width: outer.width, height: outer.height };

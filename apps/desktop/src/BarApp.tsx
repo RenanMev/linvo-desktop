@@ -13,7 +13,9 @@ import {
 import { ProcedureChecklistPanel } from "@/components/procedure/procedure-checklist-panel";
 import { QuickCenterPanel } from "@/components/quick-center/quick-center-panel";
 import { useApiHealth } from "@/hooks/use-api-health";
+import { useCompactClickThrough } from "@/hooks/use-compact-click-through";
 import { useFloatingBootstrap } from "@/hooks/use-floating-bootstrap";
+import { useOverlayChrome } from "@/hooks/use-overlay-chrome";
 import { useWindowPosition } from "@/hooks/use-window-position";
 import { hideAllWindows } from "@/lib/app-windows";
 import {
@@ -35,6 +37,7 @@ import {
   ISLAND_PAINT_WATCHDOG_MS,
   type IslandMorphGeometry,
 } from "@/lib/floating-island-transition";
+import { setClickThrough } from "@/lib/overlay-chrome";
 import { applyIslandWindowRegion } from "@/lib/window-region";
 import { islandLog, sampleViewportFrames } from "@/lib/island-debug";
 import {
@@ -144,6 +147,14 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   windowModeRef.current = windowMode;
 
   const isActive = floatingReady && apiHealthy && !sessionWarning;
+  const passthroughSuspended =
+    transitioning || Boolean(islandMorph && !islandMorph.settled);
+
+  useOverlayChrome(floatingReady);
+  useCompactClickThrough({
+    mode: windowMode,
+    suspended: passthroughSuspended,
+  });
 
   function startTransition() {
     transitionCountRef.current += 1;
@@ -699,7 +710,10 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     if (windowModeRef.current !== "compact") {
       return;
     }
-    startTransition();
+    flushSync(() => {
+      startTransition();
+    });
+    await setClickThrough({ enabled: false, holes: [] });
     try {
       await resetFloatingPosition();
       setEdgeAnchor(NO_ANCHOR);
@@ -740,8 +754,9 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   /*
    * Foca o handle ao encolher. É a única saída por teclado do modo encolhido:
    * `Ctrl+Shift+L` só alterna visibilidade, então sem isso um usuário de teclado
-   * fica preso na tira. Com o foco já posto, `showMainBar` (que dá setFocus na
-   * janela) deixa o handle pronto para `Enter`.
+   * fica preso na tira. A ilha passou a aparecer sem ativar (KAN-10), então o
+   * foco de DOM aqui só resolve porque o caminho do atalho global pede
+   * `toggleAppVisibility({ focus: true })` — tray e restore continuam sem ativar.
    */
   useEffect(() => {
     if (windowMode !== "edge-collapsed") {

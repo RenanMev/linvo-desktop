@@ -46,6 +46,7 @@ export function EdgeHandle({
     <button
       ref={buttonRef}
       type="button"
+      data-overlay-hit
       onClick={onExpand}
       title="Expandir barra"
       aria-label={`Expandir barra. Sistema ${isActive ? "ativo" : "inativo"}`}

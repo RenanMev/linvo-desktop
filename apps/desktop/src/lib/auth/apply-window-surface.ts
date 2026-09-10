@@ -10,6 +10,11 @@ import {
   type WindowSurfaceConfig,
   type WindowSurfaceMode,
 } from "@/lib/auth/window-auth";
+import {
+  setClickThrough,
+  setTopmostGuard,
+  showWindowNoActivate,
+} from "@/lib/overlay-chrome";
 
 async function readMonitor(): Promise<MonitorInfo | null> {
   const monitor = await currentMonitor();
@@ -33,9 +38,23 @@ export async function applyWindowSurfaceConfig(
   const win = getCurrentWindow();
   const scale = await win.scaleFactor();
   const size = logicalToPhysical(config.size, scale);
+  const compact = config.mode === "compact";
+
+  /*
+   * Desligar o guard **antes** do `setAlwaysOnTop`: `set_topmost_guard(false)`
+   * só para de reafirmar o topmost, não o desfaz. Na ordem inversa, um tick do
+   * loop (500 ms) caindo entre as duas chamadas deixava a tela de login presa
+   * na frente de tudo.
+   */
+  if (!compact) {
+    await setTopmostGuard(false);
+    await setClickThrough({ enabled: false, holes: [] });
+  }
 
   await win.setDecorations(config.decorations);
-  await win.setAlwaysOnTop(config.alwaysOnTop);
+  if (!compact) {
+    await win.setAlwaysOnTop(config.alwaysOnTop);
+  }
   await win.setSkipTaskbar(config.skipTaskbar);
   await win.setResizable(config.resizable);
   await win.setMaximizable(config.maximizable);
@@ -47,6 +66,12 @@ export async function applyWindowSurfaceConfig(
     await win.setPosition(new PhysicalPosition(position.x, position.y));
   } else {
     await win.center();
+  }
+
+  if (compact) {
+    await setTopmostGuard(true);
+    await showWindowNoActivate();
+    return;
   }
 
   await win.show();
