@@ -17,7 +17,10 @@ import { useCompactClickThrough } from "@/hooks/use-compact-click-through";
 import { useFloatingBootstrap } from "@/hooks/use-floating-bootstrap";
 import { useOverlayChrome } from "@/hooks/use-overlay-chrome";
 import { useWindowPosition } from "@/hooks/use-window-position";
-import { hideAllWindows } from "@/lib/app-windows";
+import { CAPTURE_AND_ASK_SHORTCUTS, useGlobalShortcut } from "@/hooks/use-global-shortcut";
+import { showMainBar, hideAllWindows } from "@/lib/app-windows";
+import { rememberPreviousWindow } from "@/lib/focus-previous-window";
+import { deriveIslandStatus } from "@/lib/island-status";
 import {
   collapseChecklistToFloating,
   expandFloatingToChecklist,
@@ -146,7 +149,12 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   } | null>(null);
   windowModeRef.current = windowMode;
 
-  const isActive = floatingReady && apiHealthy && !sessionWarning;
+  const islandStatus = deriveIslandStatus({
+    floatingReady,
+    apiHealthy,
+    sessionWarning,
+  });
+  const captureAndAskRef = useRef<() => void>(() => undefined);
   const passthroughSuspended =
     transitioning || Boolean(islandMorph && !islandMorph.settled);
 
@@ -154,6 +162,12 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   useCompactClickThrough({
     mode: windowMode,
     suspended: passthroughSuspended,
+  });
+  useGlobalShortcut({
+    shortcuts: CAPTURE_AND_ASK_SHORTCUTS,
+    onTrigger: () => {
+      captureAndAskRef.current();
+    },
   });
 
   function startTransition() {
@@ -563,15 +577,23 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   }
 
   async function handleCaptureContext() {
-    if (
-      windowModeRef.current !== "compact" ||
-      transitionCountRef.current > 0
-    ) {
+    if (transitionCountRef.current > 0) {
       return;
     }
+    if (windowModeRef.current === "checklist") {
+      return;
+    }
+    void rememberPreviousWindow();
     setCaptureAndSendPending(true);
-    await handleOpenQuickMenu();
+    await showMainBar();
+    if (windowModeRef.current === "compact") {
+      await handleOpenQuickMenu();
+    }
   }
+
+  captureAndAskRef.current = () => {
+    void handleCaptureContext();
+  };
 
   async function closeQuickMenu(
     options: CloseQuickMenuOptions = {},
@@ -768,6 +790,12 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.defaultPrevented || event.repeat) {
+        return;
+      }
+
+      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "c") {
+        event.preventDefault();
+        void handleCaptureContext();
         return;
       }
 
@@ -982,7 +1010,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
       return (
         <EdgeHandle
           anchor={edgeAnchor}
-          isActive={isActive}
+          status={islandStatus}
           onExpand={() => void handleExpandFromEdge()}
           buttonRef={edgeHandleRef}
         />
@@ -991,7 +1019,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
 
     return (
       <FloatingBar
-        isActive={isActive}
+        status={islandStatus}
         onOpenQuickMenu={() => void handleOpenQuickMenu()}
         onCaptureContext={() => void handleCaptureContext()}
         onCollapseToEdge={() => void handleCollapseToEdge()}

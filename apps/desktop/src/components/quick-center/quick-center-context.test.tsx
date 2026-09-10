@@ -168,7 +168,10 @@ describe("QuickCenterPanel visual context", () => {
      * Quem esconde e devolve as janelas em volta do overlay é o Rust — daqui só
      * vai o label, para o foco voltar para esta janela e não para o painel.
      */
-    expect(useDisplaySnapshotMock).toHaveBeenCalledWith({ windowLabel: "main" });
+    expect(useDisplaySnapshotMock).toHaveBeenCalledWith({
+      windowLabel: "main",
+      listenOverlay: true,
+    });
   });
 
   it("sends the pending capture with the question and clears it after the send", async () => {

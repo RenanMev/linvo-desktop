@@ -9,13 +9,21 @@ export const GLOBAL_SHORTCUTS = [
   "Ctrl+Shift+L",
 ] as const;
 
+export const CAPTURE_AND_ASK_SHORTCUTS = [
+  "CommandOrControl+Shift+C",
+  "CmdOrControl+Shift+C",
+  "Ctrl+Shift+C",
+] as const;
+
 type UseGlobalShortcutOptions = {
   enabled?: boolean;
+  shortcuts?: readonly string[];
   onTrigger?: () => void;
 };
 
 export function useGlobalShortcut({
   enabled = true,
+  shortcuts = GLOBAL_SHORTCUTS,
   onTrigger,
 }: UseGlobalShortcutOptions = {}) {
   useEffect(() => {
@@ -27,15 +35,13 @@ export function useGlobalShortcut({
     let registeredShortcut: string | null = null;
 
     void (async () => {
-      for (const shortcut of GLOBAL_SHORTCUTS) {
+      for (const shortcut of shortcuts) {
         try {
           await register(shortcut, (event) => {
             if (active && event.state === "Pressed") {
               if (onTrigger) {
                 onTrigger();
               } else {
-                // Quem chegou por atalho está no teclado: a janela precisa ficar
-                // ativa para o `Enter` expandir a tira encolhida.
                 void toggleAppVisibility({ focus: true });
               }
             }
@@ -50,7 +56,7 @@ export function useGlobalShortcut({
         }
       }
       console.warn("No global shortcut could be registered", {
-        shortcuts: GLOBAL_SHORTCUTS,
+        shortcuts,
       });
     })();
 
@@ -60,8 +66,5 @@ export function useGlobalShortcut({
         void unregister(registeredShortcut).catch(() => undefined);
       }
     };
-    // `onTrigger` fica de fora do array de deps de propósito: o consumidor
-    // (WindowChromeProvider) passa uma função estável que lê de um ref, para
-    // trocar o comportamento sem re-registrar o atalho no SO a cada troca.
-  }, [enabled]);
+  }, [enabled, shortcuts]);
 }

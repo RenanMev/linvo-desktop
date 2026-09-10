@@ -8,11 +8,13 @@ import {
 import type { Ref } from "react";
 
 import type { EdgeAnchor } from "@/lib/window-anchor";
+import type { IslandStatus } from "@/lib/island-status";
+import { islandStatusLabel, islandStatusLive } from "@/lib/island-status";
 import { cn } from "@/lib/utils";
 
 type EdgeHandleProps = {
   anchor: EdgeAnchor;
-  isActive: boolean;
+  status: IslandStatus;
   onExpand: () => void;
   buttonRef?: Ref<HTMLButtonElement>;
 };
@@ -35,7 +37,7 @@ function expandIcon(anchor: EdgeAnchor): LucideIcon {
 
 export function EdgeHandle({
   anchor,
-  isActive,
+  status,
   onExpand,
   buttonRef,
 }: EdgeHandleProps) {
@@ -49,7 +51,7 @@ export function EdgeHandle({
       data-overlay-hit
       onClick={onExpand}
       title="Expandir barra"
-      aria-label={`Expandir barra. Sistema ${isActive ? "ativo" : "inativo"}`}
+      aria-label={`Expandir barra. ${islandStatusLabel(status)}`}
       data-orientation={vertical ? "vertical" : "horizontal"}
       className={cn(
         // A superfície da pílula (fundo + hairline) vem do shell em BarApp —
@@ -74,7 +76,9 @@ export function EdgeHandle({
           "transition-[opacity,scale] duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
           "group-hover/edge:scale-25 group-hover/edge:opacity-0",
           "group-focus-visible/edge:scale-25 group-focus-visible/edge:opacity-0",
-          isActive ? "status-dot-live" : "bg-muted-foreground/25",
+          islandStatusLive(status)
+            ? "status-dot-live"
+            : "bg-muted-foreground/25",
         )}
       />
       <Icon

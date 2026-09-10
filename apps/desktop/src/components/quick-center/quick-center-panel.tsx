@@ -11,7 +11,6 @@ import {
   GripVertical,
   Loader2,
   MessageSquarePlus,
-  PanelRight,
   Send,
   Settings,
   Square,
@@ -28,7 +27,14 @@ import { useDisplaySnapshot } from "@/hooks/use-display-snapshot";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useQuickCenterWorkspace } from "@/hooks/use-quick-center-workspace";
 import { useQuickPrompt } from "@/hooks/use-quick-prompt";
+import { markCopyReady } from "@/lib/capture-loop-telemetry";
 import { writeClipboardText } from "@/lib/clipboard";
+import { focusPreviousWindow } from "@/lib/focus-previous-window";
+import {
+  deriveIslandStatus,
+  islandStatusLabel,
+  islandStatusLive,
+} from "@/lib/island-status";
 import { openPanel } from "@/lib/panel-window";
 import { cn } from "@/lib/utils";
 
@@ -58,16 +64,6 @@ type QuickCenterPanelProps = {
    */
   onCaptureActiveChange?: (active: boolean) => void;
 };
-
-function statusLabel(apiHealthy: boolean, sessionWarning: string | null) {
-  if (sessionWarning) {
-    return "Sessão expirada";
-  }
-  if (!apiHealthy) {
-    return "API indisponível";
-  }
-  return "Online";
-}
 
 export function QuickCenterPanel({
   apiHealthy,
@@ -113,7 +109,7 @@ export function QuickCenterPanel({
     editPending,
     clear: clearPending,
     clearError: clearCaptureError,
-  } = useDisplaySnapshot({ windowLabel: "main" });
+  } = useDisplaySnapshot({ windowLabel: "main", listenOverlay: true });
 
   useFocusTrap(containerRef, {
     active: ready && !closing,
@@ -122,6 +118,12 @@ export function QuickCenterPanel({
 
   const fieldsDisabled = !apiHealthy || Boolean(sessionWarning);
   const isStreaming = prompt.status === "streaming";
+  const islandStatus = deriveIslandStatus({
+    floatingReady: true,
+    apiHealthy,
+    sessionWarning,
+    isThinking: prompt.isThinking || isStreaming,
+  });
   const hasAttachment = pending?.status === "ready";
   const captureDialogOpen = pickerOpen || Boolean(draft);
   const captureActive = captureDialogOpen || isCapturing || isCropping;
@@ -297,6 +299,10 @@ export function QuickCenterPanel({
         copiedTimerRef.current = null;
         setCopied(false);
       }, 1500);
+      await focusPreviousWindow();
+      if (mountedRef.current) {
+        onClose({ restoreFocus: false });
+      }
     }
   }
 
@@ -313,10 +319,11 @@ export function QuickCenterPanel({
     onOpenSettings();
   }
 
-  async function handleOpenPanel() {
-    await openPanel("/chat", user);
-    onClose({ restoreFocus: false });
-  }
+  useEffect(() => {
+    if (prompt.status === "done" && prompt.responseText) {
+      markCopyReady();
+    }
+  }, [prompt.responseText, prompt.status]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -407,12 +414,12 @@ export function QuickCenterPanel({
           <span
             className={cn(
               "size-1.5 rounded-full transition-colors duration-300",
-              apiHealthy && !sessionWarning
+              islandStatusLive(islandStatus)
                 ? "status-dot-live"
                 : "bg-muted-foreground/25",
             )}
           />
-          {statusLabel(apiHealthy, sessionWarning)}
+          {islandStatusLabel(islandStatus)}
         </span>
         <Button
           type="button"
@@ -533,7 +540,7 @@ export function QuickCenterPanel({
           <div className="quick-center-fade-in flex shrink-0 items-center gap-1.5">
             <Button
               type="button"
-              variant="ghost"
+              variant="default"
               size="xs"
               onClick={() => void handleCopy()}
             >
@@ -547,7 +554,7 @@ export function QuickCenterPanel({
               onClick={() => void handleOpenInChat()}
             >
               <MessageSquarePlus className="size-3" />
-              Abrir no chat
+              Abrir no workspace
             </Button>
           </div>
         )}
@@ -563,15 +570,6 @@ export function QuickCenterPanel({
           >
             <Settings className="size-3" />
             Configurações
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            onClick={() => void handleOpenPanel()}
-          >
-            <PanelRight className="size-3" />
-            Abrir no painel
           </Button>
         </div>
         <Button type="button" variant="ghost" size="xs" onClick={onHide}>

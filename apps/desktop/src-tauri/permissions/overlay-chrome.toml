@@ -22,3 +22,13 @@ commands.allow = ["set_topmost_guard"]
 identifier = "allow-overlay-chrome-status"
 description = "Allows reading overlay chrome native status"
 commands.allow = ["overlay_chrome_status"]
+
+[[permission]]
+identifier = "allow-remember-previous-window"
+description = "Allows remembering the last foreign foreground window"
+commands.allow = ["remember_previous_window"]
+
+[[permission]]
+identifier = "allow-focus-previous-window"
+description = "Allows restoring focus to the previous application after copy"
+commands.allow = ["focus_previous_window"]

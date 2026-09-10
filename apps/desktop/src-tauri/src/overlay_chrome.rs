@@ -1,3 +1,6 @@
+use std::sync::atomic::AtomicIsize;
+#[cfg(windows)]
+use std::sync::atomic::Ordering;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 #[cfg(windows)]
@@ -44,6 +47,8 @@ struct OverlayChromeState {
 }
 
 static STATE: OnceLock<Mutex<OverlayChromeState>> = OnceLock::new();
+#[cfg_attr(not(windows), allow(dead_code))]
+static PREVIOUS_HWND: AtomicIsize = AtomicIsize::new(0);
 
 fn lock_state() -> MutexGuard<'static, OverlayChromeState> {
     STATE
@@ -275,6 +280,7 @@ fn topmost_loop(window: WebviewWindow, token: u64) {
             }
         }
         apply_topmost_once(&window);
+        remember_foreign_foreground();
         thread::sleep(TOPMOST_INTERVAL);
     }
 }
@@ -436,6 +442,58 @@ pub fn set_topmost_guard(
 #[tauri::command]
 pub fn overlay_chrome_status() -> OverlayChromeStatus {
     snapshot()
+}
+
+fn remember_foreign_foreground() {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            GetForegroundWindow, GetWindowThreadProcessId,
+        };
+
+        let fg = unsafe { GetForegroundWindow() };
+        if fg.is_null() {
+            return;
+        }
+        let mut pid = 0u32;
+        unsafe {
+            GetWindowThreadProcessId(fg, &mut pid);
+        }
+        if pid == std::process::id() {
+            return;
+        }
+        PREVIOUS_HWND.store(fg as isize, Ordering::Relaxed);
+    }
+}
+
+#[tauri::command]
+pub fn remember_previous_window() {
+    remember_foreign_foreground();
+}
+
+#[tauri::command]
+pub fn focus_previous_window() -> bool {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Foundation::HWND;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            AllowSetForegroundWindow, SetForegroundWindow,
+        };
+
+        let stored = PREVIOUS_HWND.load(Ordering::Relaxed);
+        if stored == 0 {
+            return false;
+        }
+        let hwnd = stored as HWND;
+        unsafe {
+            AllowSetForegroundWindow(u32::MAX);
+            SetForegroundWindow(hwnd) != 0
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
 }
 
 #[cfg(test)]

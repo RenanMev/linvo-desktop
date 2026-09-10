@@ -97,7 +97,7 @@ export function ChatInput({
     editPending,
     clear: clearPending,
     clearError: clearCaptureError,
-  } = useDisplaySnapshot({ windowLabel: "panel" });
+  } = useDisplaySnapshot({ windowLabel: "panel", listenOverlay: false });
 
   const hasAttachment = pending?.status === "ready";
   const canSend =

@@ -20,6 +20,7 @@ import {
   type CaptureSource,
   type OverlayResult,
 } from "@/lib/context-capture/capture-sources";
+import { markCaptureStart } from "@/lib/capture-loop-telemetry";
 import type { Rect } from "@/lib/context-capture/crop";
 
 export type PendingContextAttachment = {
@@ -40,8 +41,8 @@ export type DraftSnapshot = {
 
 export type UseDisplaySnapshotOptions = {
   startDisplayMedia?: StartDisplayMedia;
-  /** Label da janela que pede a captura, para o foco voltar para ela. */
   windowLabel?: string;
+  listenOverlay?: boolean;
 };
 
 /**
@@ -127,6 +128,7 @@ export function useDisplaySnapshot(
   options?: UseDisplaySnapshotOptions,
 ): DisplaySnapshotController {
   const windowLabel = options?.windowLabel;
+  const listenOverlay = options?.listenOverlay ?? false;
   const [pending, setPending] = useState<PendingContextAttachment | null>(null);
   const [draft, setDraft] = useState<DraftSnapshot | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -222,6 +224,20 @@ export function useDisplaySnapshot(
 
   useEffect(() => {
     mountedRef.current = true;
+    if (!listenOverlay) {
+      return () => {
+        mountedRef.current = false;
+        if (overlayTimeoutRef.current !== null) {
+          clearTimeout(overlayTimeoutRef.current);
+          overlayTimeoutRef.current = null;
+        }
+        revokePending(pendingRef.current);
+        pendingRef.current = null;
+        revokeDraft(draftRef.current);
+        draftRef.current = null;
+      };
+    }
+
     let unlistenResult: (() => void) | undefined;
     let unlistenCancel: (() => void) | undefined;
 
@@ -274,6 +290,7 @@ export function useDisplaySnapshot(
   }, [
     applyOverlayResult,
     claimOverlayRun,
+    listenOverlay,
     revokeDraft,
     revokePending,
     windowLabel,
@@ -367,6 +384,9 @@ export function useDisplaySnapshot(
     setIsCapturing(true);
     setPickerOpen(false);
     overlayRunRef.current = true;
+    if (listenOverlay) {
+      markCaptureStart();
+    }
 
     if (overlayTimeoutRef.current !== null) {
       clearTimeout(overlayTimeoutRef.current);
@@ -408,7 +428,7 @@ export function useDisplaySnapshot(
           : "Não foi possível abrir o recorte magnético",
       );
     }
-  }, [windowLabel]);
+  }, [listenOverlay, windowLabel]);
 
   const confirmDraft = useCallback(
     async (region?: Rect | null) => {

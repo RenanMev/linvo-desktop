@@ -9,10 +9,12 @@ import {
 } from "lucide-react";
 import type { Ref } from "react";
 
+import type { IslandStatus } from "@/lib/island-status";
+import { islandStatusLabel, islandStatusLive } from "@/lib/island-status";
 import { cn } from "@/lib/utils";
 
 type FloatingBarProps = {
-  isActive: boolean;
+  status: IslandStatus;
   onOpenQuickMenu: () => void;
   onCaptureContext: () => void;
   onCollapseToEdge: () => void;
@@ -27,8 +29,9 @@ function BarDivider() {
 
 const shortcuts = [
   { keys: "Ctrl Shift L", label: "Mostrar/ocultar" },
+  { keys: "Ctrl Shift C", label: "Capturar e perguntar" },
   { keys: "Enter", label: "Abrir chat" },
-  { keys: "Esc", label: "Fechar painel" },
+  { keys: "Esc", label: "Fechar Assist" },
 ] as const;
 
 function BarAction({
@@ -113,7 +116,7 @@ function ShortcutPopover() {
 }
 
 export function FloatingBar({
-  isActive,
+  status,
   onOpenQuickMenu,
   onCaptureContext,
   onCollapseToEdge,
@@ -152,14 +155,16 @@ export function FloatingBar({
       <span
         data-overlay-hit
         className="grid size-3 shrink-0 place-items-center"
-        title={isActive ? "Sistema ativo" : "Sistema inativo"}
-        aria-label={isActive ? "Sistema ativo" : "Sistema inativo"}
+        title={islandStatusLabel(status)}
+        aria-label={islandStatusLabel(status)}
         role="status"
       >
         <span
           className={cn(
             "size-1.5 rounded-full transition-colors duration-300",
-            isActive ? "status-dot-live" : "bg-muted-foreground/25",
+            islandStatusLive(status)
+              ? "status-dot-live"
+              : "bg-muted-foreground/25",
           )}
         />
       </span>

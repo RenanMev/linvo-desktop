@@ -48,6 +48,8 @@
     "allow-set-exclude-from-capture",
     "allow-set-topmost-guard",
     "allow-overlay-chrome-status",
+    "allow-remember-previous-window",
+    "allow-focus-previous-window",
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",

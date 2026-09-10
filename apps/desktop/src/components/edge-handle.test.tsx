@@ -10,7 +10,7 @@ describe("EdgeHandle", () => {
     render(
       <EdgeHandle
         anchor={{ horizontal: "right", vertical: null }}
-        isActive
+        status="online"
         onExpand={vi.fn()}
       />,
     );
@@ -24,7 +24,7 @@ describe("EdgeHandle", () => {
     render(
       <EdgeHandle
         anchor={{ horizontal: null, vertical: "bottom" }}
-        isActive
+        status="online"
         onExpand={vi.fn()}
       />,
     );
@@ -38,7 +38,7 @@ describe("EdgeHandle", () => {
     render(
       <EdgeHandle
         anchor={{ horizontal: "right", vertical: "bottom" }}
-        isActive
+        status="online"
         onExpand={vi.fn()}
       />,
     );
@@ -54,7 +54,7 @@ describe("EdgeHandle", () => {
     render(
       <EdgeHandle
         anchor={{ horizontal: "left", vertical: null }}
-        isActive={false}
+        status="offline"
         onExpand={onExpand}
       />,
     );
@@ -68,7 +68,7 @@ describe("EdgeHandle", () => {
     render(
       <EdgeHandle
         anchor={{ horizontal: "left", vertical: null }}
-        isActive
+        status="online"
         onExpand={onExpand}
       />,
     );
@@ -83,7 +83,7 @@ describe("EdgeHandle", () => {
     render(
       <EdgeHandle
         anchor={{ horizontal: "left", vertical: null }}
-        isActive
+        status="online"
         onExpand={vi.fn()}
         buttonRef={ref}
       />,
@@ -108,7 +108,7 @@ describe("EdgeHandle expand affordance", () => {
 
   for (const { edge, anchor, icon } of cases) {
     it(`points away from the ${edge} edge`, () => {
-      render(<EdgeHandle anchor={anchor} isActive onExpand={vi.fn()} />);
+      render(<EdgeHandle anchor={anchor} status="online" onExpand={vi.fn()} />);
 
       const svg = screen
         .getByRole("button", { name: /Expandir barra/ })
