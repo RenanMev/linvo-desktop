@@ -12,6 +12,18 @@ const POLL_STATUSES: ProcedureStatus[] = [
   "PUBLISHED",
 ];
 
+/*
+ * Referência estável de propósito: `notify` entra no array de deps do efeito, e
+ * uma arrow criada no corpo do hook remontaria o poll (com um `tick()` extra) a
+ * cada render.
+ *
+ * `onlyIfHidden: false` porque procedure é evento de trabalho: vale avisar mesmo
+ * com a ilha à vista, ao contrário de sessão expirada, que a pílula já mostra.
+ */
+function notifyProcedureEvent(body: string): Promise<void> {
+  return notifyDesktopEvent(body, { onlyIfHidden: false });
+}
+
 export function useProcedureStatusPoll(
   workspaceId: string | undefined,
   options: {
@@ -23,7 +35,7 @@ export function useProcedureStatusPoll(
 ): void {
   const enabled = options.enabled !== false;
   const intervalMs = options.intervalMs ?? DEFAULT_POLL_MS;
-  const notify = options.notify ?? notifyDesktopEvent;
+  const notify = options.notify ?? notifyProcedureEvent;
   const onUpdate = options.onUpdate;
   const seenRef = useRef<Map<string, ProcedureStatus>>(new Map());
 

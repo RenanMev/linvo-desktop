@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, Window } from "@tauri-apps/api/window";
 
 import { closeChecklist } from "@/lib/checklist-window";
+import { showWindowNoActivate } from "@/lib/overlay-chrome";
 import { closePanel } from "@/lib/panel-window";
 
 const MAIN_LABEL = "main";
@@ -10,14 +11,28 @@ async function getMainWindow(): Promise<Window | null> {
   return Window.getByLabel(MAIN_LABEL);
 }
 
-export async function showMainBar(): Promise<void> {
+export type ShowMainBarOptions = {
+  /**
+   * Ativa a janela depois de mostrá-la. Só para quem chegou pelo teclado: sem
+   * janela ativa o `Enter` não chega ao handle e o usuário fica preso na tira
+   * encolhida. O padrão é `false` — tray, boot e restore pós-captura mostram a
+   * ilha sem tirar o foco do canal (KAN-10).
+   */
+  focus?: boolean;
+};
+
+export async function showMainBar(
+  options: ShowMainBarOptions = {},
+): Promise<void> {
   const main = await getMainWindow();
   if (!main) {
     return;
   }
-  await main.show();
+  await showWindowNoActivate();
   await main.unminimize();
-  await main.setFocus();
+  if (options.focus) {
+    await main.setFocus();
+  }
 }
 
 export async function hideMainBar(): Promise<void> {
@@ -49,12 +64,14 @@ export async function isAnyWindowVisible(): Promise<boolean> {
   return mainVisible || panelVisible;
 }
 
-export async function toggleAppVisibility(): Promise<void> {
+export async function toggleAppVisibility(
+  options: ShowMainBarOptions = {},
+): Promise<void> {
   if (await isAnyWindowVisible()) {
     await hideAllWindows();
     return;
   }
-  await showMainBar();
+  await showMainBar(options);
 }
 
 export async function updateTaskbarVisibility(compact: boolean): Promise<void> {

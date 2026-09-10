@@ -52,6 +52,7 @@ function BarAction({
     <button
       ref={buttonRef}
       type="button"
+      data-overlay-hit
       title={label}
       aria-label={label}
       aria-controls={controls}
@@ -123,6 +124,7 @@ export function FloatingBar({
   return (
     <div className="flex h-full w-full items-center gap-1 px-1.5">
       <span
+        data-overlay-hit
         data-tauri-drag-region
         title="Mover · Ctrl+Shift+clique redefine a posição"
         onMouseDown={(event) => {
@@ -148,6 +150,7 @@ export function FloatingBar({
       </span>
 
       <span
+        data-overlay-hit
         className="grid size-3 shrink-0 place-items-center"
         title={isActive ? "Sistema ativo" : "Sistema inativo"}
         aria-label={isActive ? "Sistema ativo" : "Sistema inativo"}

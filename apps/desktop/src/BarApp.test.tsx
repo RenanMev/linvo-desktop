@@ -12,7 +12,7 @@ import {
   expandFloatingToQuickMenu,
 } from "@/lib/floating-quick-menu-mode";
 import type { ChecklistWindowPayload } from "@/lib/checklist-window";
-import { COMPACT_SIZE, QUICK_MENU_SIZE } from "@/lib/window-mode";
+import { COMPACT_SIZE, QUICK_MENU_SIZE, windowSizeForVisual } from "@/lib/window-mode";
 import {
   invokeMock,
   setMinSizeMock,
@@ -23,6 +23,14 @@ import {
 
 vi.mock("@/hooks/use-floating-bootstrap", () => ({
   useFloatingBootstrap: () => true,
+}));
+
+vi.mock("@/hooks/use-overlay-chrome", () => ({
+  useOverlayChrome: () => undefined,
+}));
+
+vi.mock("@/hooks/use-compact-click-through", () => ({
+  useCompactClickThrough: () => undefined,
 }));
 
 vi.mock("@/hooks/use-api-health", () => ({
@@ -154,7 +162,9 @@ describe("BarApp window modes", () => {
     await waitFor(() =>
       expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
     );
-    expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Quick Center")).toBeInTheDocument(),
+    );
   });
 
   it("does not arm auto-capture when Chat opens without Recorte", async () => {
@@ -166,7 +176,9 @@ describe("BarApp window modes", () => {
     await waitFor(() =>
       expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
     );
-    expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Quick Center")).toBeInTheDocument(),
+    );
     await waitFor(() => expect(setResizableMock).toHaveBeenCalledWith(true));
 
     expect(invokeMock).not.toHaveBeenCalledWith("capture_overlay_open");
@@ -183,7 +195,9 @@ describe("BarApp window modes", () => {
     await waitFor(() =>
       expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
     );
-    expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Quick Center")).toBeInTheDocument(),
+    );
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith("capture_overlay_open"),
     );
@@ -198,7 +212,9 @@ describe("BarApp window modes", () => {
     await waitFor(() =>
       expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
     );
-    expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Quick Center")).toBeInTheDocument(),
+    );
   });
 
   it("toggles the quick menu closed with the local shortcut", async () => {
@@ -308,18 +324,17 @@ describe("BarApp window modes", () => {
     render(<BarApp sessionWarning={null} user={user} />);
 
     await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
+    await waitFor(() => expect(finishExpand).toBeTypeOf("function"));
+    act(() => finishExpand());
     const closeButton = await screen.findByRole("button", {
       name: "Fechar Quick Center",
-      hidden: true,
     });
-    await waitFor(() => expect(finishExpand).toBeTypeOf("function"));
 
     fireEvent.click(closeButton);
 
     await waitFor(() =>
       expect(collapseQuickMenuToFloating).toHaveBeenCalledTimes(1),
     );
-    act(() => finishExpand());
     await waitFor(() => {
       expect(screen.queryByLabelText("Quick Center")).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument();
@@ -618,14 +633,16 @@ describe("BarApp window modes", () => {
     await waitFor(() => expect(hideAllWindows).toHaveBeenCalledTimes(1));
     expect(setMinSizeMock).toHaveBeenCalledWith(null);
     expect(setResizableMock).toHaveBeenLastCalledWith(false);
-    expect(invokeMock).toHaveBeenCalledWith(
-      "set_window_bounds",
-      expect.objectContaining({
-        to: expect.objectContaining({
-          width: COMPACT_SIZE.width,
-          height: COMPACT_SIZE.height,
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith(
+        "set_window_bounds",
+        expect.objectContaining({
+          to: expect.objectContaining({
+            width: windowSizeForVisual(COMPACT_SIZE).width,
+            height: COMPACT_SIZE.height,
+          }),
         }),
-      }),
+      ),
     );
     expect(screen.queryByLabelText("Quick Center")).not.toBeInTheDocument();
   });
@@ -636,7 +653,10 @@ describe("BarApp window modes", () => {
    * do tamanho do quick menu com a pílula desenhada dentro dela.
    */
   it("shrinks the window back when the expansion aborts after it grew", async () => {
-    windowMock.outerSize.mockResolvedValue({ ...COMPACT_SIZE });
+    // Tamanho da *janela* compacta (largura fixa da ilha), não o do desenho:
+    // com o visual aqui a reconciliação de bounds já corrigiria na montagem e
+    // esconderia o encolhimento que este teste mede.
+    windowMock.outerSize.mockResolvedValue(windowSizeForVisual(COMPACT_SIZE));
     vi.mocked(expandFloatingToQuickMenu).mockImplementationOnce(async () => {
       windowMock.outerSize.mockResolvedValue({ ...QUICK_MENU_SIZE });
       throw new Error("expand interrupted");
@@ -659,7 +679,7 @@ describe("BarApp window modes", () => {
         "set_window_bounds",
         expect.objectContaining({
           to: expect.objectContaining({
-            width: COMPACT_SIZE.width,
+            width: windowSizeForVisual(COMPACT_SIZE).width,
             height: COMPACT_SIZE.height,
           }),
         }),

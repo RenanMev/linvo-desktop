@@ -1,8 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 
 import { SettingsSelect } from "@/components/settings/settings-select";
+import { SettingsSwitch } from "@/components/settings/settings-switch";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  hydrateDesktopSettings,
+  loadHideFromCapture,
+  saveHideFromCapture,
+} from "@/lib/desktop-settings-store";
+import { islandLog } from "@/lib/island-debug";
+import { overlayChromeStatus, setExcludeFromCapture } from "@/lib/overlay-chrome";
 import { requestOnboardingReview } from "@/lib/onboarding-review-sync";
 import { closePanel } from "@/lib/panel-window";
 
@@ -18,10 +27,73 @@ export function GeneralSettingsPage() {
   const [systemLanguage, setSystemLanguage] = useState<LanguageValue>("pt-BR");
   const [responseLanguage, setResponseLanguage] =
     useState<LanguageValue>("pt-BR");
+  const [openAtLogin, setOpenAtLogin] = useState(false);
+  const [hideFromCapture, setHideFromCapture] = useState(false);
+  const [nativeUnavailable, setNativeUnavailable] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const enabled = await isEnabled();
+        if (!cancelled) {
+          setOpenAtLogin(enabled);
+        }
+      } catch (error) {
+        islandLog("settings:autostart:isEnabled:FAILED", {
+          error: String(error),
+        });
+      }
+
+      await hydrateDesktopSettings();
+      if (!cancelled) {
+        setHideFromCapture(loadHideFromCapture());
+      }
+
+      const status = await overlayChromeStatus();
+      if (!cancelled && status && !status.win32Ok) {
+        setNativeUnavailable(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleReviewOnboarding() {
     await requestOnboardingReview();
     await closePanel();
+  }
+
+  async function handleOpenAtLoginChange(next: boolean) {
+    const previous = openAtLogin;
+    setOpenAtLogin(next);
+    try {
+      if (next) {
+        await enable();
+      } else {
+        await disable();
+      }
+    } catch (error) {
+      islandLog("settings:autostart:toggle:FAILED", { error: String(error) });
+      setOpenAtLogin(previous);
+    }
+  }
+
+  async function handleHideFromCaptureChange(next: boolean) {
+    const previous = hideFromCapture;
+    setHideFromCapture(next);
+    try {
+      await saveHideFromCapture(next);
+      await setExcludeFromCapture(next);
+    } catch (error) {
+      islandLog("settings:hideFromCapture:toggle:FAILED", {
+        error: String(error),
+      });
+      setHideFromCapture(previous);
+    }
   }
 
   return (
@@ -54,6 +126,23 @@ export function GeneralSettingsPage() {
               Use Ctrl+Shift+L para mostrar ou ocultar a barra flutuante.
             </p>
           </div>
+          <SettingsSwitch
+            label="Abrir com o Windows"
+            description="O assistente fica disponível depois do login."
+            checked={openAtLogin}
+            onCheckedChange={(next) => void handleOpenAtLoginChange(next)}
+          />
+          <SettingsSwitch
+            label="Ocultar Linvo ao compartilhar tela"
+            description="Some do Meet e do Teams. A captura do próprio Linvo continua funcionando."
+            checked={hideFromCapture}
+            onCheckedChange={(next) => void handleHideFromCaptureChange(next)}
+          />
+          {nativeUnavailable ? (
+            <p className="px-1 text-[11px] text-muted-foreground">
+              Algumas funções nativas da ilha não estão disponíveis neste Windows.
+            </p>
+          ) : null}
           <div className="flex items-center justify-between gap-4 rounded-xl border border-hairline bg-muted/40 p-3">
             <div>
               <p className="text-xs font-medium">Onboarding</p>

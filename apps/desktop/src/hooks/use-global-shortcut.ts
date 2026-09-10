@@ -34,7 +34,9 @@ export function useGlobalShortcut({
               if (onTrigger) {
                 onTrigger();
               } else {
-                void toggleAppVisibility();
+                // Quem chegou por atalho está no teclado: a janela precisa ficar
+                // ativa para o `Enter` expandir a tira encolhida.
+                void toggleAppVisibility({ focus: true });
               }
             }
           });
