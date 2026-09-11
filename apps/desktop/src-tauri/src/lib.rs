@@ -425,6 +425,8 @@ pub fn run() {
             overlay_chrome::set_exclude_from_capture,
             overlay_chrome::set_topmost_guard,
             overlay_chrome::overlay_chrome_status,
+            overlay_chrome::remember_previous_window,
+            overlay_chrome::focus_previous_window,
             app::app_quit,
             auth::auth_set_tokens,
             auth::auth_get_tokens,

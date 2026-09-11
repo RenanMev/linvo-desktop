@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,6 +8,7 @@ import { QuickCenterPanel } from "@/components/quick-center/quick-center-panel";
 import { useQuickCenterWorkspace } from "@/hooks/use-quick-center-workspace";
 import { useQuickPrompt } from "@/hooks/use-quick-prompt";
 import { writeClipboardText } from "@/lib/clipboard";
+import { focusPreviousWindow } from "@/lib/focus-previous-window";
 import { openPanel } from "@/lib/panel-window";
 
 vi.mock("@/hooks/use-quick-prompt", () => ({
@@ -24,6 +25,11 @@ vi.mock("@/lib/panel-window", () => ({
 
 vi.mock("@/lib/clipboard", () => ({
   writeClipboardText: vi.fn(() => Promise.resolve(true)),
+}));
+
+vi.mock("@/lib/focus-previous-window", () => ({
+  focusPreviousWindow: vi.fn(() => Promise.resolve(true)),
+  rememberPreviousWindow: vi.fn(() => Promise.resolve()),
 }));
 
 const user: UserPublic = {
@@ -70,6 +76,7 @@ describe("QuickCenterPanel", () => {
     });
     vi.mocked(openPanel).mockClear();
     vi.mocked(writeClipboardText).mockClear();
+    vi.mocked(focusPreviousWindow).mockClear();
   });
 
   it("focuses the prompt field on mount when ready", () => {
@@ -139,7 +146,38 @@ describe("QuickCenterPanel", () => {
     expect(stop).toHaveBeenCalledTimes(1);
   });
 
-  it("shows Copiar and Abrir no chat once the answer is done", async () => {
+  it("shows Copiar as the primary action once the answer is done", async () => {
+    vi.mocked(useQuickPrompt).mockReturnValue(
+      makePrompt({
+        status: "done",
+        responseText: "resposta final",
+        conversationId: "conv-1",
+      }),
+    );
+    const onClose = vi.fn();
+    const userEventInstance = userEvent.setup();
+
+    renderPanel({ onClose });
+
+    expect(screen.getByText("resposta final")).toBeInTheDocument();
+    expect(openPanel).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Copiar" })).toHaveAttribute(
+      "data-variant",
+      "default",
+    );
+    expect(
+      screen.getByRole("button", { name: "Abrir no workspace" }),
+    ).toHaveAttribute("data-variant", "ghost");
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Copiar" }));
+    expect(writeClipboardText).toHaveBeenCalledWith("resposta final");
+    await waitFor(() => {
+      expect(focusPreviousWindow).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledWith({ restoreFocus: false });
+    });
+  });
+
+  it("opens the conversation only from the secondary workspace action", async () => {
     vi.mocked(useQuickPrompt).mockReturnValue(
       makePrompt({
         status: "done",
@@ -151,30 +189,27 @@ describe("QuickCenterPanel", () => {
 
     renderPanel();
 
-    expect(screen.getByText("resposta final")).toBeInTheDocument();
-
-    await userEventInstance.click(screen.getByRole("button", { name: "Copiar" }));
-    expect(writeClipboardText).toHaveBeenCalledWith("resposta final");
-
     await userEventInstance.click(
-      screen.getByRole("button", { name: "Abrir no chat" }),
+      screen.getByRole("button", { name: "Abrir no workspace" }),
     );
     expect(openPanel).toHaveBeenCalledWith("/chat/conv-1", user);
   });
 
-  it("Abrir no painel opens the panel at /chat and closes the menu", async () => {
+  it("does not offer Abrir no painel or open /chat from the happy path", async () => {
     vi.mocked(useQuickPrompt).mockReturnValue(makePrompt());
-    const onClose = vi.fn();
     const userEventInstance = userEvent.setup();
 
-    renderPanel({ onClose });
+    renderPanel();
+
+    expect(
+      screen.queryByRole("button", { name: "Abrir no painel" }),
+    ).not.toBeInTheDocument();
 
     await userEventInstance.click(
-      screen.getByRole("button", { name: "Abrir no painel" }),
+      screen.getByRole("button", { name: "Configurações" }),
     );
-
-    expect(openPanel).toHaveBeenCalledWith("/chat", user);
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(openPanel).toHaveBeenCalledWith("/settings/general", user);
+    expect(openPanel).not.toHaveBeenCalledWith("/chat", user);
   });
 
   it("Esc calls stop() when streaming and always closes", async () => {

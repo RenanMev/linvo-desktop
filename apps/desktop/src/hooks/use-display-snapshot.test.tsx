@@ -179,6 +179,21 @@ describe("useDisplaySnapshot", () => {
     expect(result.current.isCapturing).toBe(true);
   });
 
+  it("does not subscribe to overlay events outside the assist surface", async () => {
+    const listenResult = vi
+      .spyOn(captureSources, "listenOverlayResult")
+      .mockResolvedValue(() => {});
+    const listenCancel = vi
+      .spyOn(captureSources, "listenOverlayCancel")
+      .mockResolvedValue(() => {});
+
+    renderHook(() => useDisplaySnapshot({ windowLabel: "panel" }));
+    await Promise.resolve();
+
+    expect(listenResult).not.toHaveBeenCalled();
+    expect(listenCancel).not.toHaveBeenCalled();
+  });
+
   it("ignores an overlay result it did not ask for", async () => {
     let resultHandler:
       | ((value: captureSources.OverlayResult) => void)
@@ -190,9 +205,10 @@ describe("useDisplaySnapshot", () => {
       },
     );
     const crop = vi.spyOn(captureSources, "fetchOverlayCrop");
-    const { result } = renderHook(() => useDisplaySnapshot());
+    const { result } = renderHook(() =>
+      useDisplaySnapshot({ listenOverlay: true }),
+    );
 
-    // Recorte disparado pela outra janela: o evento é global e chega aqui também.
     await act(async () => {
       resultHandler?.({ region: { x: 0, y: 0, width: 50, height: 50 } });
       await Promise.resolve();
@@ -217,7 +233,9 @@ describe("useDisplaySnapshot", () => {
       .spyOn(captureSources, "fetchOverlayCrop")
       .mockResolvedValue(new Blob(["png"], { type: "image/png" }));
 
-    const { result } = renderHook(() => useDisplaySnapshot());
+    const { result } = renderHook(() =>
+      useDisplaySnapshot({ listenOverlay: true }),
+    );
     await act(async () => {
       await result.current.startMagneticCapture();
     });
@@ -259,7 +277,9 @@ describe("useDisplaySnapshot", () => {
       new Blob(["png"], { type: "image/png" }),
     );
 
-    const { result } = renderHook(() => useDisplaySnapshot());
+    const { result } = renderHook(() =>
+      useDisplaySnapshot({ listenOverlay: true }),
+    );
     await act(async () => {
       await result.current.startMagneticCapture();
     });
@@ -318,7 +338,7 @@ describe("useDisplaySnapshot", () => {
       .mockResolvedValue(undefined);
 
     const { result } = renderHook(() =>
-      useDisplaySnapshot({ windowLabel: "panel" }),
+      useDisplaySnapshot({ windowLabel: "panel", listenOverlay: true }),
     );
     await act(async () => {
       await result.current.startMagneticCapture();
@@ -349,7 +369,7 @@ describe("useDisplaySnapshot", () => {
       .mockResolvedValue(new Blob(["png"], { type: "image/png" }));
 
     const { result } = renderHook(() =>
-      useDisplaySnapshot({ windowLabel: "panel" }),
+      useDisplaySnapshot({ windowLabel: "panel", listenOverlay: true }),
     );
     await act(async () => {
       await result.current.startMagneticCapture();

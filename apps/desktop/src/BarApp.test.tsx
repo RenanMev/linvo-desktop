@@ -203,6 +203,67 @@ describe("BarApp window modes", () => {
     );
   });
 
+  it("opens capture-and-ask from Ctrl+Shift+C with the Assist closed", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.keyboard("{Control>}{Shift>}c{/Shift}{/Control}");
+
+    await waitFor(() =>
+      expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText("Quick Center")).toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("capture_overlay_open"),
+    );
+  });
+
+  it("shows session expiry on the compact pill instead of a live green", () => {
+    render(<BarApp sessionWarning="expired" user={user} />);
+
+    expect(
+      screen.getByRole("status", { name: "Sessão expirada" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the Assist open when magnetic capture is cancelled", async () => {
+    let cancelHandler: (() => void) | undefined;
+    const captureSources = await import(
+      "@/lib/context-capture/capture-sources"
+    );
+    vi.spyOn(captureSources, "listenOverlayCancel").mockImplementation(
+      (handler) => {
+        cancelHandler = handler;
+        return Promise.resolve(() => {});
+      },
+    );
+    vi.spyOn(captureSources, "listenOverlayResult").mockResolvedValue(() => {});
+    vi.spyOn(captureSources, "openCaptureOverlay").mockResolvedValue(undefined);
+
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(
+      screen.getByRole("button", { name: "Recorte" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText("Quick Center")).toBeInTheDocument(),
+    );
+    await waitFor(() => expect(cancelHandler).toBeDefined());
+
+    act(() => {
+      cancelHandler?.();
+    });
+
+    expect(collapseQuickMenuToFloating).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Quick Center")).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("Pergunte alguma coisa..."),
+    ).toBeEnabled();
+  });
+
   it("expands to the quick menu when the local shortcut is pressed", async () => {
     const userEventInstance = userEvent.setup();
     render(<BarApp sessionWarning={null} user={user} />);
