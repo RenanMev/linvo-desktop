@@ -12,7 +12,7 @@ import {
   type LlmModelOption,
   type Procedure,
 } from "@linvo/shared";
-import { ArrowUp, Paperclip, X } from "lucide-react";
+import { ArrowUp, Paperclip, Square, X } from "lucide-react";
 
 import { CaptureContextChip } from "@/components/chat/capture-context-chip";
 import { CaptureMenu } from "@/components/chat/capture-menu";
@@ -50,6 +50,7 @@ export type ChatSendOptions = {
 type ChatInputProps = {
   onSend: (content: string, options?: ChatSendOptions) => void;
   isResponding: boolean;
+  onStop?: () => void;
   replyTarget: ChatReplyRef | null;
   onCancelReply: () => void;
   disabled?: boolean;
@@ -81,6 +82,7 @@ type ChatInputProps = {
 export function ChatInput({
   onSend,
   isResponding,
+  onStop,
   replyTarget,
   onCancelReply,
   disabled = false,
@@ -503,15 +505,29 @@ export function ChatInput({
                 />
               ) : null}
             </div>
-            <Button
-              size="icon-sm"
-              onClick={handleSend}
-              disabled={!canSend || resolving}
-              title="Enviar"
-              className="shrink-0"
-            >
-              <ArrowUp />
-            </Button>
+            {isResponding && onStop ? (
+              <Button
+                type="button"
+                size="sm"
+                onClick={onStop}
+                title="Parar"
+                aria-label="Parar"
+                className="shrink-0"
+              >
+                <Square />
+                Parar
+              </Button>
+            ) : (
+              <Button
+                size="icon-sm"
+                onClick={handleSend}
+                disabled={!canSend || resolving}
+                title="Enviar"
+                className="shrink-0"
+              >
+                <ArrowUp />
+              </Button>
+            )}
           </div>
         </div>
       </div>

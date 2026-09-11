@@ -115,4 +115,39 @@ describe("ChatInput", () => {
       screen.getByRole("button", { name: "Capturar contexto visual" }),
     ).toBeInTheDocument();
   });
+
+  it("T3.2 isResponding + onStop mostra Parar e o clique chama onStop", async () => {
+    const user = userEvent.setup();
+    const onStop = vi.fn();
+
+    render(
+      <ChatInput
+        onSend={vi.fn()}
+        isResponding
+        onStop={onStop}
+        replyTarget={null}
+        onCancelReply={vi.fn()}
+      />,
+    );
+
+    const stop = screen.getByRole("button", { name: "Parar" });
+    expect(stop).toBeEnabled();
+    await user.click(stop);
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it("T3.3 sem isResponding o Parar está ausente e Enviar presente", () => {
+    render(
+      <ChatInput
+        onSend={vi.fn()}
+        isResponding={false}
+        onStop={vi.fn()}
+        replyTarget={null}
+        onCancelReply={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Parar" })).not.toBeInTheDocument();
+    expect(screen.getByTitle("Enviar")).toBeInTheDocument();
+  });
 });

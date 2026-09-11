@@ -26,7 +26,7 @@ import { useGlobalShortcut } from "@/hooks/use-global-shortcut";
 type WindowChromeContextValue = {
   windowLabel: WindowLabel;
   registerAuthPhase: (phase: AuthPhase) => void;
-  registerTrayHandlers: (handlers: TrayHandlers) => void;
+  registerTrayHandlers: (handlers: Partial<TrayHandlers>) => void;
   setShortcutOverride: (handler: (() => void) | null) => void;
   updateTrayAuthState: typeof updateTrayAuthState;
 };

@@ -30,8 +30,8 @@ export function updateTrayAuthState(state: TrayAppState): void {
   void rebuildTrayMenu();
 }
 
-export function registerTrayHandlers(handlers: TrayHandlers): void {
-  trayHandlers = handlers;
+export function registerTrayHandlers(handlers: Partial<TrayHandlers>): void {
+  trayHandlers = { ...trayHandlers, ...handlers };
   void rebuildTrayMenu();
 }
 
@@ -61,6 +61,14 @@ export function buildTrayMenuItems(
         enabled: hasUser,
         action: () => {
           void handlers.openChat();
+        },
+      },
+      {
+        id: "open-workspace",
+        text: "Abrir workspace",
+        enabled: hasUser,
+        action: () => {
+          void handlers.openWorkspace();
         },
       },
       {

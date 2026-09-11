@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Procedure } from "@linvo/shared";
 
 import { ChatPanel } from "@/components/chat/chat-panel";
@@ -11,11 +11,10 @@ import { buildConversationTitle } from "@/lib/chat/conversation-title";
 import { getStoredWorkspaceId } from "@/lib/workspace/workspace-store";
 
 type IslandChatProps = {
-  /** Bloqueia o envio quando a API está fora ou a sessão expirou. */
   disabled?: boolean;
-  /** Ver `autoStartCapture` em `ChatInput` — vem do botão "Recorte" da pílula. */
   autoStartCapture?: boolean;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
+  resetToken?: number;
 };
 
 /**
@@ -41,11 +40,13 @@ export function IslandChat({
   disabled = false,
   autoStartCapture = false,
   onOpenProcedureChecklist,
+  resetToken = 0,
 }: IslandChatProps) {
   const [conversationId, setConversationId] = useState<string | null>(() =>
     loadActiveConversationId(),
   );
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const skipResetRef = useRef(true);
 
   // Lido uma vez por render em vez de vir de contexto: a ilha não tem
   // `WorkspaceProvider`, e o id é a mesma fonte que o painel usa.
@@ -68,6 +69,7 @@ export function IslandChat({
     startReply,
     cancelReply,
     resolveToolRequest,
+    stopResponding,
   } = useChat({
     conversationId,
     workspaceId,
@@ -75,6 +77,16 @@ export function IslandChat({
     onConversationCreated: handleConversationCreated,
     ...(onOpenProcedureChecklist ? { onOpenProcedureChecklist } : {}),
   });
+
+  useEffect(() => {
+    if (skipResetRef.current) {
+      skipResetRef.current = false;
+      return;
+    }
+    stopResponding();
+    saveActiveConversationId(null);
+    setConversationId(null);
+  }, [resetToken, stopResponding]);
 
   /*
    * Título derivado da primeira mensagem do usuário.
@@ -116,22 +128,20 @@ export function IslandChat({
           replyTarget={replyTarget}
           pendingToolRequest={pendingToolRequest}
           onSend={(content, options) => void sendMessage(content, options)}
+          onStop={stopResponding}
           onReply={startReply}
           onRegenerate={(message) => void regenerateMessage(message.id)}
           onCancelReply={cancelReply}
           onApproveTool={() => void resolveToolRequest(true)}
           onDenyTool={() => void resolveToolRequest(false)}
-          disabled={disabled || isResponding || Boolean(pendingToolRequest)}
+          disabled={disabled || Boolean(pendingToolRequest)}
           workspaceId={workspaceId}
           selectedModel={selectedModel}
           onModelChange={setSelectedModel}
-          // A ilha é a janela `main`: a captura precisa se esconder dela, não
-          // do painel, e devolver o recorte para cá.
           captureWindowLabel="main"
           autoStartCapture={autoStartCapture}
-          // A ilha tem cabeçalho próprio; a barra de título do chat viraria
-          // uma segunda faixa repetindo "Nova conversa" logo abaixo.
           showToolbar={false}
+          variant="assist"
           {...(onOpenProcedureChecklist
             ? { onOpenProcedureChecklist }
             : {})}

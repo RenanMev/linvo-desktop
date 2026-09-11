@@ -10,6 +10,7 @@ import {
   saveCachedConversationMessages,
 } from "@/lib/chat/chat-local-store";
 import {
+  appendCitation,
   appendReasoning,
   appendToMessage,
   appendToolUse,
@@ -19,7 +20,9 @@ import {
   createReplyRef,
   createUserMessage,
   finalizeMessage,
+  mergeAssistantDoneMessage,
   mergeAttachmentPreviewUrls,
+  setCaptureSummary,
   setMessageModel,
   appendArtifact,
   upsertActivity,
@@ -79,6 +82,7 @@ export function useChat({
   );
   const abortRef = useRef<AbortController | null>(null);
   const streamConversationIdRef = useRef<string | null>(null);
+  const skipHistoryForConversationRef = useRef<string | null>(null);
   const activeConversationRef = useRef<string | null>(conversationId);
   const assistantIdRef = useRef<string | null>(null);
   const workspaceIdRef = useRef<string | null>(workspaceId);
@@ -149,6 +153,11 @@ export function useChat({
     [],
   );
 
+  const stopResponding = useCallback(() => {
+    abortRef.current?.abort();
+    setIsResponding(false);
+  }, []);
+
   useEffect(() => {
     const runningController = abortRef.current;
     if (
@@ -156,6 +165,14 @@ export function useChat({
       runningController &&
       !runningController.signal.aborted &&
       streamConversationIdRef.current === conversationId
+    ) {
+      setIsLoadingHistory(false);
+      return;
+    }
+
+    if (
+      conversationId &&
+      skipHistoryForConversationRef.current === conversationId
     ) {
       setIsLoadingHistory(false);
       return;
@@ -171,6 +188,7 @@ export function useChat({
     chainOpenedSlugsRef.current = new Set();
 
     if (!conversationId) {
+      skipHistoryForConversationRef.current = null;
       setMessages([]);
       setIsLoadingHistory(false);
       setError(null);
@@ -386,7 +404,7 @@ export function useChat({
             setMessages((prev) => {
               const next = prev.map((item) =>
                 item.id === assistantId || item.id === currentAssistantId
-                  ? mapped
+                  ? mergeAssistantDoneMessage(mapped, item)
                   : item,
               );
               if (isCurrentRun(activeConversationId, controller)) {
@@ -425,6 +443,32 @@ export function useChat({
             }
             setMessages((prev) => {
               const next = appendArtifact(prev, currentAssistantId, artifact);
+              if (isCurrentRun(activeConversationId, controller)) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onCitation: (citation) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
+            const targetId = currentAssistantId;
+            setMessages((prev) => {
+              const next = appendCitation(prev, targetId, citation);
+              if (isCurrentRun(activeConversationId, controller)) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onCaptureSummary: (bullets) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
+            const targetId = currentAssistantId;
+            setMessages((prev) => {
+              const next = setCaptureSummary(prev, targetId, bullets);
               if (isCurrentRun(activeConversationId, controller)) {
                 persistMessages(activeConversationId, next);
               }
@@ -535,6 +579,7 @@ export function useChat({
       if (!canSendMessage(rawContent, isResponding, { hasAttachment })) return;
 
       let activeConversationId = conversationId;
+      let createdConversation = false;
 
       if (!activeConversationId) {
         try {
@@ -544,7 +589,7 @@ export function useChat({
           }
           activeConversationId = conversation.id;
           activeConversationRef.current = conversation.id;
-          onConversationCreated?.(conversation.id);
+          createdConversation = true;
         } catch (caught) {
           setError(formatChatError(caught, "Não foi possível criar a conversa"));
           return;
@@ -558,6 +603,10 @@ export function useChat({
       const optimisticAssistantId = crypto.randomUUID();
       const now = Date.now();
       const controller = beginRun(activeConversationId);
+      skipHistoryForConversationRef.current = activeConversationId;
+      if (createdConversation) {
+        onConversationCreated?.(activeConversationId);
+      }
       setIsResponding(true);
       setError(null);
       setPendingToolRequest(null);
@@ -674,7 +723,7 @@ export function useChat({
             setMessages((prev) => {
               const next = prev.map((item) =>
                 item.id === optimisticAssistantId || item.id === assistantId
-                  ? mapped
+                  ? mergeAssistantDoneMessage(mapped, item)
                   : item,
               );
               if (isCurrentRun(activeConversationId, controller)) {
@@ -713,6 +762,32 @@ export function useChat({
             }
             setMessages((prev) => {
               const next = appendArtifact(prev, assistantId, artifact);
+              if (isCurrentRun(activeConversationId, controller)) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onCitation: (citation) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
+            const targetId = assistantId;
+            setMessages((prev) => {
+              const next = appendCitation(prev, targetId, citation);
+              if (isCurrentRun(activeConversationId, controller)) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onCaptureSummary: (bullets) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
+            const targetId = assistantId;
+            setMessages((prev) => {
+              const next = setCaptureSummary(prev, targetId, bullets);
               if (isCurrentRun(activeConversationId, controller)) {
                 persistMessages(activeConversationId, next);
               }
@@ -863,6 +938,8 @@ export function useChat({
                 activities: undefined,
                 reasoning: undefined,
                 model: undefined,
+                citations: undefined,
+                captureSummary: undefined,
               }
             : message,
         );
@@ -890,7 +967,7 @@ export function useChat({
             setMessages((prev) => {
               const next = prev.map((item) =>
                 item.id === assistantMessageId || item.id === assistantId
-                  ? mapped
+                  ? mergeAssistantDoneMessage(mapped, item)
                   : item,
               );
               if (isCurrentRun(activeConversationId, controller)) {
@@ -929,6 +1006,32 @@ export function useChat({
             }
             setMessages((prev) => {
               const next = appendArtifact(prev, assistantId, artifact);
+              if (isCurrentRun(activeConversationId, controller)) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onCitation: (citation) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
+            const targetId = assistantId;
+            setMessages((prev) => {
+              const next = appendCitation(prev, targetId, citation);
+              if (isCurrentRun(activeConversationId, controller)) {
+                persistMessages(activeConversationId, next);
+              }
+              return next;
+            });
+          },
+          onCaptureSummary: (bullets) => {
+            if (!isCurrentRun(activeConversationId, controller)) {
+              return;
+            }
+            const targetId = assistantId;
+            setMessages((prev) => {
+              const next = setCaptureSummary(prev, targetId, bullets);
               if (isCurrentRun(activeConversationId, controller)) {
                 persistMessages(activeConversationId, next);
               }
@@ -1102,5 +1205,6 @@ export function useChat({
     startReply,
     cancelReply,
     resolveToolRequest,
+    stopResponding,
   };
 }

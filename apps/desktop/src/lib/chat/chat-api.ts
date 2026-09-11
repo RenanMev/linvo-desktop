@@ -3,6 +3,7 @@ import {
   conversationSchema,
   messageActivitySchema,
   messageArtifactSchema,
+  messageCitationSchema,
   messageListSchema,
   messageToolUseSchema,
   modelInfoSchema,
@@ -14,6 +15,7 @@ import {
   type Message,
   type MessageActivity,
   type MessageArtifact,
+  type MessageCitation,
   type MessageToolUse,
   type ToolRequest,
 } from "@linvo/shared";
@@ -164,10 +166,30 @@ type StreamHandlers = {
   onToolRequest?: (request: ToolRequest) => void;
   onActivity?: (activity: MessageActivity) => void;
   onArtifact?: (artifact: MessageArtifact) => void;
+  onCitation?: (citation: MessageCitation) => void;
+  onCaptureSummary?: (bullets: string[]) => void;
   onReasoningChunk?: (text: string) => void;
   onModel?: (model: string) => void;
   onAssistantDone?: (message: Message) => void;
 };
+
+function parseCaptureSummaryBullets(data: unknown): string[] | undefined {
+  if (typeof data !== "object" || data === null || !("bullets" in data)) {
+    return undefined;
+  }
+  const { bullets } = data as { bullets: unknown };
+  if (!Array.isArray(bullets) || bullets.length < 1 || bullets.length > 3) {
+    return undefined;
+  }
+  const parsed: string[] = [];
+  for (const item of bullets) {
+    if (typeof item !== "string" || item.length < 1) {
+      return undefined;
+    }
+    parsed.push(item);
+  }
+  return parsed;
+}
 
 async function* consumeSseStream(
   response: Response,
@@ -227,6 +249,20 @@ async function* consumeSseStream(
           const artifact = messageArtifactSchema.safeParse(parsed.data);
           if (artifact.success) {
             handlers.onArtifact?.(artifact.data);
+          }
+          break;
+        }
+        case "citation": {
+          const citation = messageCitationSchema.safeParse(parsed.data);
+          if (citation.success) {
+            handlers.onCitation?.(citation.data);
+          }
+          break;
+        }
+        case "capture_summary": {
+          const bullets = parseCaptureSummaryBullets(parsed.data);
+          if (bullets) {
+            handlers.onCaptureSummary?.(bullets);
           }
           break;
         }

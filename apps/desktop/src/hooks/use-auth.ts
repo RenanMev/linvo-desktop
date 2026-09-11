@@ -17,8 +17,12 @@ import {
 import { enterLoggedInDesktop } from "@/lib/auth/enter-logged-in-desktop";
 import { applyOnboardingWindowSurface } from "@/lib/auth/onboarding-window-surface";
 import { clearStoredAppearance } from "@/lib/appearance/appearance-store";
+import { saveActiveConversationId } from "@/lib/chat/active-conversation-store";
 import { clearChatLocalCache } from "@/lib/chat/chat-local-store";
-import { clearStoredWorkspaceId } from "@/lib/workspace/workspace-store";
+import {
+  clearStoredWorkspaceId,
+  setStoredWorkspaceId,
+} from "@/lib/workspace/workspace-store";
 import {
   clearOnboardingCompleted,
   hasCompletedOnboarding,
@@ -49,7 +53,19 @@ async function persistSession(
   }
 }
 
+function persistWorkspaceFromUser(user: UserPublic): void {
+  if (user.activeWorkspaceId) {
+    setStoredWorkspaceId(user.activeWorkspaceId);
+  }
+}
+
+function conversationIdFromChatRoute(route: string): string | null {
+  const match = /^\/chat\/([^/?#]+)$/.exec(route);
+  return match?.[1] ?? null;
+}
+
 async function enterSession(user: UserPublic): Promise<void> {
+  persistWorkspaceFromUser(user);
   await enterLoggedInDesktop(user);
 }
 
@@ -120,6 +136,7 @@ export function useAuth() {
        * fica atrás da tela de login.
        */
       const finishBoot = async (user: UserPublic) => {
+        persistWorkspaceFromUser(user);
         if (shouldShowOnboarding(user)) {
           dispatch({ type: "START_ONBOARDING", user });
           return;
@@ -263,6 +280,7 @@ export function useAuth() {
     try {
       const result = await loginRequest(input);
       await persistSession(result.accessToken, result.refreshToken);
+      persistWorkspaceFromUser(result.user);
       if (shouldShowOnboarding(result.user)) {
         dispatch({ type: "START_ONBOARDING", user: result.user });
       } else {
@@ -284,6 +302,7 @@ export function useAuth() {
     try {
       const result = await registerRequest(input);
       await persistSession(result.accessToken, result.refreshToken);
+      persistWorkspaceFromUser(result.user);
       if (shouldShowOnboarding(result.user)) {
         dispatch({ type: "START_ONBOARDING", user: result.user });
       } else {
@@ -325,6 +344,11 @@ export function useAuth() {
       }
       markOnboardingCompleted(state.user.id);
       clearOnboardingProgress(state.user.id);
+      persistWorkspaceFromUser(state.user);
+      const conversationId = conversationIdFromChatRoute(route);
+      if (conversationId) {
+        saveActiveConversationId(conversationId);
+      }
       dispatch({ type: "START_FLOATING" });
       await enterLoggedInDesktop(state.user, route);
     },

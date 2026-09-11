@@ -120,13 +120,14 @@ describe("buildTrayMenuItems", () => {
     expect(labels).toEqual([
       "Mostrar barra",
       "Abrir chat",
+      "Abrir workspace",
       "Abrir configurações",
       "Ocultar tudo",
       "Sair",
     ]);
   });
 
-  it("disables chat and settings when user is missing in floating phase", () => {
+  it("disables chat, workspace and settings when user is missing in floating phase", () => {
     const items = buildTrayMenuItems(
       { phase: "floating", user: null },
       defaultTrayHandlers,
@@ -139,6 +140,13 @@ describe("buildTrayMenuItems", () => {
         item.id === "open-chat",
     ) as { enabled?: boolean } | undefined;
 
+    const workspace = items.find(
+      (item) =>
+        typeof item === "object" &&
+        "id" in item &&
+        item.id === "open-workspace",
+    ) as { enabled?: boolean } | undefined;
+
     const settings = items.find(
       (item) =>
         typeof item === "object" &&
@@ -147,6 +155,7 @@ describe("buildTrayMenuItems", () => {
     ) as { enabled?: boolean } | undefined;
 
     expect(chat?.enabled).toBe(false);
+    expect(workspace?.enabled).toBe(false);
     expect(settings?.enabled).toBe(false);
   });
 });

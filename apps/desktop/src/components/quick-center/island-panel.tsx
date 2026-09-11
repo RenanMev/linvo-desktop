@@ -1,12 +1,12 @@
 import type { Procedure } from "@linvo/shared";
 import { GripVertical, Maximize2, Minus, X } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { IslandChat } from "@/components/quick-center/island-chat";
 import { Button } from "@/components/ui/button";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useQuickCenterWorkspace } from "@/hooks/use-quick-center-workspace";
-import { loadActiveConversationId } from "@/lib/chat/active-conversation-store";
+import { loadActiveConversationId, saveActiveConversationId } from "@/lib/chat/active-conversation-store";
 import { openPanel } from "@/lib/panel-window";
 
 type IslandPanelProps = {
@@ -45,6 +45,7 @@ export function IslandPanel({
   onOpenProcedureChecklist,
 }: IslandPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [chatEpoch, setChatEpoch] = useState(0);
   const workspace = useQuickCenterWorkspace(true);
 
   /*
@@ -71,6 +72,11 @@ export function IslandPanel({
     onClose();
   }
 
+  function handleNewQuestion() {
+    saveActiveConversationId(null);
+    setChatEpoch((value) => value + 1);
+  }
+
   return (
     <div
       id="quick-center-panel"
@@ -84,7 +90,7 @@ export function IslandPanel({
       className="flex h-full min-h-0 w-full flex-col text-card-foreground"
       role="dialog"
       aria-modal="true"
-      aria-label="Chat"
+      aria-label="Assist"
     >
       <div className="flex shrink-0 items-center gap-2 border-b border-hairline px-2.5 py-2.5">
         <span
@@ -99,6 +105,15 @@ export function IslandPanel({
             {workspace.name ?? "Workspace"}
           </p>
         </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          onClick={handleNewQuestion}
+          className="text-foreground/50 hover:text-foreground"
+        >
+          Nova pergunta
+        </Button>
         <Button
           type="button"
           variant="ghost"
@@ -128,8 +143,8 @@ export function IslandPanel({
           variant="ghost"
           size="icon-xs"
           onClick={onClose}
-          title="Fechar chat"
-          aria-label="Fechar chat"
+          title="Fechar Assist"
+          aria-label="Fechar Assist"
           className="text-foreground/50 hover:text-foreground"
         >
           <X />
@@ -137,6 +152,7 @@ export function IslandPanel({
       </div>
 
       <IslandChat
+        resetToken={chatEpoch}
         disabled={!apiHealthy || Boolean(sessionWarning)}
         // Só depois de assentar: armar durante o morph abriria o overlay de
         // recorte por cima de uma janela ainda em movimento.

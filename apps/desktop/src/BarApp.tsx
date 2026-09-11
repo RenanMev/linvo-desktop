@@ -14,7 +14,7 @@ import { IslandPanel } from "@/components/quick-center/island-panel";
 import { useApiHealth } from "@/hooks/use-api-health";
 import { useFloatingBootstrap } from "@/hooks/use-floating-bootstrap";
 import { useWindowPosition } from "@/hooks/use-window-position";
-import { hideAllWindows } from "@/lib/app-windows";
+import { hideAllWindows, showMainBar } from "@/lib/app-windows";
 import {
   collapseChecklistToFloating,
   expandFloatingToChecklist,
@@ -53,6 +53,9 @@ import {
   rememberChecklistConversation,
   type ChecklistWindowPayload,
 } from "@/lib/checklist-window";
+import { openPanel } from "@/lib/panel-window";
+import { registerTrayHandlers } from "@/lib/system-tray";
+import { createFloatingTrayHandlers } from "@/lib/tray-handlers";
 
 type BarAppProps = {
   sessionWarning: string | null;
@@ -143,6 +146,7 @@ export function BarApp({ sessionWarning }: BarAppProps) {
   const restoreChatFocusRef = useRef(false);
   const chatButtonRef = useRef<HTMLButtonElement>(null);
   const edgeHandleRef = useRef<HTMLButtonElement>(null);
+  const openQuickMenuRef = useRef<() => Promise<void>>(async () => {});
   const islandMorphRef = useRef<FloatingIslandMorph | null>(null);
   const islandMorphIdRef = useRef(0);
   const islandMorphCompletionRef = useRef<{
@@ -620,6 +624,24 @@ export function BarApp({ sessionWarning }: BarAppProps) {
       finishTransition();
     }
   }
+
+  openQuickMenuRef.current = handleOpenQuickMenu;
+
+  useEffect(() => {
+    const handlers = createFloatingTrayHandlers({
+      expandAssist: async () => {
+        await showMainBar();
+        await openQuickMenuRef.current();
+      },
+      openWorkspace: async () => {
+        await openPanel("/chat");
+      },
+    });
+    registerTrayHandlers({
+      openChat: handlers.openChat,
+      openWorkspace: handlers.openWorkspace,
+    });
+  }, []);
 
   async function handleCaptureContext() {
     if (

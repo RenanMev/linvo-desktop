@@ -39,6 +39,7 @@ async function* toAsyncGenerator(chunks: string[]) {
 
 describe("useQuickPrompt", () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.mocked(chatApi.createConversation).mockReset();
     vi.mocked(chatApi.streamChatResponse).mockReset();
     vi.mocked(uploadChatAttachment).mockReset();
@@ -78,6 +79,9 @@ describe("useQuickPrompt", () => {
     expect(result.current.conversationId).toBe("conv-1");
     expect(result.current.responseText).toBe("Olá, mundo");
     expect(result.current.status).toBe("done");
+    expect(localStorage.getItem("linvo:island-active-conversation")).toBe(
+      "conv-1",
+    );
   });
 
   it("uploads the visual context and streams with its attachment id", async () => {

@@ -38,6 +38,8 @@ type ChatPanelProps = {
    * repetindo "Nova conversa".
    */
   showToolbar?: boolean;
+  onStop?: () => void;
+  variant?: "assist";
 };
 
 export function ChatPanel({
@@ -61,6 +63,8 @@ export function ChatPanel({
   captureWindowLabel,
   autoStartCapture,
   showToolbar = true,
+  onStop,
+  variant,
 }: ChatPanelProps) {
   const inputDisabled = disabled || Boolean(pendingToolRequest);
   const activeModel =
@@ -92,12 +96,15 @@ export function ChatPanel({
           onDenyTool={onDenyTool}
           toolActionDisabled={isResponding}
           conversationId={conversationKey}
+          workspaceId={workspaceId}
+          variant={variant}
         />
       </div>
       <ChatInput
         key={conversationKey ?? "draft"}
         onSend={onSend}
         isResponding={isResponding}
+        onStop={onStop}
         replyTarget={replyTarget}
         onCancelReply={onCancelReply}
         disabled={inputDisabled}

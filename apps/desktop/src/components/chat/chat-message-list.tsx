@@ -16,6 +16,8 @@ type ChatMessageListProps = {
   onDenyTool?: () => void;
   toolActionDisabled?: boolean;
   conversationId?: string | null;
+  workspaceId?: string | null;
+  variant?: "assist";
 };
 
 const SCROLL_STICK_THRESHOLD_PX = 80;
@@ -32,6 +34,8 @@ export function ChatMessageList({
   onDenyTool,
   toolActionDisabled = false,
   conversationId = null,
+  workspaceId = null,
+  variant,
 }: ChatMessageListProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
@@ -43,6 +47,18 @@ export function ChatMessageList({
         message.role === "assistant" &&
         (message.status === "done" || message.status === "error"),
     )?.id;
+
+  const lastAssistCopyId =
+    variant === "assist"
+      ? [...messages]
+          .reverse()
+          .find(
+            (message) =>
+              message.role === "assistant" &&
+              message.status === "done" &&
+              message.content.trim().length > 0,
+          )?.id
+      : undefined;
 
   const updateStickToBottom = useCallback(() => {
     const viewport = viewportRef.current;
@@ -61,7 +77,7 @@ export function ChatMessageList({
       return;
     }
 
-    viewport.scrollTo({
+    viewport.scrollTo?.({
       top: viewport.scrollHeight,
       behavior,
     });
@@ -109,6 +125,9 @@ export function ChatMessageList({
             onDenyTool={onDenyTool}
             toolActionDisabled={toolActionDisabled}
             conversationId={conversationId}
+            workspaceId={workspaceId}
+            variant={variant}
+            showAssistCopy={message.id === lastAssistCopyId}
           />
         ))}
       </div>

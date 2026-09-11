@@ -34,6 +34,15 @@ export type ChatArtifact = {
   pageCount?: number;
 };
 
+export type ChatCitationKind = "rule" | "procedure" | "document";
+
+export type ChatCitation = {
+  id: string;
+  kind: ChatCitationKind;
+  label: string;
+  href?: string;
+};
+
 export type ChatAttachment = {
   id: string;
   kind: "image";
@@ -64,6 +73,8 @@ export type ChatMessage = {
   activities?: ChatActivity[];
   artifacts?: ChatArtifact[];
   attachments?: ChatAttachment[];
+  citations?: ChatCitation[];
+  captureSummary?: string[];
   reasoning?: string;
   model?: string;
 };

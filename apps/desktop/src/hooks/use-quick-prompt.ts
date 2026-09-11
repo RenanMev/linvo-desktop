@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { AuthApiError, AuthNetworkError } from "@/lib/auth/auth-api";
 import * as chatApi from "@/lib/chat/chat-api";
 import { ChatApiError } from "@/lib/chat/chat-api";
+import { saveActiveConversationId } from "@/lib/chat/active-conversation-store";
 import { uploadChatAttachment } from "@/lib/chat/chat-attachments-api";
 import type { ChatSendAttachment } from "@/lib/chat/types";
 
@@ -95,6 +96,7 @@ export function useQuickPrompt(): QuickPromptController {
         activeConversationId = conversation.id;
         conversationIdRef.current = conversation.id;
         setConversationId(conversation.id);
+        saveActiveConversationId(conversation.id);
       }
 
       let attachmentIds: string[] | undefined;
