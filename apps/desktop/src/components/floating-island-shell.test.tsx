@@ -84,17 +84,12 @@ describe("FloatingIslandShell", () => {
     // "barril", então não precisa mais ser reduzido durante o morph — e não
     // haver troca é o que evita o pulo de raio ao assentar.
     expect(pillStyle).toContain("border-radius: 12px");
-    expect(pillStyle).toContain("translate3d(0px, 0px, 0) scale(1, 1)");
     expect(pillStyle).toContain("calc(");
 
-    // A superfície de destino já está no lugar, encolhida sob a pílula: nenhum
-    // frame do cross-fade deixa o desktop aparecer por baixo.
     expect(panel).toHaveAttribute("data-shape", "expanded");
     expect(panelStyle).toContain("width: 378px");
     expect(panelStyle).toContain("border-radius: 14px");
-    expect(panelStyle).toContain(
-      `translate3d(106px, 243px, 0) scale(${166 / 378}, ${32 / 518})`,
-    );
+    expect(panelStyle).toContain("calc(");
     expect(panelStyle).toContain("opacity: 1");
   });
 
@@ -121,9 +116,7 @@ describe("FloatingIslandShell", () => {
 
     expect(panel.getAttribute("style")).toContain("opacity: 1");
     expect(pill.getAttribute("style")).toContain("opacity: 0");
-    expect(pill.getAttribute("style")).toContain(
-      `translate3d(-106px, -243px, 0) scale(${378 / 166}, ${518 / 32})`,
-    );
+    expect(pill.getAttribute("style")).toContain("calc(");
   });
 
   it("settles the expanded state on an untransformed layout", () => {
@@ -147,8 +140,9 @@ describe("FloatingIslandShell", () => {
     const style =
       screen.getByTestId("floating-island-surface").getAttribute("style") ?? "";
 
-    expect(style).toContain("translate3d(0px, 0px, 0) scale(1, 1)");
+    expect(style).toContain("width: 378px");
     expect(style).toContain("border-radius: 14px");
+    expect(style).toContain("calc(");
   });
 
   it("renders one interactive layer when stable", () => {

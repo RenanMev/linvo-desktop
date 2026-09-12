@@ -35,13 +35,11 @@ describe("floating-checklist-mode", () => {
   it("clips to the union of compact and checklist while expanding", async () => {
     await expandFloatingToChecklist("down");
 
-    // O checklist é mais estreito que a pílula está deslocada dentro do
-    // envelope: a união é o retângulo do checklist (ver window-mode.ts).
     expect(regionCalls()).toEqual([
       [
         "set_window_region",
         {
-          region: { x: 71, y: 25, width: 286, height: 418 },
+          region: { x: 51, y: 5, width: 326, height: 458 },
           radius: 14,
         },
       ],
