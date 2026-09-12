@@ -35,8 +35,10 @@ describe("enterFloatingMode", () => {
     resetOverlayChromeCache();
     vi.mocked(updateTaskbarVisibility).mockClear();
     invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === "monitor_work_area") {
+        return Promise.resolve({ x: 0, y: 0, width: 1920, height: 1080 });
+      }
       if (cmd === "show_window_no_activate") {
-        // Como no runtime: `Ok(())` chega no front como `null`.
         return Promise.resolve(null);
       }
       if (cmd === "overlay_chrome_status") {
@@ -56,6 +58,9 @@ describe("enterFloatingMode", () => {
     invokeMock.mockImplementation((cmd: string) => {
       if (cmd === "animate_window_bounds") {
         return Promise.reject(new Error("SetWindowPos failed"));
+      }
+      if (cmd === "monitor_work_area") {
+        return Promise.resolve({ x: 0, y: 0, width: 1920, height: 1080 });
       }
       if (cmd === "show_window_no_activate") {
         // Como no runtime: `Ok(())` chega no front como `null`.
