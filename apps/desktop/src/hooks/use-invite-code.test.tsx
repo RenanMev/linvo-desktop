@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useInviteCode } from "@/hooks/use-invite-code";
+import { POLL_MS, useInviteCode } from "@/hooks/use-invite-code";
 
 const getActiveInviteCode = vi.fn();
 const generateInviteCode = vi.fn();
@@ -84,7 +84,7 @@ describe("useInviteCode", () => {
     });
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(3000);
+      await vi.advanceTimersByTimeAsync(POLL_MS);
     });
 
     expect(result.current.uiState).toBe("redeemed");
@@ -130,7 +130,7 @@ describe("useInviteCode", () => {
     expect(result.current.uiState).toBe("active-without-value");
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(3000);
+      await vi.advanceTimersByTimeAsync(POLL_MS);
     });
 
     expect(result.current.uiState).toBe("active-without-value");

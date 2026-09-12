@@ -21,12 +21,6 @@ export function AuthGate() {
     updateTrayAuthState({ phase: auth.phase, user: auth.user });
 
     registerTrayHandlers({
-      openChat: async () => {
-        if (!auth.user) {
-          return;
-        }
-        await openPanel("/chat", auth.user);
-      },
       openSettings: async () => {
         if (!auth.user) {
           return;
@@ -37,6 +31,22 @@ export function AuthGate() {
         await auth.logout();
         await quitApp();
       },
+      openWorkspace: async () => {
+        if (!auth.user) {
+          return;
+        }
+        await openPanel("/chat", auth.user);
+      },
+      ...(auth.phase === "floating"
+        ? {}
+        : {
+            openChat: async () => {
+              if (!auth.user) {
+                return;
+              }
+              await openPanel("/chat", auth.user);
+            },
+          }),
     });
   }, [
     auth.phase,

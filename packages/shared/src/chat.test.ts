@@ -8,6 +8,8 @@ import {
   messageActivitySchema,
   messageArtifactSchema,
   messageAttachmentSchema,
+  messageCitationKindSchema,
+  messageCitationSchema,
   messageSchema,
   messageToolUseSchema,
   reasoningChunkSchema,
@@ -337,6 +339,94 @@ describe("toolResultInputSchema", () => {
       approved: false,
     });
     expect(parsed.approved).toBe(false);
+  });
+});
+
+const baseMessage = {
+  id: "m1",
+  role: "assistant" as const,
+  content: "Resposta",
+  status: "done" as const,
+  createdAt: "2026-01-01T00:00:00.000Z",
+};
+
+describe("messageSchema citations", () => {
+  it("T7.1 parses a message without citations", () => {
+    const parsed = messageSchema.parse(baseMessage);
+    expect(parsed.content).toBe("Resposta");
+    expect(parsed.citations).toBeUndefined();
+  });
+
+  it("T7.2 parses citation kinds rule, procedure and document", () => {
+    const parsed = messageSchema.parse({
+      ...baseMessage,
+      citations: [
+        { id: "r1", kind: "rule", label: "Regra de reembolso" },
+        { id: "p1", kind: "procedure", label: "Cancelar plano" },
+        { id: "d1", kind: "document", label: "Política comercial" },
+      ],
+    });
+    expect(parsed.citations?.map((item) => item.kind)).toEqual([
+      "rule",
+      "procedure",
+      "document",
+    ]);
+  });
+
+  it("T7.3 keeps citations: [] instead of collapsing to undefined", () => {
+    const parsed = messageSchema.parse({
+      ...baseMessage,
+      citations: [],
+    });
+    expect(parsed.citations).toEqual([]);
+    expect(parsed.citations).not.toBeUndefined();
+  });
+
+  it("T7.3b unknown kind fails the citations array on messageSchema; SSE parser (7b) strips the item so the rest of the message stays usable", () => {
+    expect(messageCitationKindSchema.options).toEqual([
+      "rule",
+      "procedure",
+      "document",
+    ]);
+    expect(() =>
+      messageCitationSchema.parse({
+        id: "c1",
+        kind: "wiki",
+        label: "Página",
+      }),
+    ).toThrow();
+    expect(() =>
+      messageSchema.parse({
+        ...baseMessage,
+        citations: [
+          { id: "c1", kind: "wiki", label: "Página" },
+          { id: "d1", kind: "document", label: "Política comercial" },
+        ],
+      }),
+    ).toThrow();
+    const usable = messageSchema.parse({
+      ...baseMessage,
+      citations: [{ id: "d1", kind: "document", label: "Política comercial" }],
+    });
+    expect(usable.content).toBe("Resposta");
+    expect(usable.status).toBe("done");
+    expect(usable.citations).toEqual([
+      { id: "d1", kind: "document", label: "Política comercial" },
+    ]);
+  });
+
+  it("parses optional captureSummary of up to 3 bullets", () => {
+    const parsed = messageSchema.parse({
+      ...baseMessage,
+      captureSummary: ["pedido", "protocolo", "prazo"],
+    });
+    expect(parsed.captureSummary).toEqual(["pedido", "protocolo", "prazo"]);
+    expect(() =>
+      messageSchema.parse({
+        ...baseMessage,
+        captureSummary: ["a", "b", "c", "d"],
+      }),
+    ).toThrow();
   });
 });
 

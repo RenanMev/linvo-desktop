@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   appendArtifact,
+  appendCitation,
   appendReasoning,
   appendToMessage,
   appendToolUse,
@@ -11,7 +12,10 @@ import {
   createReplyRef,
   createUserMessage,
   finalizeMessage,
+  mergeAssistantDoneMessage,
   replyAuthorLabel,
+  setCaptureSummary,
+  setMessageCitations,
   truncateReplyContent,
   upsertActivity,
 } from "@/lib/chat/chat-state";
@@ -229,5 +233,108 @@ describe("createReplyRef with attachments", () => {
       role: "user",
       content: "Contexto visual",
     });
+  });
+});
+
+describe("appendCitation", () => {
+  const citation = {
+    id: "d1",
+    kind: "document" as const,
+    label: "Política comercial",
+  };
+
+  it("appends citations to the matching message", () => {
+    const messages = [createAssistantPlaceholder("a1", 1)];
+    const withOne = appendCitation(messages, "a1", citation);
+    const withTwo = appendCitation(withOne, "a1", {
+      ...citation,
+      id: "p1",
+      kind: "procedure",
+      label: "Cancelar plano",
+    });
+
+    expect(withTwo[0]?.citations).toEqual([
+      citation,
+      { id: "p1", kind: "procedure", label: "Cancelar plano" },
+    ]);
+  });
+
+  it("ignores a citation already present", () => {
+    const messages = [createAssistantPlaceholder("a1", 1)];
+    const withOne = appendCitation(messages, "a1", citation);
+    const again = appendCitation(withOne, "a1", citation);
+
+    expect(again[0]?.citations).toHaveLength(1);
+    expect(again[0]).toBe(withOne[0]);
+  });
+});
+
+describe("setMessageCitations", () => {
+  it("keeps citations: [] as a search miss", () => {
+    const messages = [createAssistantPlaceholder("a1", 1)];
+    const result = setMessageCitations(messages, "a1", []);
+
+    expect(result[0]?.citations).toEqual([]);
+    expect(result[0]?.citations).not.toBeUndefined();
+  });
+});
+
+describe("setCaptureSummary", () => {
+  it("sets captureSummary bullets on the matching message", () => {
+    const messages = [createAssistantPlaceholder("a1", 1)];
+    const bullets = ["pedido", "protocolo 123", "sem multa"];
+    const result = setCaptureSummary(messages, "a1", bullets);
+
+    expect(result[0]?.captureSummary).toEqual(bullets);
+    expect(result[1]).toBeUndefined();
+  });
+});
+
+describe("mergeAssistantDoneMessage", () => {
+  it("keeps local citations when done omits the field", () => {
+    const local = {
+      ...createAssistantPlaceholder("a1", 1),
+      content: "com fonte",
+      citations: [
+        { id: "d1", kind: "document" as const, label: "Política comercial" },
+      ],
+    };
+    const mapped = {
+      ...local,
+      id: "asst-1",
+      status: "done" as const,
+      citations: undefined,
+    };
+
+    expect(mergeAssistantDoneMessage(mapped, local).citations).toEqual([
+      { id: "d1", kind: "document", label: "Política comercial" },
+    ]);
+  });
+
+  it("uses citations: [] from done as a search miss", () => {
+    const local = createAssistantPlaceholder("a1", 1);
+    const mapped = {
+      ...local,
+      status: "done" as const,
+      citations: [],
+    };
+
+    expect(mergeAssistantDoneMessage(mapped, local).citations).toEqual([]);
+  });
+
+  it("keeps local captureSummary when done omits the field", () => {
+    const local = {
+      ...createAssistantPlaceholder("a1", 1),
+      captureSummary: ["pedido de cancelamento"],
+    };
+    const mapped = {
+      ...local,
+      status: "done" as const,
+      captureSummary: undefined,
+    };
+
+    expect(mergeAssistantDoneMessage(mapped, local).captureSummary).toEqual([
+      "pedido de cancelamento",
+    ]);
   });
 });

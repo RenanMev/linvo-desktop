@@ -5,7 +5,6 @@ import {
   type Window,
 } from "@tauri-apps/api/window";
 
-import { islandLog } from "@/lib/island-debug";
 import type { MonitorInfo, Position, Size } from "@/lib/window-position";
 
 export type WindowBounds = {
@@ -93,8 +92,6 @@ export async function applyWindowBoundsImmediate(
   win: Window,
   to: WindowBounds,
 ): Promise<void> {
-  const startedAt = performance.now();
-  islandLog("native:setBounds:begin", { to });
   try {
     await invoke("set_window_bounds", {
       to: {
@@ -104,13 +101,7 @@ export async function applyWindowBoundsImmediate(
         height: to.size.height,
       },
     });
-    islandLog("native:setBounds:done", {
-      ipcMs: Number((performance.now() - startedAt).toFixed(1)),
-    });
   } catch {
-    islandLog("native:setBounds:FALLBACK", {
-      ipcMs: Number((performance.now() - startedAt).toFixed(1)),
-    });
     // Fora do Windows o comando cai no set_size/set_position do Tauri; se nem
     // isso existir (testes/web), aplica pelo próprio handle da janela.
     await win.setSize(new PhysicalSize(to.size.width, to.size.height));

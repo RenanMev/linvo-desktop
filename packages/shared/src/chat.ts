@@ -43,6 +43,15 @@ export const messageArtifactSchema = z.object({
   pageCount: z.number().int().positive().optional(),
 });
 
+export const messageCitationKindSchema = z.enum(["rule", "procedure", "document"]);
+
+export const messageCitationSchema = z.object({
+  id: z.string().min(1),
+  kind: messageCitationKindSchema,
+  label: z.string().min(1),
+  href: z.string().min(1).optional(),
+});
+
 export const messageAttachmentKindSchema = z.literal("image");
 
 export const messageAttachmentMimeTypeSchema = z.enum([
@@ -203,6 +212,8 @@ export const messageSchema = z.object({
   activities: z.array(messageActivitySchema).optional(),
   artifacts: z.array(messageArtifactSchema).optional(),
   attachments: z.array(messageAttachmentSchema).optional(),
+  citations: z.array(messageCitationSchema).optional(),
+  captureSummary: z.array(z.string().min(1)).max(3).optional(),
   reasoning: z.string().optional(),
   model: z.string().optional(),
 });
@@ -242,6 +253,8 @@ export type MessageActivityKind = z.infer<typeof messageActivityKindSchema>;
 export type MessageActivity = z.infer<typeof messageActivitySchema>;
 export type MessageArtifactKind = z.infer<typeof messageArtifactKindSchema>;
 export type MessageArtifact = z.infer<typeof messageArtifactSchema>;
+export type MessageCitationKind = z.infer<typeof messageCitationKindSchema>;
+export type MessageCitation = z.infer<typeof messageCitationSchema>;
 export type MessageAttachmentKind = z.infer<typeof messageAttachmentKindSchema>;
 export type MessageAttachmentMimeType = z.infer<
   typeof messageAttachmentMimeTypeSchema

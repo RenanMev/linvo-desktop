@@ -3,7 +3,7 @@ import { availableMonitors, currentMonitor } from "@tauri-apps/api/window";
 import { getIslandStore } from "@/lib/desktop-settings-store";
 import { islandLog } from "@/lib/island-debug";
 import { parseAnchor, serializeAnchor, type EdgeAnchor } from "@/lib/window-anchor";
-import { COMPACT_SIZE, windowSizeForVisual } from "@/lib/window-mode";
+import { COMPACT_SIZE, ISLAND_PANEL_WIDTH } from "@/lib/window-mode";
 import {
   clampToMonitor,
   parsePosition,
@@ -15,6 +15,7 @@ import {
 export const POSITION_STORAGE_KEY = "linvo:window-position";
 export const CHECKLIST_POSITION_STORAGE_KEY = "linvo:checklist-window-position";
 export const ANCHOR_STORAGE_KEY = "linvo:window-anchor";
+export const ISLAND_PILL_POSITION_STORAGE_KEY = "linvo:island-pill-position";
 
 export const EDGE_MARGIN = 24;
 export const SNAP_THRESHOLD = 40;
@@ -31,7 +32,10 @@ const PLACEMENT_STORE_KEYS: Record<string, string> = {
 };
 
 const ANCHOR_STORE_KEY = "anchor";
-const DEFAULT_CLAMP_SIZE: Size = windowSizeForVisual(COMPACT_SIZE);
+const DEFAULT_CLAMP_SIZE: Size = {
+  width: ISLAND_PANEL_WIDTH,
+  height: COMPACT_SIZE.height,
+};
 
 const positionCache = new Map<string, Position | null>();
 const placementCache = new Map<string, SavedIslandPlacement | null>();
@@ -411,6 +415,7 @@ async function hydrateAnchor(): Promise<void> {
 async function doHydrate(): Promise<void> {
   await hydratePlacement(POSITION_STORAGE_KEY);
   await hydratePlacement(CHECKLIST_POSITION_STORAGE_KEY);
+  await hydratePlacement(ISLAND_PILL_POSITION_STORAGE_KEY);
   await hydrateAnchor();
 }
 
@@ -419,4 +424,43 @@ export async function hydrateWindowStorage(): Promise<void> {
     hydratePromise = doHydrate();
   }
   return hydratePromise;
+}
+
+/**
+ * Offset horizontal lógico da pílula dentro da janela pré-envelope (380px de
+ * largura, pílula de 168px centralizada por dentro): `(380 - 168) / 2`.
+ *
+ * Usado só para migrar, uma vez, a posição salva por versões anteriores ao
+ * envelope fixo (ver `docs/SDD-ILHA-ENVELOPE.md`): a posição salva passava a
+ * ser a do canto da janela, e agora é a da pílula na tela.
+ */
+const LEGACY_WINDOW_TO_PILL_OFFSET_X_LOGICAL = 106;
+
+/**
+ * Posição salva da pílula, em px físicos — mesma unidade que `POSITION_STORAGE_KEY`
+ * sempre guardou (`win.outerPosition()` é físico, e nunca houve conversão no
+ * limite da persistência). Migra da chave antiga na primeira leitura se a
+ * chave nova ainda não existir; não regrava a antiga, para permitir rollback
+ * de versão sem perder a posição do usuário.
+ *
+ * `scaleFactor` (a escala atual do monitor) converte o offset da migração —
+ * definido em px lógicos — para a mesma unidade física do valor legado.
+ */
+export function loadIslandPillPosition(scaleFactor = 1): Position | null {
+  const direct = loadSavedPosition(ISLAND_PILL_POSITION_STORAGE_KEY);
+  if (direct) {
+    return direct;
+  }
+  const legacy = loadSavedPosition(POSITION_STORAGE_KEY);
+  if (!legacy) {
+    return null;
+  }
+  return {
+    x: legacy.x + Math.round(LEGACY_WINDOW_TO_PILL_OFFSET_X_LOGICAL * scaleFactor),
+    y: legacy.y,
+  };
+}
+
+export function saveIslandPillPosition(pos: Position): void {
+  saveSavedPosition(pos, ISLAND_PILL_POSITION_STORAGE_KEY);
 }

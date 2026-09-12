@@ -4,21 +4,27 @@ import {
   readWindowBounds,
   releaseMinWindowSize,
 } from "@/lib/window-animation";
-import { COMPACT_SIZE, windowSizeForVisual } from "@/lib/window-mode";
+import {
+  COMPACT_SIZE,
+  envelopePositionForPill,
+  ISLAND_ENVELOPE_SIZE,
+  pillPositionForEnvelope,
+  type IslandGrowthDirection,
+} from "@/lib/window-mode";
 import { clampToMonitor, type Size } from "@/lib/window-position";
+import { applyIslandRegionForMode } from "@/lib/window-region";
 import {
   clearRestoreOrigin,
   loadRestoreOrigin,
   resolveRestorePosition,
 } from "@/lib/window-restore-origin";
-import { loadSavedAnchor, saveSavedPosition } from "@/lib/window-storage";
+import { loadSavedAnchor, saveIslandPillPosition } from "@/lib/window-storage";
 import {
   enqueueWindowAnimation,
   getCurrentWindow,
   resolveCollapsePosition,
 } from "@/lib/window-transition";
 import { readWorkArea } from "@/lib/window-work-area";
-import { applyIslandWindowRegion } from "@/lib/window-region";
 
 /**
  * Tolerância de 1px: os bounds físicos vêm de `Math.ceil` sobre a escala do
@@ -48,52 +54,75 @@ export function isCompactWindowSize(
 }
 
 /**
- * Devolve a janela ao tamanho da pílula quando ela ficou expandida sem que o
- * React ainda esteja no modo expandido.
+ * Devolve a janela ao envelope fixo (ver `docs/SDD-ILHA-ENVELOPE.md`) e
+ * reconcilia a região de recorte para a pílula, quando algo ficou fora do
+ * lugar.
  *
- * Existe porque o morph é feito em duas metades independentes — bounds nativos
- * de um lado, CSS do outro. Todo caminho que aborta no meio (deadline de fecho
- * estourado, intenção trocada durante a expansão, erro de IPC) deixa a janela
- * grande com a barra compacta desenhada dentro dela. Em vez de tapar cada um
- * desses buracos, o estado compacto é reconciliado quando assenta.
+ * Desde o envelope fixo, `compact`/`quick-menu`/`checklist` nunca redimensionam
+ * a janela — só o modo `edge-collapsed` ainda faz isso, encolhendo para o
+ * tamanho do handle. Um caminho que aborta no meio dessa ida-e-volta (deadline
+ * de fecho estourado, erro de IPC) pode deixar a janela do tamanho do handle
+ * em vez do envelope; é esse desvio que esta função corrige.
  *
- * @returns `true` se precisou corrigir os bounds.
+ * A região é reconciliada mesmo quando o tamanho já está certo: um morph
+ * abortado no meio (compact ↔ quick-menu/checklist) deixa o recorte na forma
+ * errada sem nunca mexer no tamanho da janela, e reaplicar o recorte é uma
+ * chamada de IPC barata e idempotente.
+ *
+ * @returns `true` se precisou corrigir os bounds da janela (não conta a
+ * reconciliação de região sozinha).
  */
 export async function ensureCompactWindowBounds(
+  growth: IslandGrowthDirection,
   options: EnsureCompactBoundsOptions = {},
 ): Promise<boolean> {
   return enqueueWindowAnimation(async () => {
     const win = getCurrentWindow();
     const scale = await win.scaleFactor();
-    const targetSize = logicalToPhysical(windowSizeForVisual(COMPACT_SIZE), scale);
+    const targetSize = logicalToPhysical(ISLAND_ENVELOPE_SIZE, scale);
     const current = await readWindowBounds(win);
 
     if (isCompactWindowSize(current.size, targetSize)) {
+      if (options.shouldApply?.() === false) {
+        return false;
+      }
+      await applyIslandRegionForMode({ mode: "compact", growth, scaleFactor: scale });
       return false;
     }
+
     if (options.shouldApply?.() === false) {
       return false;
     }
 
     const monitorInfo = await readWorkArea();
     const anchor = loadSavedAnchor() ?? undefined;
-    const restored = resolveRestorePosition({
-      origin:
-        loadRestoreOrigin("quick-menu") ?? loadRestoreOrigin("checklist"),
+    const pillTargetSize = logicalToPhysical(COMPACT_SIZE, scale);
+
+    // Só o edge mode ainda move a janela de verdade; se ele ficou destravado
+    // no meio, a origem salva devolve a pílula ao pixel exato de onde saiu.
+    const restoredPill = resolveRestorePosition({
+      origin: loadRestoreOrigin("edge"),
       currentPosition: current.position,
       currentSize: current.size,
     });
-    const position = restored
-      ? monitorInfo
-        ? clampToMonitor(restored, targetSize, monitorInfo)
-        : restored
-      : resolveCollapsePosition({
-          currentPosition: current.position,
-          currentSize: current.size,
-          targetSize,
-          monitor: monitorInfo,
-          anchor,
-        });
+    const pillPosition =
+      restoredPill ??
+      resolveCollapsePosition({
+        currentPosition: current.position,
+        currentSize: current.size,
+        targetSize: pillTargetSize,
+        monitor: monitorInfo,
+        anchor,
+      });
+
+    let envelopePosition = envelopePositionForPill({
+      pillPosition,
+      growth,
+      scaleFactor: scale,
+    });
+    if (monitorInfo) {
+      envelopePosition = clampToMonitor(envelopePosition, targetSize, monitorInfo);
+    }
 
     if (options.shouldApply?.() === false) {
       return false;
@@ -103,18 +132,13 @@ export async function ensureCompactWindowBounds(
     // tamanho expandido e a janela não encolhe.
     await releaseMinWindowSize(win);
     await win.setResizable(false);
-    await applyWindowBoundsImmediate(win, { position, size: targetSize });
-    // A região faz parte do estado compacto: um morph abortado deixa a janela
-    // sem recorte, e sem isto as faixas laterais seguiriam captando cliques.
-    await applyIslandWindowRegion({
-      visual: COMPACT_SIZE,
-      scaleFactor: scale,
-      radius: COMPACT_SIZE.height / 2,
-    });
+    await applyWindowBoundsImmediate(win, { position: envelopePosition, size: targetSize });
+    await applyIslandRegionForMode({ mode: "compact", growth, scaleFactor: scale });
 
-    clearRestoreOrigin("quick-menu");
-    clearRestoreOrigin("checklist");
-    saveSavedPosition(position);
+    clearRestoreOrigin("edge");
+    saveIslandPillPosition(
+      pillPositionForEnvelope({ envelopePosition, growth, scaleFactor: scale }),
+    );
     return true;
   });
 }

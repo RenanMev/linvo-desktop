@@ -5,7 +5,7 @@ import { checkApiHealth } from "@/lib/api-health";
 const POLL_INTERVAL_MS = 30_000;
 
 export function useApiHealth(enabled: boolean): boolean {
-  const [healthy, setHealthy] = useState(false);
+  const [healthy, setHealthy] = useState(true);
 
   useEffect(() => {
     if (!enabled) {

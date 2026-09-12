@@ -135,6 +135,75 @@ describe("useChat stream ownership", () => {
     );
   });
 
+  it("rehydrates history after sending in an existing conversation and switching away", async () => {
+    vi.mocked(chatApi.listMessages).mockImplementation(async (id) => {
+      if (id === "conv-a") {
+        return [
+          {
+            id: "a-user",
+            role: "user",
+            content: "pergunta A",
+            status: "done",
+            createdAt: "2026-01-01T00:00:00.000Z",
+          },
+        ];
+      }
+      return [
+        {
+          id: "b-user",
+          role: "user",
+          content: "pergunta B",
+          status: "done",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      ];
+    });
+    vi.mocked(chatApi.streamChatResponse).mockImplementation(() =>
+      (async function* () {
+        yield "resposta A";
+      })(),
+    );
+
+    const { result, rerender } = renderHook(
+      ({ conversationId }: { conversationId: string }) =>
+        useChat({ conversationId }),
+      { initialProps: { conversationId: "conv-a" } },
+    );
+
+    await waitFor(() => {
+      expect(result.current.messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ content: "pergunta A" }),
+        ]),
+      );
+    });
+
+    await act(async () => {
+      await result.current.sendMessage("hello");
+    });
+
+    rerender({ conversationId: "conv-b" });
+    await waitFor(() => {
+      expect(result.current.messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ content: "pergunta B" }),
+        ]),
+      );
+    });
+
+    rerender({ conversationId: "conv-a" });
+    await waitFor(() => {
+      expect(result.current.messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ content: "pergunta A" }),
+        ]),
+      );
+    });
+    expect(
+      result.current.messages.some((message) => message.content === "pergunta B"),
+    ).toBe(false);
+  });
+
   it("does not accept a draft when creating the conversation fails", async () => {
     const onAccepted = vi.fn();
     vi.mocked(chatApi.createConversation).mockRejectedValue(
@@ -356,6 +425,285 @@ describe("useChat stream ownership", () => {
     expect(result.current.messages).toEqual([]);
     expect(result.current.error).toBe("upload falhou");
     expect(result.current.isResponding).toBe(false);
+  });
+
+  it("T3.1 stopResponding aborta o signal e preserva o texto parcial", async () => {
+    const gate = deferred<void>();
+    const started = deferred<AbortSignal>();
+
+    vi.mocked(chatApi.streamChatResponse).mockImplementation((options) =>
+      (async function* () {
+        const signal = options.signal;
+        if (!signal) {
+          throw new Error("expected AbortSignal");
+        }
+        started.resolve(signal);
+        yield "parcial";
+        await gate.promise;
+        yield " extra";
+      })(),
+    );
+
+    const { result } = renderHook(() =>
+      useChat({ conversationId: "conv-a" }),
+    );
+
+    await waitFor(() => {
+      expect(chatApi.listMessages).toHaveBeenCalledWith("conv-a");
+      expect(result.current.isLoadingHistory).toBe(false);
+    });
+
+    act(() => {
+      void result.current.sendMessage("hello");
+    });
+
+    const signal = await started.promise;
+    await waitFor(() => {
+      expect(result.current.isResponding).toBe(true);
+      expect(result.current.messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            role: "assistant",
+            content: "parcial",
+          }),
+        ]),
+      );
+    });
+
+    act(() => {
+      result.current.stopResponding();
+    });
+
+    expect(signal.aborted).toBe(true);
+    expect(result.current.isResponding).toBe(false);
+    expect(result.current.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "assistant",
+          content: "parcial",
+          status: "done",
+        }),
+      ]),
+    );
+    expect(chatStore.saveCachedConversationMessages).toHaveBeenCalledWith(
+      "conv-a",
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "assistant",
+          content: "parcial",
+          status: "done",
+        }),
+      ]),
+    );
+
+    await act(async () => {
+      gate.resolve();
+    });
+  });
+
+  it("accumulates citation chips on the assistant from stream events", async () => {
+    vi.mocked(chatApi.streamChatResponse).mockImplementation((options) =>
+      (async function* () {
+        options.onCitation?.({
+          id: "d1",
+          kind: "document",
+          label: "Política comercial",
+        });
+        options.onCitation?.({
+          id: "p1",
+          kind: "procedure",
+          label: "Cancelar plano",
+        });
+        yield "com base";
+      })(),
+    );
+
+    const { result } = renderHook(() =>
+      useChat({ conversationId: "conv-a" }),
+    );
+
+    await waitFor(() => {
+      expect(chatApi.listMessages).toHaveBeenCalledWith("conv-a");
+      expect(result.current.isLoadingHistory).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.sendMessage("onde está a política?");
+    });
+
+    expect(result.current.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "assistant",
+          content: "com base",
+          citations: [
+            { id: "d1", kind: "document", label: "Política comercial" },
+            { id: "p1", kind: "procedure", label: "Cancelar plano" },
+          ],
+        }),
+      ]),
+    );
+  });
+
+  it("keeps citations: [] from assistant done as a search miss", async () => {
+    vi.mocked(chatApi.streamChatResponse).mockImplementation((options) =>
+      (async function* () {
+        yield "sem hits";
+        options.onAssistantDone?.({
+          id: "asst-1",
+          role: "assistant",
+          content: "sem hits",
+          status: "done",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          citations: [],
+        });
+      })(),
+    );
+
+    const { result } = renderHook(() =>
+      useChat({ conversationId: "conv-a" }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.isLoadingHistory).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.sendMessage("busca isso");
+    });
+
+    const assistant = result.current.messages.find(
+      (message) => message.role === "assistant",
+    );
+    expect(assistant?.citations).toEqual([]);
+    expect(assistant?.citations).not.toBeUndefined();
+  });
+
+  it("does not drop stream citations when done omits the field", async () => {
+    vi.mocked(chatApi.streamChatResponse).mockImplementation((options) =>
+      (async function* () {
+        options.onCitation?.({
+          id: "d1",
+          kind: "document",
+          label: "Política comercial",
+        });
+        yield "com fonte";
+        options.onAssistantDone?.({
+          id: "asst-1",
+          role: "assistant",
+          content: "com fonte",
+          status: "done",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        });
+      })(),
+    );
+
+    const { result } = renderHook(() =>
+      useChat({ conversationId: "conv-a" }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.isLoadingHistory).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.sendMessage("com fonte?");
+    });
+
+    expect(result.current.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "assistant",
+          citations: [
+            { id: "d1", kind: "document", label: "Política comercial" },
+          ],
+        }),
+      ]),
+    );
+  });
+
+  it("applies captureSummary without delaying assistant text", async () => {
+    const gate = deferred<void>();
+    vi.mocked(chatApi.streamChatResponse).mockImplementation((options) =>
+      (async function* () {
+        yield "vi o print";
+        await gate.promise;
+        options.onCaptureSummary?.(["pedido de cancelamento"]);
+        yield " e segue";
+      })(),
+    );
+
+    const { result } = renderHook(() =>
+      useChat({ conversationId: "conv-a" }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.isLoadingHistory).toBe(false);
+    });
+
+    act(() => {
+      void result.current.sendMessage("analise o print");
+    });
+
+    await waitFor(() => {
+      expect(result.current.messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            role: "assistant",
+            content: "vi o print",
+          }),
+        ]),
+      );
+    });
+    expect(
+      result.current.messages.find((message) => message.role === "assistant")
+        ?.captureSummary,
+    ).toBeUndefined();
+
+    await act(async () => {
+      gate.resolve();
+    });
+
+    await waitFor(() => {
+      expect(result.current.messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            role: "assistant",
+            content: "vi o print e segue",
+            captureSummary: ["pedido de cancelamento"],
+            status: "done",
+          }),
+        ]),
+      );
+    });
+  });
+
+  it("hydrates citations: [] from listMessages without collapsing", async () => {
+    vi.mocked(chatApi.listMessages).mockResolvedValue([
+      {
+        id: "asst-hist",
+        role: "assistant",
+        content: "Sem hits",
+        status: "done",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        citations: [],
+      },
+    ]);
+
+    const { result } = renderHook(() =>
+      useChat({ conversationId: "conv-a" }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.isLoadingHistory).toBe(false);
+      expect(result.current.messages).toEqual([
+        expect.objectContaining({
+          id: "asst-hist",
+          citations: [],
+        }),
+      ]);
+    });
+    expect(result.current.messages[0]?.citations).not.toBeUndefined();
   });
 });
 

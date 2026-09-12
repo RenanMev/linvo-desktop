@@ -12,7 +12,7 @@ import {
   type LlmModelOption,
   type Procedure,
 } from "@linvo/shared";
-import { ArrowUp, Paperclip, X } from "lucide-react";
+import { ArrowUp, Paperclip, Square, X } from "lucide-react";
 
 import { CaptureContextChip } from "@/components/chat/capture-context-chip";
 import { CaptureMenu } from "@/components/chat/capture-menu";
@@ -50,6 +50,7 @@ export type ChatSendOptions = {
 type ChatInputProps = {
   onSend: (content: string, options?: ChatSendOptions) => void;
   isResponding: boolean;
+  onStop?: () => void;
   replyTarget: ChatReplyRef | null;
   onCancelReply: () => void;
   disabled?: boolean;
@@ -57,11 +58,32 @@ type ChatInputProps = {
   selectedModel?: string | null;
   onModelChange?: (modelId: string | null) => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
+  /**
+   * Janela que hospeda este input, para a captura de tela saber de quem se
+   * esconder e para onde devolver o recorte.
+   *
+   * Existe porque o mesmo `ChatInput` roda em duas janelas: o painel grande e
+   * a ilha flutuante (`"main"`). Ficou fixo em `"panel"` enquanto o painel era
+   * o único chat de verdade; a ilha mantinha uma segunda cópia de toda a
+   * plumbing de captura só para poder passar `"main"`.
+   */
+  captureWindowLabel?: string;
+  /**
+   * Dispara o recorte magnético assim que vira `true`, uma única vez.
+   *
+   * É o que faz o botão "Recorte" da pílula continuar sendo um atalho de uma
+   * ação só: ele abre o chat E já inicia a captura. Quem liga isto deve
+   * esperar a ilha assentar — armar durante o morph abriria o overlay de
+   * recorte por cima de uma janela ainda em movimento.
+   */
+  autoStartCapture?: boolean;
+  onAutoCaptureConsumed?: () => void;
 };
 
 export function ChatInput({
   onSend,
   isResponding,
+  onStop,
   replyTarget,
   onCancelReply,
   disabled = false,
@@ -69,7 +91,11 @@ export function ChatInput({
   selectedModel = null,
   onModelChange,
   onOpenProcedureChecklist,
+  captureWindowLabel = "panel",
+  autoStartCapture = false,
+  onAutoCaptureConsumed,
 }: ChatInputProps) {
+  const autoCaptureStartedRef = useRef(false);
   const [value, setValue] = useState("");
   const [forceTool, setForceTool] = useState<ForceTool | null>(null);
   const [publishedSlugs, setPublishedSlugs] = useState<string[]>([]);
@@ -97,7 +123,33 @@ export function ChatInput({
     editPending,
     clear: clearPending,
     clearError: clearCaptureError,
-  } = useDisplaySnapshot({ windowLabel: "panel", listenOverlay: false });
+  } = useDisplaySnapshot({
+    windowLabel: captureWindowLabel,
+    listenOverlay: captureWindowLabel !== "panel",
+  });
+
+  /*
+   * Uma vez só por montagem: `autoStartCapture` continua verdadeiro enquanto
+   * quem chamou não limpar o pedido, e sem a trava cada re-render reabriria o
+   * overlay de recorte.
+   */
+  useEffect(() => {
+    if (!autoStartCapture) {
+      autoCaptureStartedRef.current = false;
+      return;
+    }
+    if (disabled || autoCaptureStartedRef.current) {
+      return;
+    }
+    autoCaptureStartedRef.current = true;
+    onAutoCaptureConsumed?.();
+    void startMagneticCapture();
+  }, [
+    autoStartCapture,
+    disabled,
+    onAutoCaptureConsumed,
+    startMagneticCapture,
+  ]);
 
   const hasAttachment = pending?.status === "ready";
   const canSend =
@@ -468,15 +520,29 @@ export function ChatInput({
                 />
               ) : null}
             </div>
-            <Button
-              size="icon-sm"
-              onClick={handleSend}
-              disabled={!canSend || resolving}
-              title="Enviar"
-              className="shrink-0"
-            >
-              <ArrowUp />
-            </Button>
+            {isResponding && onStop ? (
+              <Button
+                type="button"
+                size="sm"
+                onClick={onStop}
+                title="Parar"
+                aria-label="Parar"
+                className="shrink-0"
+              >
+                <Square />
+                Parar
+              </Button>
+            ) : (
+              <Button
+                size="icon-sm"
+                onClick={handleSend}
+                disabled={!canSend || resolving}
+                title="Enviar"
+                className="shrink-0"
+              >
+                <ArrowUp />
+              </Button>
+            )}
           </div>
         </div>
       </div>

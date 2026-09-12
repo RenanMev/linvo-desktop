@@ -1,7 +1,10 @@
-import { Bot, RefreshCw, User } from "lucide-react";
+import { useState } from "react";
+import { Bot, Check, Copy, RefreshCw, User } from "lucide-react";
 
+import { CaptureSummary } from "@/components/chat/capture-summary";
 import { ChatArtifactCard } from "@/components/chat/chat-artifact-card";
 import { ChatAttachmentImage } from "@/components/chat/chat-attachment-image";
+import { ChatCitations } from "@/components/chat/chat-citations";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { ChatMessageOptions } from "@/components/chat/chat-message-options";
 import { ChatReasoningPanel } from "@/components/chat/chat-reasoning-panel";
@@ -10,6 +13,7 @@ import { ChatToolApproval } from "@/components/chat/chat-tool-approval";
 import { ChatToolUses } from "@/components/chat/chat-tool-uses";
 import { Button } from "@/components/ui/button";
 import { canReplyToMessage } from "@/lib/chat/chat-state";
+import { writeClipboardText } from "@/lib/clipboard";
 import type { ChatMessage, ChatToolRequest } from "@/lib/chat/types";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +28,9 @@ type ChatMessageBubbleProps = {
   onDenyTool?: () => void;
   toolActionDisabled?: boolean;
   conversationId?: string | null;
+  workspaceId?: string | null;
+  variant?: "assist";
+  showAssistCopy?: boolean;
 };
 
 export function ChatMessageBubble({
@@ -37,7 +44,11 @@ export function ChatMessageBubble({
   onDenyTool,
   toolActionDisabled = false,
   conversationId = null,
+  workspaceId = null,
+  variant,
+  showAssistCopy = false,
 }: ChatMessageBubbleProps) {
+  const [copied, setCopied] = useState(false);
   const isUser = message.role === "user";
   const canReply = canReplyToMessage(message);
   const isStreaming =
@@ -59,6 +70,12 @@ export function ChatMessageBubble({
       (isStreaming && !message.content));
   const showRegenerate =
     canRegenerate && onRegenerate != null && !isUser && !isStreaming;
+  const showCopy =
+    variant === "assist" &&
+    showAssistCopy &&
+    !isUser &&
+    message.status === "done" &&
+    message.content.trim().length > 0;
   const idleStreamingOnly =
     !isUser &&
     isStreaming &&
@@ -140,6 +157,10 @@ export function ChatMessageBubble({
                 </div>
               ) : null}
 
+              {!isUser ? (
+                <CaptureSummary bullets={message.captureSummary} />
+              ) : null}
+
               {message.content ? (
                 isUser ? (
                   message.content
@@ -152,6 +173,13 @@ export function ChatMessageBubble({
                     ? "Aguardando aprovação..."
                     : "Pensando..."}
                 </span>
+              ) : null}
+
+              {!isUser ? (
+                <ChatCitations
+                  citations={message.citations}
+                  workspaceId={workspaceId}
+                />
               ) : null}
             </div>
           )}
@@ -169,6 +197,24 @@ export function ChatMessageBubble({
             Falha ao gerar resposta.
           </span>
         )}
+
+        {showCopy ? (
+          <Button
+            type="button"
+            size="sm"
+            className="h-7 gap-1.5 px-2 text-xs"
+            onClick={() => {
+              void writeClipboardText(message.content).then((ok) => {
+                if (ok) {
+                  setCopied(true);
+                }
+              });
+            }}
+          >
+            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+            {copied ? "Copiado" : "Copiar"}
+          </Button>
+        ) : null}
 
         {showRegenerate ? (
           <Button

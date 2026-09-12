@@ -4,13 +4,12 @@ import {
   ensureCompactWindowBounds,
   isCompactWindowSize,
 } from "@/lib/floating-compact-bounds";
-import {
-  COMPACT_SIZE,
-  QUICK_MENU_SIZE,
-  windowSizeForVisual,
-} from "@/lib/window-mode";
-import { loadSavedPosition, resetWindowStorageCache } from "@/lib/window-storage";
 import { resetDesktopSettingsCache } from "@/lib/desktop-settings-store";
+import { COMPACT_SIZE, ISLAND_ENVELOPE_SIZE, QUICK_MENU_SIZE } from "@/lib/window-mode";
+import {
+  loadIslandPillPosition,
+  resetWindowStorageCache,
+} from "@/lib/window-storage";
 import {
   invokeMock,
   resetPluginStoreMock,
@@ -32,6 +31,18 @@ function mockBounds(bounds: {
 function boundsCalls() {
   return invokeMock.mock.calls.filter((call) => call[0] === "set_window_bounds");
 }
+
+function regionCalls() {
+  return invokeMock.mock.calls.filter((call) => call[0] === "set_window_region");
+}
+
+// Retângulo do modo compact dentro do envelope, crescimento "down" (ver
+// window-mode.test.ts): {x:114, y:24, width:200, height:38}. Já recuado pelo
+// gutter e com o mesmo clamp de raio que o código de produção aplica.
+const COMPACT_REGION_CALL = [
+  "set_window_region",
+  { region: { x: 115, y: 25, width: 198, height: 36 }, radius: 12 },
+];
 
 describe("isCompactWindowSize", () => {
   it("accepts a 1px drift from the ceil applied on fractional scales", () => {
@@ -61,47 +72,49 @@ describe("ensureCompactWindowBounds", () => {
     windowMock.scaleFactor.mockResolvedValue(1);
     mockBounds({
       position: { x: 0, y: 0 },
-      size: windowSizeForVisual(COMPACT_SIZE),
+      size: ISLAND_ENVELOPE_SIZE,
     });
   });
 
-  it("leaves an already compact window alone", async () => {
-    await expect(ensureCompactWindowBounds()).resolves.toBe(false);
+  it("leaves an already-envelope-sized window alone but still reconciles the region", async () => {
+    await expect(ensureCompactWindowBounds("down")).resolves.toBe(false);
     expect(boundsCalls()).toHaveLength(0);
+    expect(regionCalls()).toEqual([COMPACT_REGION_CALL]);
   });
 
-  it("shrinks a window left expanded, keeping the window origin", async () => {
+  it("grows a window left at the edge-handle size back to the envelope, keeping the pill's screen spot", async () => {
     mockBounds({
       position: { x: 400, y: 200 },
-      size: { ...QUICK_MENU_SIZE },
+      size: { width: 12, height: 112 },
     });
 
-    await expect(ensureCompactWindowBounds()).resolves.toBe(true);
+    await expect(ensureCompactWindowBounds("down")).resolves.toBe(true);
 
-    // Sem deslocamento: encolher preserva o canto, e a largura da janela é a
-    // mesma nos dois modos — só a altura muda.
+    // A pílula estava em (400, 200); o envelope nasce 114px à esquerda e
+    // 24px acima disso, para a pílula recair no mesmo pixel.
     expect(boundsCalls()).toEqual([
       [
         "set_window_bounds",
         {
           to: {
-            x: 400,
-            y: 200,
-            width: windowSizeForVisual(COMPACT_SIZE).width,
-            height: COMPACT_SIZE.height,
+            x: 400 - 114,
+            y: 200 - 24,
+            width: ISLAND_ENVELOPE_SIZE.width,
+            height: ISLAND_ENVELOPE_SIZE.height,
           },
         },
       ],
     ]);
+    expect(regionCalls()).toEqual([COMPACT_REGION_CALL]);
   });
 
   it("clears the quick-menu minimum before resizing", async () => {
     mockBounds({
       position: { x: 400, y: 200 },
-      size: { ...QUICK_MENU_SIZE },
+      size: { width: 12, height: 112 },
     });
 
-    await ensureCompactWindowBounds();
+    await ensureCompactWindowBounds("down");
 
     // Sem isto o Windows trava o SetWindowPos no mínimo do quick menu.
     expect(setMinSizeMock).toHaveBeenCalledWith(null);
@@ -113,40 +126,41 @@ describe("ensureCompactWindowBounds", () => {
    * capability. Sem ela a chamada rejeita, e deixar a rejeição propagar abortava
    * o encolhimento — a janela ficava do tamanho do quick menu.
    */
-  it("still shrinks when clearing the minimum size is denied", async () => {
+  it("still grows back when clearing the minimum size is denied", async () => {
     mockBounds({
       position: { x: 400, y: 200 },
-      size: { ...QUICK_MENU_SIZE },
+      size: { width: 12, height: 112 },
     });
     setMinSizeMock.mockRejectedValueOnce(
       new Error("window.set_min_size not allowed"),
     );
 
-    await expect(ensureCompactWindowBounds()).resolves.toBe(true);
+    await expect(ensureCompactWindowBounds("down")).resolves.toBe(true);
     expect(boundsCalls()).toHaveLength(1);
   });
 
-  it("skips the resize when the caller no longer wants compact bounds", async () => {
+  it("skips everything when the caller no longer wants compact bounds", async () => {
     mockBounds({
       position: { x: 400, y: 200 },
-      size: { ...QUICK_MENU_SIZE },
+      size: { width: 12, height: 112 },
     });
 
     await expect(
-      ensureCompactWindowBounds({ shouldApply: () => false }),
+      ensureCompactWindowBounds("down", { shouldApply: () => false }),
     ).resolves.toBe(false);
     expect(boundsCalls()).toHaveLength(0);
+    expect(regionCalls()).toHaveLength(0);
     expect(setMinSizeMock).not.toHaveBeenCalled();
   });
 
-  it("persists the reconciled position for the next launch", async () => {
+  it("persists the reconciled pill position (not the envelope position) for the next launch", async () => {
     mockBounds({
       position: { x: 400, y: 200 },
-      size: { ...QUICK_MENU_SIZE },
+      size: { width: 12, height: 112 },
     });
 
-    await ensureCompactWindowBounds();
+    await ensureCompactWindowBounds("down");
 
-    expect(loadSavedPosition()).toEqual({ x: 400, y: 200 });
+    expect(loadIslandPillPosition()).toEqual({ x: 400, y: 200 });
   });
 });

@@ -126,16 +126,18 @@
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
-  /* Motion da ilha flutuante: uma curva única para shell e conteúdo. */
+  /*
+   * Motion da ilha flutuante.
+   *
+   * O morph em si (casca e troca de conteúdo) NÃO mora aqui: é do Motion, em
+   * `floating-island-shell.tsx`, que é quem conhece a direção em curso e
+   * precisa poder interromper e redirecionar a partir da velocidade atual —
+   * coisa que uma transição CSS não faz. O que sobrou nestes tokens é o que
+   * ainda é CSS: o repouso da casca e a entrada dos blocos do painel.
+   */
   --island-gutter: 1px;
-  --motion-duration-island: 170ms;
-  /* Cross-fade das superfícies: some antes do fim do transform, para nunca
-     mostrar a borda da forma que está saindo já muito esticada. */
-  --motion-duration-island-fade: 90ms;
-  --motion-duration-island-content: 100ms;
-  --motion-delay-island-content: 35ms;
-  --motion-distance-island-content: 6px;
-  --motion-distance-island-content-exit: -2px;
+  --motion-duration-island: 260ms;
+  --motion-duration-island-content: 130ms;
   --motion-ease-island: cubic-bezier(0.2, 0.82, 0.2, 1);
 
   /* Linvo AI Design System — tokens novos, aditivos (claro: derivados da escala existente) */
@@ -269,13 +271,16 @@
 
   --radius-premium: 12px;
   /*
-   * Raio da pílula flutuante. Valor explícito em px (= metade da altura útil
-   * da barra), NÃO `rounded-full`/9999px: o raio da pílula é interpolado até
-   * `--radius-premium` quando a janela cresce pro quick menu, e um valor
-   * gigante pinta como metade do lado menor a cada frame — a janela passaria
-   * por um "blob" circular no meio da transição.
+   * Raio da pílula flutuante. Valor explícito em px, NÃO `rounded-full`/9999px:
+   * um valor gigante pinta como metade do lado menor a cada frame, e a janela
+   * passaria por um "blob" circular no meio da transição.
+   *
+   * Espelha `ISLAND_COMPACT_RADIUS_PX` (`window-mode.ts`), que rege o recorte
+   * da janela e a superfície da ilha; esta variável rege o conteúdo
+   * (`overflow: hidden`) e o modo `edge-collapsed`. Divergir corta o conteúdo
+   * antes da borda pintada — mudar um exige mudar o outro.
    */
-  --radius-pill: 16px;
+  --radius-pill: 12px;
 
   --shadow-pill: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.35);
 }
@@ -531,6 +536,16 @@
   /*
    * Barra flutuante: pílula fina de superfície sólida.
    *
+   * Mesma cor de fundo do painel do chat (`--color-neutral-deep`, via
+   * `.window-shell`), não `--color-neutral-raised`: as duas são a MESMA
+   * superfície em momentos diferentes do morph, e uma diferença de tom entre
+   * elas aparecia como uma troca de cor no meio do cross-fade.
+   *
+   * Sem `--shadow-inner-light` aqui, ao contrário do painel. Ele é um realce
+   * branco de 1px no topo; num painel de 518px de altura é imperceptível, mas
+   * numa pílula de 36px ocupa proporcionalmente 14× mais e lê como um
+   * degradê vertical em vez de cor chapada.
+   *
    * A borda é um anel INSET, não `border`. A janela é recortada por
    * `SetWindowRgn` exatamente no retângulo desta superfície (ver
    * `window-region.ts`), e uma `border` mora no pixel mais externo do elemento —
@@ -539,10 +554,8 @@
    * para dentro do recorte e sobrevive em qualquer DPI.
    */
   .floating-pill {
-    background-color: var(--color-neutral-raised);
-    box-shadow:
-      inset 0 0 0 1px var(--pill-hairline),
-      var(--shadow-inner-light);
+    background-color: var(--color-neutral-deep);
+    box-shadow: inset 0 0 0 1px var(--pill-hairline);
     transition: box-shadow 200ms ease-out;
   }
 
@@ -552,9 +565,7 @@
    * nos próprios botões, inset (ver `floating-bar.tsx`).
    */
   .floating-pill:hover {
-    box-shadow:
-      inset 0 0 0 1px var(--hairline-strong),
-      var(--shadow-inner-light);
+    box-shadow: inset 0 0 0 1px var(--hairline-strong);
   }
 
   .floating-island-stage {
@@ -572,6 +583,16 @@
    * tem a sua superfície, com raio fixo, e elas se cruzam (ver
    * `resolveSurfaceLayers`).
    */
+  /*
+   * Sem `transition` aqui: `transform` e `opacity` desta camada são animados
+   * pelo Motion (ver `floating-island-shell.tsx`). Declarar uma transição CSS
+   * nas mesmas propriedades faria as duas brigarem — o Motion escreve o valor
+   * de cada quadro no `style`, e a transição tentaria interpolar CADA um
+   * desses valores, atrasando tudo e destruindo a mola.
+   *
+   * O que continua valendo: `transform-origin: top left`, exigido pelo FLIP
+   * de `resolveRectFlip`, e a promoção de camada.
+   */
   .floating-island-surface {
     position: absolute;
     z-index: 0;
@@ -581,10 +602,6 @@
     transform-origin: top left;
     contain: layout paint;
     will-change: transform, opacity;
-    transition:
-      transform var(--island-morph-duration, var(--motion-duration-island))
-        var(--motion-ease-island),
-      opacity var(--motion-duration-island-fade) ease-out;
   }
 
   /*
@@ -654,30 +671,15 @@
    * declarado enquanto a camada existe evita a promoção e despromoção repetida
    * da camada durante a transição.
    */
+  /*
+   * O escalonamento entre o conteúdo que sai e o que entra é do Motion agora
+   * (ver `contentAnimation` em `floating-island-shell.tsx`), que é quem sabe
+   * a direção e a duração do morph em curso. Aqui fica só o que não anima.
+   */
   .floating-island-content[data-phase="source"],
   .floating-island-content[data-phase="target"] {
     pointer-events: none;
-    will-change: opacity, transform;
-    transition:
-      opacity var(--motion-duration-island-content) ease-out,
-      transform var(--motion-duration-island-content)
-        var(--motion-ease-island);
-  }
-
-  .floating-island-content[data-phase="source"][data-active="true"] {
-    opacity: 0;
-    transform: translate3d(0, var(--motion-distance-island-content-exit), 0);
-  }
-
-  .floating-island-content[data-phase="target"] {
-    opacity: 0;
-    transform: translate3d(0, var(--motion-distance-island-content), 0);
-  }
-
-  .floating-island-content[data-phase="target"][data-active="true"] {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-    transition-delay: var(--motion-delay-island-content);
+    will-change: opacity, transform, clip-path;
   }
 
   .quick-center-panel-preopen {
@@ -697,6 +699,20 @@
   .quick-center-panel-closing > :not(.sr-only) {
     animation: none;
   }
+
+  /*
+   * NÃO existe entrada escalonada dos blocos do painel aqui.
+   *
+   * Já existiu, presa a `data-ready`. Fazia sentido quando o painel só
+   * aparecia depois que a casca parava de crescer. Depois que o conteúdo
+   * passou a ser revelado DURANTE o morph (pelo `clip-path`, ver
+   * `contentAnimation` em `floating-island-shell.tsx`), virou uma segunda
+   * entrada: `data-ready` vira `true` no settle, ou seja, exatamente quando a
+   * animação termina — e o painel inteiro re-animava de `opacity: 0`, o que
+   * lia como uma piscada no fim da abertura.
+   *
+   * A entrada do conteúdo é o próprio `clip-path` abrindo junto com a forma.
+   */
 
   /* Aparecimento de blocos condicionais dentro do painel já aberto
      (resposta, ações de resposta, troca Enviar/Parar) — mais curto que

@@ -144,4 +144,48 @@ describe("map-message", () => {
       },
     ]);
   });
+
+  it("T7.11 keeps citations: [] instead of collapsing to undefined", () => {
+    const mapped = mapApiMessageToChat({
+      id: "msg-5",
+      role: "assistant",
+      content: "Sem hits",
+      status: "done",
+      createdAt: "2026-01-01T12:00:00.000Z",
+      citations: [],
+    });
+
+    expect(mapped.citations).toEqual([]);
+    expect(mapped.citations).not.toBeUndefined();
+  });
+
+  it("T7.12 leaves citations undefined when the field is absent", () => {
+    const mapped = mapApiMessageToChat({
+      id: "msg-6",
+      role: "assistant",
+      content: "Olá",
+      status: "done",
+      createdAt: "2026-01-01T12:00:00.000Z",
+    });
+
+    expect(mapped.citations).toBeUndefined();
+    expect("citations" in mapped && mapped.citations === undefined).toBe(true);
+  });
+
+  it("copies captureSummary when the API sends bullets", () => {
+    const mapped = mapApiMessageToChat({
+      id: "msg-7",
+      role: "assistant",
+      content: "Vi o print",
+      status: "done",
+      createdAt: "2026-01-01T12:00:00.000Z",
+      captureSummary: ["pedido de cancelamento", "protocolo 123", "sem multa"],
+    });
+
+    expect(mapped.captureSummary).toEqual([
+      "pedido de cancelamento",
+      "protocolo 123",
+      "sem multa",
+    ]);
+  });
 });

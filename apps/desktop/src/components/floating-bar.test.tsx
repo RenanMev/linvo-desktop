@@ -12,7 +12,6 @@ function renderBar(overrides: Overrides = {}) {
     onOpenQuickMenu: vi.fn(),
     onCaptureContext: vi.fn(),
     onCollapseToEdge: vi.fn(),
-    onMinimize: vi.fn(),
     onResetPosition: vi.fn(),
     ...overrides,
   };
@@ -21,7 +20,7 @@ function renderBar(overrides: Overrides = {}) {
 }
 
 describe("FloatingBar", () => {
-  it("renders the compact set of controls: grip, status, chat, crop, collapse, minimize", () => {
+  it("renders the compact set of controls: grip, status, chat, crop, collapse", () => {
     renderBar();
 
     expect(screen.getByTitle(/^Mover/)).toBeInTheDocument();
@@ -29,7 +28,7 @@ describe("FloatingBar", () => {
     expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Recorte" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Encolher" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Minimizar" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Minimizar" })).not.toBeInTheDocument();
   });
 
   it("does not render a standalone 'Mais' button", () => {
@@ -77,13 +76,6 @@ describe("FloatingBar", () => {
     expect(onCollapseToEdge).toHaveBeenCalledTimes(1);
   });
 
-  it("calls onMinimize when Minimizar is clicked", async () => {
-    const user = userEvent.setup();
-    const { onMinimize } = renderBar();
-
-    await user.click(screen.getByRole("button", { name: "Minimizar" }));
-    expect(onMinimize).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe("FloatingBar position reset gesture", () => {

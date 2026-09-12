@@ -40,6 +40,10 @@ if (typeof Element !== "undefined") {
   if (typeof Element.prototype.scrollIntoView === "undefined") {
     Element.prototype.scrollIntoView = () => {};
   }
+
+  if (typeof Element.prototype.scrollTo === "undefined") {
+    Element.prototype.scrollTo = () => {};
+  }
 }
 
 if (typeof globalThis.ResizeObserver === "undefined") {

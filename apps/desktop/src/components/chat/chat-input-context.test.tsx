@@ -54,6 +54,23 @@ describe("ChatInput visual context", () => {
     expect(openPicker).toHaveBeenCalledOnce();
   });
 
+  it("starts magnetic capture once and notifies the parent", async () => {
+    const onAutoCaptureConsumed = vi.fn();
+    render(
+      <ChatInput
+        onSend={vi.fn()}
+        isResponding={false}
+        replyTarget={null}
+        onCancelReply={vi.fn()}
+        autoStartCapture
+        onAutoCaptureConsumed={onAutoCaptureConsumed}
+      />,
+    );
+
+    expect(startMagneticCapture).toHaveBeenCalledOnce();
+    expect(onAutoCaptureConsumed).toHaveBeenCalledOnce();
+  });
+
   it("starts magnetic capture from the menu", async () => {
     const user = userEvent.setup();
     renderInput();

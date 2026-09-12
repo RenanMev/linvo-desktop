@@ -2,54 +2,52 @@ import { describe, expect, it } from "vitest";
 
 import {
   hasMeaningfulMorph,
-  resolveCollapseMorphGeometry,
-  resolveExpandMorphGeometry,
+  ISLAND_GUTTER_PX,
+  ISLAND_MORPH_COMPACT_RADIUS_PX,
+  resolveEnvelopeMorphGeometry,
   resolveCompactRect,
   resolveExpandedRect,
   resolveIslandPlacement,
   resolveRectFlip,
   type IslandMorphGeometry,
 } from "@/lib/floating-island-transition";
+import {
+  COMPACT_SIZE,
+  ISLAND_ENVELOPE_SIZE,
+  islandRectForMode,
+  radiusForEnvelopeMode,
+} from "@/lib/window-mode";
 
 describe("floating island transition geometry", () => {
-  it("maps a compact physical window into the expanded logical viewport", () => {
-    expect(
-      resolveExpandMorphGeometry({
-        sourceBounds: {
-          position: { x: 120, y: 80 },
-          size: { width: 336, height: 68 },
-        },
-        targetBounds: {
-          position: { x: 20, y: 0 },
-          size: { width: 760, height: 1040 },
-        },
-        scaleFactor: 2,
-      }),
-    ).toEqual({
-      viewport: { width: 380, height: 520 },
-      from: { x: 50, y: 40, width: 168, height: 34 },
-      to: { x: 0, y: 0, width: 380, height: 520 },
+  it("uses the envelope as a fixed viewport for both rects", () => {
+    const geometry = resolveEnvelopeMorphGeometry({
+      fromMode: "compact",
+      toMode: "quick-menu",
+      growth: "down",
+    });
+
+    expect(geometry).toEqual({
+      viewport: ISLAND_ENVELOPE_SIZE,
+      from: islandRectForMode("compact", "down"),
+      to: islandRectForMode("quick-menu", "down"),
     });
   });
 
-  it("maps the compact target into the current expanded viewport on collapse", () => {
-    expect(
-      resolveCollapseMorphGeometry({
-        sourceBounds: {
-          position: { x: 20, y: 0 },
-          size: { width: 760, height: 1040 },
-        },
-        targetBounds: {
-          position: { x: 232, y: 486 },
-          size: { width: 336, height: 68 },
-        },
-        scaleFactor: 2,
-      }),
-    ).toEqual({
-      viewport: { width: 380, height: 520 },
-      from: { x: 0, y: 0, width: 380, height: 520 },
-      to: { x: 106, y: 243, width: 168, height: 34 },
+  it("does not depend on transition direction: expand and collapse are the same rects reversed", () => {
+    const expand = resolveEnvelopeMorphGeometry({
+      fromMode: "compact",
+      toMode: "checklist",
+      growth: "up",
     });
+    const collapse = resolveEnvelopeMorphGeometry({
+      fromMode: "checklist",
+      toMode: "compact",
+      growth: "up",
+    });
+
+    expect(collapse.from).toEqual(expand.to);
+    expect(collapse.to).toEqual(expand.from);
+    expect(collapse.viewport).toEqual(expand.viewport);
   });
 
   it("ignores sub-pixel geometry noise", () => {
@@ -183,5 +181,63 @@ describe("resolveRectFlip", () => {
         resolveExpandedRect(expandGeometry),
       ),
     );
+  });
+});
+
+/**
+ * Regressão: `resolveRectFlip` anima a camada da pílula via `transform:
+ * scale()`, que estica `border-radius` pelos mesmos fatores não uniformes do
+ * resto da forma. Com o raio de repouso (height/2) o alcance vertical do
+ * arco bate exatamente na metade da altura do alvo no pior caso — os arcos
+ * do topo e do fundo se encontram no meio, e a pílula vira um "barril"
+ * (cintura fina, topo/base estufados) em vez de manter os cantos retos.
+ * `ISLAND_MORPH_COMPACT_RADIUS_PX` precisa deixar uma margem folgada disso
+ * em todo alvo real (quick-menu e checklist), nas duas direções de
+ * crescimento.
+ */
+describe("ISLAND_MORPH_COMPACT_RADIUS_PX safety margin", () => {
+  const targets = ["quick-menu", "checklist"] as const;
+  const growths = ["down", "up"] as const;
+
+  for (const toMode of targets) {
+    for (const growth of growths) {
+      it(`stays well below the barrel threshold for compact -> ${toMode} (growth: ${growth})`, () => {
+        const geometry = resolveEnvelopeMorphGeometry({
+          fromMode: "compact",
+          toMode,
+          growth,
+        });
+        const compactRect = resolveCompactRect(geometry);
+        const expandedRect = resolveExpandedRect(geometry);
+        const expandedPlacement = resolveIslandPlacement(expandedRect, geometry);
+        const flip = resolveRectFlip(expandedRect, compactRect);
+
+        const effectiveVerticalReach = ISLAND_MORPH_COMPACT_RADIUS_PX * flip.scaleY;
+        const halfTargetHeight = expandedPlacement.height / 2;
+
+        // O "barril" aparece quando o alcance chega a 100% da metade da
+        // altura (os dois arcos se tocam). 75% ainda deixa um quarto da
+        // metade da altura em lado reto.
+        expect(effectiveVerticalReach).toBeLessThanOrEqual(halfTargetHeight * 0.75);
+      });
+    }
+  }
+
+  /*
+   * A razão do barril é `raio / (altura interna da pílula / 2)` e NÃO depende
+   * do alvo: o alcance do arco e a altura da camada são ambos multiplicados
+   * por `scaleY`, então o fator se cancela. Os casos por alvo acima confirmam
+   * isso; este teste guarda o limite de verdade, que é só sobre a pílula.
+   *
+   * É a forma acionável do invariante: se alguém aumentar o raio ou diminuir
+   * a altura da pílula, é aqui que a conta estoura, com o número certo à mão.
+   */
+  it("keeps the morph radius below half the pill's own inner height", () => {
+    const compactInnerHalf = (COMPACT_SIZE.height - ISLAND_GUTTER_PX * 2) / 2;
+    expect(ISLAND_MORPH_COMPACT_RADIUS_PX).toBeLessThan(compactInnerHalf);
+  });
+
+  it("uses the resting radius, so nothing pops when the morph settles", () => {
+    expect(ISLAND_MORPH_COMPACT_RADIUS_PX).toBe(radiusForEnvelopeMode("compact"));
   });
 });

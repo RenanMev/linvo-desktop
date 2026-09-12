@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { useQuickPrompt } from "@/hooks/use-quick-prompt";
 
 type FirstQuestionStepProps = {
+  userId: string;
   workspaceName: string;
   busy: boolean;
   finish: (routeOverride?: string) => Promise<void>;
@@ -18,12 +19,13 @@ type FirstQuestionStepProps = {
 };
 
 export function FirstQuestionStep({
+  userId,
   workspaceName,
   busy,
   finish,
   onBack,
 }: FirstQuestionStepProps) {
-  const prompt = useQuickPrompt();
+  const prompt = useQuickPrompt(userId);
   const [question, setQuestion] = useState("");
   const label = workspaceName.trim() || "seu workspace";
   const suggestions = [

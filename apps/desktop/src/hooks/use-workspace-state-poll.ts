@@ -3,8 +3,12 @@ import type { WorkspaceState } from "@linvo/shared";
 
 import * as workspaceApi from "@/lib/workspace/workspace-api";
 
-/** Telas de administração; é onde a mudança de outra pessoa precisa aparecer rápido. */
-export const FOREGROUND_POLL_MS = 3_000;
+/**
+ * Telas de administração; é onde a mudança de outra pessoa precisa aparecer
+ * rápido. A 3s eram 20 req/min por usuário só desta rota, sem que ninguém
+ * percebesse a diferença para 6s.
+ */
+export const FOREGROUND_POLL_MS = 6_000;
 /** Resto do app: continua atualizando, sem gastar 20 requests por minuto. */
 export const BACKGROUND_POLL_MS = 15_000;
 /** Espelha use-invite-code: só pausa se a janela ficar escondida um tempo. */

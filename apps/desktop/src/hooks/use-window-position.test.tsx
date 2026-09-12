@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useWindowPosition } from "@/hooks/use-window-position";
 import { resetDesktopSettingsCache } from "@/lib/desktop-settings-store";
+import { ISLAND_ENVELOPE_SIZE } from "@/lib/window-mode";
 import {
+  ISLAND_PILL_POSITION_STORAGE_KEY,
   loadSavedAnchor,
   loadSavedPosition,
   resetWindowStorageCache,
@@ -244,5 +246,117 @@ describe("useWindowPosition — magnetic snap", () => {
     );
 
     expect(onMovedSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("useWindowPosition — pillGrowth (envelope)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    localStorage.clear();
+    resetPluginStoreMock();
+    resetDesktopSettingsCache();
+    resetWindowStorageCache();
+    invokeMock.mockReset();
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === "monitor_work_area") {
+        return Promise.resolve(WORK_AREA);
+      }
+      return Promise.resolve(true);
+    });
+    windowMock.outerPosition.mockReset();
+    windowMock.outerSize.mockReset();
+    windowMock.outerSize.mockResolvedValue(ISLAND_ENVELOPE_SIZE);
+    windowMock.scaleFactor.mockResolvedValue(1);
+    windowMock.onMoved.mockReset();
+    setPositionMock.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("restores a saved pill anchor, applying it to the envelope's own position", async () => {
+    captureMovedHandler();
+    saveSavedPosition({ x: 1_000, y: 300 }, ISLAND_PILL_POSITION_STORAGE_KEY);
+    saveSavedAnchor({ horizontal: "right", vertical: null });
+
+    renderHook(() =>
+      useWindowPosition({
+        shouldPersist: () => true,
+        enabled: true,
+        storageKey: ISLAND_PILL_POSITION_STORAGE_KEY,
+        pillGrowth: () => "down",
+      }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Pílula ancorada à direita: x = 1920 - 200 = 1720, y preservado (300).
+    // O envelope nasce 114px à esquerda e 24px acima disso.
+    expect(setPositionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ x: 1720 - 114, y: 300 - 24 }),
+    );
+  });
+
+  it("migrates the legacy window position into the pill key on first restore", async () => {
+    captureMovedHandler();
+    saveSavedPosition({ x: 400, y: 200 });
+
+    renderHook(() =>
+      useWindowPosition({
+        shouldPersist: () => true,
+        enabled: true,
+        storageKey: ISLAND_PILL_POSITION_STORAGE_KEY,
+        pillGrowth: () => "down",
+      }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Pílula migrada em (400+106, 200) = (506, 200); envelope 114px à
+    // esquerda e 24px acima disso.
+    expect(setPositionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ x: 506 - 114, y: 200 - 24 }),
+    );
+  });
+
+  it("snaps the pill to the edge and persists the pill position, not the envelope's", async () => {
+    const getHandler = captureMovedHandler();
+    // Envelope tal que a pílula (envelope + offset "down") cai em (10, 400) —
+    // 10px da borda esquerda, dentro do limiar de 40px do snap.
+    windowMock.outerPosition.mockResolvedValue({ x: 10 - 114, y: 400 - 24 });
+
+    renderHook(() =>
+      useWindowPosition({
+        shouldPersist: () => true,
+        enabled: true,
+        storageKey: ISLAND_PILL_POSITION_STORAGE_KEY,
+        pillGrowth: () => "down",
+      }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    getHandler()();
+
+    await act(async () => {
+      vi.advanceTimersByTime(180);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(loadSavedPosition(ISLAND_PILL_POSITION_STORAGE_KEY)).toEqual({
+      x: 0,
+      y: 400,
+    });
+    expect(loadSavedAnchor()).toEqual({ horizontal: "left", vertical: null });
   });
 });

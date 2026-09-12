@@ -36,6 +36,7 @@ describe("FirstQuestionStep", () => {
     const pointer = userEvent.setup();
     render(
       <FirstQuestionStep
+        userId="user-1"
         workspaceName="Atendimento"
         busy={false}
         finish={vi.fn()}
@@ -63,6 +64,7 @@ describe("FirstQuestionStep", () => {
 
     render(
       <FirstQuestionStep
+        userId="user-1"
         workspaceName="Atendimento"
         busy={false}
         finish={vi.fn()}
@@ -83,6 +85,7 @@ describe("FirstQuestionStep", () => {
 
     render(
       <FirstQuestionStep
+        userId="user-1"
         workspaceName="Atendimento"
         busy={false}
         finish={finish}
@@ -113,6 +116,7 @@ describe("FirstQuestionStep", () => {
 
     render(
       <FirstQuestionStep
+        userId="user-1"
         workspaceName="Atendimento"
         busy={false}
         finish={finish}

@@ -114,6 +114,54 @@ export function appendArtifact(
   });
 }
 
+export function appendCitation(
+  messages: ChatMessage[],
+  id: string,
+  citation: NonNullable<ChatMessage["citations"]>[number],
+): ChatMessage[] {
+  return messages.map((message) => {
+    if (message.id !== id) return message;
+    const citations = message.citations ?? [];
+    if (citations.some((item) => item.id === citation.id)) return message;
+    return { ...message, citations: [...citations, citation] };
+  });
+}
+
+export function setMessageCitations(
+  messages: ChatMessage[],
+  id: string,
+  citations: NonNullable<ChatMessage["citations"]>,
+): ChatMessage[] {
+  return messages.map((message) =>
+    message.id === id ? { ...message, citations } : message,
+  );
+}
+
+export function setCaptureSummary(
+  messages: ChatMessage[],
+  id: string,
+  captureSummary: NonNullable<ChatMessage["captureSummary"]>,
+): ChatMessage[] {
+  return messages.map((message) =>
+    message.id === id ? { ...message, captureSummary } : message,
+  );
+}
+
+export function mergeAssistantDoneMessage(
+  mapped: ChatMessage,
+  local: ChatMessage,
+): ChatMessage {
+  return {
+    ...mapped,
+    citations:
+      mapped.citations !== undefined ? mapped.citations : local.citations,
+    captureSummary:
+      mapped.captureSummary !== undefined
+        ? mapped.captureSummary
+        : local.captureSummary,
+  };
+}
+
 export function upsertActivity(
   messages: ChatMessage[],
   id: string,

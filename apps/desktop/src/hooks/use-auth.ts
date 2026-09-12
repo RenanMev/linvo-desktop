@@ -17,8 +17,13 @@ import {
 import { enterLoggedInDesktop } from "@/lib/auth/enter-logged-in-desktop";
 import { applyOnboardingWindowSurface } from "@/lib/auth/onboarding-window-surface";
 import { clearStoredAppearance } from "@/lib/appearance/appearance-store";
+import { saveActiveConversationId } from "@/lib/chat/active-conversation-store";
 import { clearChatLocalCache } from "@/lib/chat/chat-local-store";
-import { clearStoredWorkspaceId } from "@/lib/workspace/workspace-store";
+import {
+  clearStoredWorkspaceId,
+  getStoredWorkspaceId,
+  setStoredWorkspaceId,
+} from "@/lib/workspace/workspace-store";
 import {
   clearOnboardingCompleted,
   hasCompletedOnboarding,
@@ -49,7 +54,19 @@ async function persistSession(
   }
 }
 
+function persistWorkspaceFromUser(user: UserPublic): void {
+  if (user.activeWorkspaceId) {
+    setStoredWorkspaceId(user.activeWorkspaceId);
+  }
+}
+
+function conversationIdFromChatRoute(route: string): string | null {
+  const match = /^\/chat\/([^/?#]+)$/.exec(route);
+  return match?.[1] ?? null;
+}
+
 async function enterSession(user: UserPublic): Promise<void> {
+  persistWorkspaceFromUser(user);
   await enterLoggedInDesktop(user);
 }
 
@@ -87,6 +104,7 @@ export function useAuth() {
   const handleUnauthorized = useCallback(() => {
     invalidateSession();
     clearStoredAppearance();
+    clearStoredWorkspaceId();
     void (async () => {
       await notifyDesktopEvent("Sessão expirada. Faça login novamente.");
       await closePanel();
@@ -120,6 +138,7 @@ export function useAuth() {
        * fica atrás da tela de login.
        */
       const finishBoot = async (user: UserPublic) => {
+        persistWorkspaceFromUser(user);
         if (shouldShowOnboarding(user)) {
           dispatch({ type: "START_ONBOARDING", user });
           return;
@@ -135,6 +154,7 @@ export function useAuth() {
 
       const stored = await getTokens();
       if (!stored) {
+        clearStoredWorkspaceId();
         dispatch({ type: "BOOT_NO_TOKEN" });
         return;
       }
@@ -163,6 +183,7 @@ export function useAuth() {
             }
             await clearTokens();
             clearStoredAppearance();
+            clearStoredWorkspaceId();
             await emitAuthSync("unauthorized");
             dispatch({ type: "BOOT_SESSION_INVALID" });
             return;
@@ -176,6 +197,7 @@ export function useAuth() {
         }
         await clearTokens();
         clearStoredAppearance();
+        clearStoredWorkspaceId();
         await emitAuthSync("unauthorized");
         dispatch({ type: "BOOT_SESSION_INVALID" });
       }
@@ -221,6 +243,7 @@ export function useAuth() {
         clearOnboardingProgress(state.user.id);
       }
       clearStoredAppearance();
+      clearStoredWorkspaceId();
       void closePanel();
       dispatch({
         type: payload.type === "logout" ? "LOGOUT" : "UNAUTHORIZED",
@@ -263,6 +286,7 @@ export function useAuth() {
     try {
       const result = await loginRequest(input);
       await persistSession(result.accessToken, result.refreshToken);
+      persistWorkspaceFromUser(result.user);
       if (shouldShowOnboarding(result.user)) {
         dispatch({ type: "START_ONBOARDING", user: result.user });
       } else {
@@ -284,6 +308,7 @@ export function useAuth() {
     try {
       const result = await registerRequest(input);
       await persistSession(result.accessToken, result.refreshToken);
+      persistWorkspaceFromUser(result.user);
       if (shouldShowOnboarding(result.user)) {
         dispatch({ type: "START_ONBOARDING", user: result.user });
       } else {
@@ -325,6 +350,15 @@ export function useAuth() {
       }
       markOnboardingCompleted(state.user.id);
       clearOnboardingProgress(state.user.id);
+      persistWorkspaceFromUser(state.user);
+      const conversationId = conversationIdFromChatRoute(route);
+      const workspaceId = getStoredWorkspaceId();
+      saveActiveConversationId(
+        conversationId,
+        conversationId && workspaceId
+          ? { userId: state.user.id, workspaceId }
+          : null,
+      );
       dispatch({ type: "START_FLOATING" });
       await enterLoggedInDesktop(state.user, route);
     },

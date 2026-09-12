@@ -168,6 +168,7 @@ export function OnboardingShell({
           ) : null}
           {flow.stepId === "first_question" ? (
             <FirstQuestionStep
+              userId={user.id}
               workspaceName={workspaceLabel}
               busy={flow.busy}
               finish={flow.finish}

@@ -1,6 +1,5 @@
 import {
   Minimize2,
-  Minus,
   GripVertical,
   Keyboard,
   MessageSquare,
@@ -18,14 +17,27 @@ type FloatingBarProps = {
   onOpenQuickMenu: () => void;
   onCaptureContext: () => void;
   onCollapseToEdge: () => void;
-  onMinimize: () => void;
   onResetPosition: () => void;
   chatButtonRef?: Ref<HTMLButtonElement>;
 };
 
 function BarDivider() {
-  return <span className="h-3.5 w-px shrink-0 bg-surface-raise-2" aria-hidden />;
+  return <span className="h-4 w-px shrink-0 bg-foreground/15" aria-hidden />;
 }
+
+/**
+ * Traço dos ícones da barra, mais grosso que o padrão do Lucide (2).
+ *
+ * É o único jeito de deixar os ícones visualmente mais macios: o raio dos
+ * cantos vive no próprio `path` de cada ícone (2 de 24 unidades) e não é
+ * exposto por prop. Como o Lucide já desenha com `stroke-linejoin: round`,
+ * engrossar o traço aumenta o raio efetivo da junção.
+ *
+ * 2,25 foi medido na tela e quase não se distingue do padrão; 2,5 é onde a
+ * junção arredondada passa a ler a 16px de ícone, sem borrar os vazados (o
+ * quadrado tracejado do Recorte é o mais apertado, e ainda respira).
+ */
+const BAR_ICON_STROKE_WIDTH = 2.5;
 
 const shortcuts = [
   { keys: "Ctrl Shift L", label: "Mostrar/ocultar" },
@@ -63,20 +75,21 @@ function BarAction({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "grid size-6 shrink-0 place-items-center rounded-full outline-none",
+        "grid size-7 shrink-0 place-items-center rounded-full outline-none",
         "text-foreground transition-[background-color,transform] duration-150 ease-out",
-        // Hover/foco são só fundo + opacidade: escalar o ícone a cada passada
-        // do mouse numa barra de 34px vira ruído.
-        "[&_svg]:size-3.5 [&_svg]:opacity-50 [&_svg]:transition-opacity [&_svg]:duration-150 [&_svg]:ease-out",
-        "hover:bg-surface-hover hover:[&_svg]:opacity-100",
+        // Ícones cheios (não apagados) o tempo todo — só o fundo reage ao
+        // hover. Escalar o ícone a cada passada do mouse vira ruído, daí o
+        // hover ficar restrito ao background.
+        "[&_svg]:size-4",
+        "hover:bg-surface-hover",
         // Foco neutro e inset: halo externo seria recortado pela janela.
-        "focus-visible:bg-surface-hover focus-visible:[&_svg]:opacity-100",
+        "focus-visible:bg-surface-hover",
         "focus-visible:inset-ring-1 focus-visible:inset-ring-hairline-strong",
         "active:scale-[0.96]",
         "disabled:pointer-events-none disabled:[&_svg]:opacity-20",
       )}
     >
-      <Icon />
+      <Icon strokeWidth={BAR_ICON_STROKE_WIDTH} />
     </button>
   );
 }
@@ -120,12 +133,11 @@ export function FloatingBar({
   onOpenQuickMenu,
   onCaptureContext,
   onCollapseToEdge,
-  onMinimize,
   onResetPosition,
   chatButtonRef,
 }: FloatingBarProps) {
   return (
-    <div className="flex h-full w-full items-center gap-1 px-1.5">
+    <div className="flex h-full w-full items-center gap-1.5 px-2">
       <span
         data-overlay-hit
         data-tauri-drag-region
@@ -144,12 +156,15 @@ export function FloatingBar({
           onResetPosition();
         }}
         className={cn(
-          "grid h-5 w-4 shrink-0 cursor-grab place-items-center rounded-full",
+          "grid h-6 w-5 shrink-0 cursor-grab place-items-center rounded-full",
           "text-foreground/30 transition-colors",
           "hover:bg-surface-hover hover:text-foreground/70 active:cursor-grabbing",
         )}
       >
-        <GripVertical className="pointer-events-none size-3" />
+        <GripVertical
+          className="pointer-events-none size-3.5"
+          strokeWidth={BAR_ICON_STROKE_WIDTH}
+        />
       </span>
 
       <span
@@ -188,7 +203,6 @@ export function FloatingBar({
         onClick={onCaptureContext}
       />
       <BarAction icon={Minimize2} label="Encolher" onClick={onCollapseToEdge} />
-      <BarAction icon={Minus} label="Minimizar" onClick={onMinimize} />
     </div>
   );
 }

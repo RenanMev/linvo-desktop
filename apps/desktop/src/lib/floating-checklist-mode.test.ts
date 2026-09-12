@@ -1,68 +1,85 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import {
-  resolveChecklistCollapsePosition,
-  resolveChecklistExpandPosition,
+  collapseChecklistToFloating,
+  expandFloatingToChecklist,
 } from "@/lib/floating-checklist-mode";
-import type { MonitorInfo } from "@/lib/window-position";
+import { resolveEnvelopeMorphGeometry } from "@/lib/floating-island-transition";
+import { invokeMock, showMock, windowMock } from "@/test/mocks/tauri";
 
-const monitor: MonitorInfo = {
-  position: { x: 0, y: 0 },
-  size: { width: 1920, height: 1080 },
-};
+function regionCalls() {
+  return invokeMock.mock.calls.filter((call) => call[0] === "set_window_region");
+}
 
-describe("floating-checklist-mode positions", () => {
-  it("moves to visible compact spot first when bar is off-screen", () => {
-    const plan = resolveChecklistExpandPosition({
-      currentPosition: { x: -400, y: -200 },
-      currentSize: { width: 140, height: 40 },
-      targetSize: { width: 288, height: 420 },
-      monitor,
-    });
+function boundsCalls() {
+  return invokeMock.mock.calls.filter((call) => call[0] === "set_window_bounds");
+}
 
-    expect(plan.moveFirst).toEqual({ x: 0, y: 0 });
-    expect(plan.finalPosition).toEqual({ x: 0, y: 0 });
+describe("floating-checklist-mode", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+    showMock.mockClear();
+    windowMock.unminimize.mockClear();
+    windowMock.setFocus.mockClear();
+    invokeMock.mockImplementation(() => Promise.resolve(undefined));
+    windowMock.scaleFactor.mockResolvedValue(1);
   });
 
-  it("resizes without a pre-move when the bar is already visible, keeping the origin", () => {
-    const plan = resolveChecklistExpandPosition({
-      currentPosition: { x: 100, y: 80 },
-      currentSize: { width: 140, height: 40 },
-      targetSize: { width: 288, height: 420 },
-      monitor,
-    });
+  it("never touches window bounds: the envelope stays put for the whole morph", async () => {
+    await expandFloatingToChecklist("down");
+    await collapseChecklistToFloating("down");
 
-    expect(plan.moveFirst).toBeNull();
-    // A janela cresce a partir do próprio canto: nenhum dos eixos se desloca,
-    // e o checklist ainda cabe na tela a partir de (100, 80).
-    expect(plan.finalPosition).toEqual({ x: 100, y: 80 });
+    expect(boundsCalls()).toHaveLength(0);
   });
 
-  it("clamps final checklist bounds to the monitor", () => {
-    const plan = resolveChecklistExpandPosition({
-      currentPosition: { x: 1800, y: 900 },
-      currentSize: { width: 140, height: 40 },
-      targetSize: { width: 288, height: 420 },
-      monitor,
-    });
+  it("clips to the union of compact and checklist while expanding", async () => {
+    await expandFloatingToChecklist("down");
 
-    expect(plan.moveFirst).toEqual({
-      x: 1920 - 140,
-      y: 900,
-    });
-    expect(plan.finalPosition).toEqual({
-      x: 1920 - 288,
-      y: 1080 - 420,
-    });
+    expect(regionCalls()).toEqual([
+      [
+        "set_window_region",
+        {
+          region: { x: 51, y: 5, width: 326, height: 458 },
+          radius: 14,
+        },
+      ],
+    ]);
   });
 
-  it("keeps collapse position when compact still fits", () => {
-    expect(
-      resolveChecklistCollapsePosition({
-        currentPosition: { x: 120, y: 40 },
-        targetSize: { width: 140, height: 40 },
-        monitor,
+  it("shows, unminimizes and focuses the window before expanding", async () => {
+    await expandFloatingToChecklist("down");
+
+    expect(showMock).toHaveBeenCalled();
+    expect(windowMock.unminimize).toHaveBeenCalled();
+    expect(windowMock.setFocus).toHaveBeenCalled();
+  });
+
+  it("does not touch focus or visibility while collapsing", async () => {
+    await collapseChecklistToFloating("down");
+
+    expect(showMock).not.toHaveBeenCalled();
+    expect(windowMock.setFocus).not.toHaveBeenCalled();
+  });
+
+  it("resolves the geometry for expand", async () => {
+    const result = await expandFloatingToChecklist("down");
+    expect(result).toEqual(
+      resolveEnvelopeMorphGeometry({
+        fromMode: "compact",
+        toMode: "checklist",
+        growth: "down",
       }),
-    ).toEqual({ x: 120, y: 40 });
+    );
+  });
+
+  it("resolves the mirrored geometry for collapse", async () => {
+    const result = await collapseChecklistToFloating("up");
+    expect(result).toEqual(
+      resolveEnvelopeMorphGeometry({
+        fromMode: "checklist",
+        toMode: "compact",
+        growth: "up",
+      }),
+    );
   });
 });

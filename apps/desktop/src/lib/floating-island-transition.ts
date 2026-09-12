@@ -1,15 +1,130 @@
 import type { Position, Size } from "@/lib/window-position";
+import {
+  ISLAND_COMPACT_RADIUS_PX,
+  ISLAND_ENVELOPE_SIZE,
+  islandRectForMode,
+  type IslandEnvelopeMode,
+  type IslandGrowthDirection,
+} from "@/lib/window-mode";
 
-export const ISLAND_MORPH_DURATION_MS = 170;
+// Reexportado por compatibilidade: definido em `window-mode.ts` para
+// `radiusForEnvelopeMode` poder usá-lo sem criar um ciclo de import entre os
+// dois módulos (ver o comentário na definição).
+export { ISLAND_EXPANDED_RADIUS_PX } from "@/lib/window-mode";
+
+/**
+ * Duração do morph ao ABRIR (compact → quick-menu/checklist).
+ *
+ * Também é o teto usado pelos watchdogs: é a maior das duas direções, então
+ * um watchdog dimensionado por ela nunca dispara antes de um fecho terminar.
+ *
+ * É o `visualDuration` da mola de abertura (`EXPAND_SPRING`), não o tempo
+ * total: o Motion define `visualDuration` como o tempo até a forma PARECER ter
+ * chegado, e a acomodação do overshoot continua depois disso. Por isso o
+ * movimento lê como mais rápido que os 170ms fixos de antes, apesar do número
+ * maior — o ataque é bem mais curto.
+ */
+export const ISLAND_MORPH_DURATION_MS = 260;
+
+/**
+ * Duração do morph ao FECHAR. Mais curta e criticamente amortecida: fechar é
+ * uma confirmação, não uma apresentação — arrastar tanto quanto a abertura faz
+ * a interface parecer travada.
+ */
+export const ISLAND_MORPH_COLLAPSE_DURATION_MS = 190;
+
+/**
+ * Fração da duração do morph que o cross-fade das superfícies leva, e fração
+ * após a qual a opacidade do conteúdo de destino começa a subir.
+ *
+ * São frações e não valores fixos porque as duas direções têm durações
+ * diferentes: com um tempo fixo, a forma que sai sumiria cedo demais no fecho
+ * e tarde demais na abertura.
+ *
+ * O atraso do conteúdo é curto de propósito. A geometria dele não espera nada
+ * — o `clip-path` abre junto com a casca, na mesma mola — então este atraso
+ * rege só a opacidade, e serve apenas para o texto não aparecer no primeiro
+ * quadro, quando a fresta revelada ainda é fina demais para caber qualquer
+ * coisa legível. Era 0,42 quando o conteúdo só podia entrar DEPOIS da casca
+ * parar; nesse valor a abertura lia como duas etapas.
+ */
+export const ISLAND_MORPH_FADE_RATIO = 0.42;
+export const ISLAND_CONTENT_DELAY_RATIO = 0.08;
+
+/** Deslocamento vertical do conteúdo que entra / que sai, em px. */
+export const ISLAND_MORPH_CONTENT_DISTANCE_PX = 8;
+export const ISLAND_MORPH_CONTENT_EXIT_DISTANCE_PX = -4;
+
+/**
+ * Quanto tempo a mola leva para ACOMODAR, como múltiplo da duração visual.
+ *
+ * `visualDuration` é o tempo até a forma parecer ter chegado; a mola continua
+ * corrigindo o overshoot depois disso, e `onAnimationComplete` só dispara no
+ * fim de verdade. Os watchdogs precisam desta escala, não da duração visual:
+ * dimensionados pela duração visual eles disparavam ANTES da mola acabar, o
+ * BarApp assentava o morph no meio e a forma saltava para o estado final —
+ * a animação aparecia cortada pela metade.
+ *
+ * 2× cobre com folga o pior caso (abertura, `bounce: 0.18`). É um failsafe:
+ * no caminho normal quem termina o morph é o callback do Motion, bem antes.
+ */
+export const ISLAND_SPRING_SETTLE_FACTOR = 2;
+
+/** Teto de acomodação da mola de cada direção, para os watchdogs. */
+export function islandMorphSettleMs(expanding: boolean): number {
+  return Math.round(
+    (expanding ? ISLAND_MORPH_DURATION_MS : ISLAND_MORPH_COLLAPSE_DURATION_MS) *
+      ISLAND_SPRING_SETTLE_FACTOR,
+  );
+}
+
 export const ISLAND_MORPH_WATCHDOG_MS = 60;
 export const ISLAND_PAINT_WATCHDOG_MS = 80;
 export const ISLAND_GUTTER_PX = 1;
-export const ISLAND_EXPANDED_RADIUS_PX = 14;
 
-export type WindowBounds = {
-  position: Position;
-  size: Size;
-};
+/**
+ * Folga somada ao recorte da janela enquanto o morph roda.
+ *
+ * A mola de abertura passa ~3,8% do retângulo de destino antes de voltar. Sem
+ * esta folga o recorte — que é a união exata dos retângulos de origem e
+ * destino — cortaria o pico do overshoot numa linha reta, e o efeito viraria
+ * um achatamento visível justo no quadro mais expressivo da animação.
+ *
+ * 20px cobre o pico com sobra (o pico do quick-menu chega a ~19,7px além do
+ * alvo no eixo vertical) e ainda cabe no envelope depois do clamp em
+ * `inflateRectWithinEnvelope`.
+ */
+export const ISLAND_MORPH_REGION_SLACK_PX = 20;
+
+/**
+ * Raio da camada da pílula *durante* o cross-fade.
+ *
+ * `resolveRectFlip` anima essa camada via `transform: scale()`, que estica
+ * `border-radius` pelos MESMOS fatores não uniformes do resto da forma
+ * (~1,9× no X, ~14,4× no Y ao abrir o quick menu). Se o alcance vertical do
+ * arco na escala máxima chegar à metade da altura do alvo, os arcos do topo e
+ * do fundo se encontram e a forma vira um barril (cintura fina, topo e base
+ * estufados) em vez de manter os lados retos.
+ *
+ * Quando o repouso era `COMPACT_SIZE.height / 2` (uma cápsula), esse alcance
+ * batia exatamente nos 100% e o barril aparecia — daí este valor ter sido
+ * fixado abaixo do raio real. Com o repouso agora em
+ * `ISLAND_COMPACT_RADIUS_PX` (um retângulo arredondado, bem menor que meia
+ * altura), o alcance fica em ~67% da metade da altura nos dois painéis
+ * (quick-menu e checklist): sobra 33% de margem e o raio de verdade pode ser
+ * usado o morph inteiro. Isso elimina o pulo de raio que existia ao assentar,
+ * quando a camada trocava do valor reduzido para o de repouso.
+ *
+ * A margem é verificada por teste — se `ISLAND_COMPACT_RADIUS_PX` ou a altura
+ * da pílula crescerem, é o teste que avisa antes do barril voltar.
+ *
+ * Animar `border-radius` de verdade (em vez desta aproximação por
+ * `transform`) eliminaria a distorção pela raiz, mas já foi tentado nesta
+ * base e piscava pior (o WebView precisa re-rasterizar a máscara arredondada
+ * a cada frame, e os frames que não ficam prontos saem em branco) — ver o
+ * comentário em `.floating-island-surface` no `index.css`.
+ */
+export const ISLAND_MORPH_COMPACT_RADIUS_PX = ISLAND_COMPACT_RADIUS_PX;
 
 export type IslandRect = Position & Size;
 
@@ -21,121 +136,22 @@ export type IslandMorphGeometry = {
   to: IslandRect;
 };
 
-export type PreparedIslandWindowTransition = {
-  geometry: IslandMorphGeometry;
-  targetBounds: WindowBounds;
-  /**
-   * Escala já lida no prepare. Carregada até o commit para o recorte da região
-   * não precisar de outro round-trip de IPC no meio da transição — era ele que
-   * deixava a janela ~160ms encolhida e ainda sem recorte, tempo suficiente para
-   * o Windows desenhar a moldura em volta do retângulo.
-   */
-  scaleFactor: number;
-};
-
-export type IslandExpandHooks = {
-  onPrepare?: (geometry: IslandMorphGeometry) => Promise<void> | void;
-  /**
-   * Runs after the native bounds commit and after the WebView has painted the
-   * target viewport. This keeps the first CSS transition frame from being
-   * coalesced with the resize.
-   */
-  onViewportReady?: (geometry: IslandMorphGeometry) => Promise<void> | void;
-  onResizeStart?: (geometry: IslandMorphGeometry) => Promise<void> | void;
-};
-
-export type IslandCollapseHooks = {
-  /** Run the local CSS collapse before compact native bounds are committed. */
-  onBeforeCommit?: (geometry: IslandMorphGeometry) => Promise<void> | void;
-  /**
-   * Runs after native bounds shrink. Use this to settle React into the target
-   * mode once the WebView viewport matches the compact shell.
-   */
-  onAfterCommit?: (geometry: IslandMorphGeometry) => Promise<void> | void;
-  /** Prevent a delayed transition from committing after it was superseded. */
-  shouldCommit?: () => boolean;
-};
-
-function toLogical(value: number, scaleFactor: number): number {
-  return value / Math.max(scaleFactor, Number.EPSILON);
-}
-
-function localRect(
-  bounds: WindowBounds,
-  viewportOrigin: Position,
-  scaleFactor: number,
-): IslandRect {
-  return {
-    x: toLogical(bounds.position.x - viewportOrigin.x, scaleFactor),
-    y: toLogical(bounds.position.y - viewportOrigin.y, scaleFactor),
-    width: toLogical(bounds.size.width, scaleFactor),
-    height: toLogical(bounds.size.height, scaleFactor),
-  };
-}
-
 /**
- * Expansion runs after the native window has jumped to `targetBounds`, so all
- * local coordinates are expressed inside the target WebView.
+ * Geometria do morph entre dois modos do envelope fixo (ver
+ * `docs/SDD-ILHA-ENVELOPE.md`). Ao contrário do que uma expansão nativa exigia
+ * antes, não depende dos bounds da janela: o envelope não muda de tamanho nem
+ * de posição entre `fromMode` e `toMode`, então os dois retângulos já são os
+ * retângulos de desenho de cada modo, no mesmo viewport fixo.
  */
-export function resolveExpandMorphGeometry(input: {
-  sourceBounds: WindowBounds;
-  targetBounds: WindowBounds;
-  scaleFactor: number;
+export function resolveEnvelopeMorphGeometry(input: {
+  fromMode: IslandEnvelopeMode;
+  toMode: IslandEnvelopeMode;
+  growth: IslandGrowthDirection;
 }): IslandMorphGeometry {
-  const { sourceBounds, targetBounds, scaleFactor } = input;
   return {
-    viewport: {
-      width: toLogical(targetBounds.size.width, scaleFactor),
-      height: toLogical(targetBounds.size.height, scaleFactor),
-    },
-    from: localRect(sourceBounds, targetBounds.position, scaleFactor),
-    to: localRect(targetBounds, targetBounds.position, scaleFactor),
-  };
-}
-
-/**
- * Collapse runs before the native window shrinks, so both rectangles are
- * expressed inside the current expanded WebView.
- */
-export function resolveCollapseMorphGeometry(input: {
-  sourceBounds: WindowBounds;
-  targetBounds: WindowBounds;
-  scaleFactor: number;
-}): IslandMorphGeometry {
-  const { sourceBounds, targetBounds, scaleFactor } = input;
-  return {
-    viewport: {
-      width: toLogical(sourceBounds.size.width, scaleFactor),
-      height: toLogical(sourceBounds.size.height, scaleFactor),
-    },
-    from: localRect(sourceBounds, sourceBounds.position, scaleFactor),
-    to: localRect(targetBounds, sourceBounds.position, scaleFactor),
-  };
-}
-
-/**
- * Substitui os retângulos da janela pelos retângulos do desenho, centralizados.
- *
- * A janela tem sempre a mesma largura em todos os modos, então os retângulos que
- * saem de `resolve*MorphGeometry` descrevem a janela, não a forma visível: sem
- * isto a pílula animaria com a largura inteira do painel. O eixo vertical não
- * muda — a altura da janela já é a altura do desenho.
- */
-export function withCenteredVisualRects(
-  geometry: IslandMorphGeometry,
-  fromVisualWidth: number,
-  toVisualWidth: number,
-): IslandMorphGeometry {
-  const center = (rect: IslandRect, visualWidth: number): IslandRect => ({
-    ...rect,
-    x: rect.x + Math.round((rect.width - visualWidth) / 2),
-    width: visualWidth,
-  });
-
-  return {
-    viewport: geometry.viewport,
-    from: center(geometry.from, fromVisualWidth),
-    to: center(geometry.to, toVisualWidth),
+    viewport: ISLAND_ENVELOPE_SIZE,
+    from: islandRectForMode(input.fromMode, input.growth),
+    to: islandRectForMode(input.toMode, input.growth),
   };
 }
 
@@ -156,7 +172,15 @@ export type IslandPlacement = {
 };
 
 export type IslandFlip = {
+  /**
+   * Forma pronta para `transform` do CSS. Mantida para quem só precisa da
+   * string; o shell usa os componentes soltos abaixo, porque o Motion anima
+   * `x`/`y`/`scaleX`/`scaleY` como valores independentes — é o que permite
+   * interromper e redirecionar cada eixo a partir da velocidade atual.
+   */
   transform: string;
+  x: number;
+  y: number;
   scaleX: number;
   scaleY: number;
 };
@@ -247,6 +271,74 @@ export function resolveIslandPlacement(
   };
 }
 
+/**
+ * Posição direta de `rect` dentro de um viewport que não muda — o estado
+ * assentado da ilha, fora de qualquer morph. Ao contrário de
+ * `resolveIslandPlacement`, não precisa da âncora nem do `calc()` por
+ * fração: como o envelope nunca redimensiona entre os modos
+ * compact/quick-menu/checklist (ver `docs/SDD-ILHA-ENVELOPE.md`), o
+ * retângulo de cada modo já vale em px absolutos.
+ */
+export function resolveStablePlacement(
+  rect: IslandRect,
+  inset = ISLAND_GUTTER_PX,
+): IslandPlacement {
+  return {
+    left: `${rect.x + inset}px`,
+    top: `${rect.y + inset}px`,
+    width: innerExtent(rect.width, inset),
+    height: innerExtent(rect.height, inset),
+  };
+}
+
+/**
+ * `clip-path` que revela apenas a área de `inner` dentro da caixa de `outer`.
+ *
+ * É o que costura as duas metades da transição numa só. Sem isto o conteúdo
+ * de destino só podia aparecer DEPOIS que a casca terminasse de crescer (ele
+ * mora no retângulo final, em tamanho final, e apareceria transbordando para
+ * fora da forma ainda pequena) — e a abertura lia como duas etapas: a casca
+ * cresce vazia, e então o conteúdo surge.
+ *
+ * Recortando o conteúdo pelo retângulo da forma de origem e animando esse
+ * recorte até `inset(0…)` com a MESMA mola da casca, o conteúdo é revelado na
+ * medida em que a forma abre. Nada de escalar o conteúdo: texto escalado por
+ * `transform` borra e depois estala ao voltar para 1.
+ *
+ * Ambos os retângulos estão em coordenadas do envelope; `inset` é o mesmo
+ * gutter aplicado às superfícies, para o recorte casar com o que é pintado.
+ */
+export function resolveRevealClipPath(
+  outer: IslandRect,
+  inner: IslandRect,
+  radius: number,
+  inset = ISLAND_GUTTER_PX,
+): string {
+  const outerLeft = outer.x + inset;
+  const outerTop = outer.y + inset;
+  const outerRight = outerLeft + innerExtent(outer.width, inset);
+  const outerBottom = outerTop + innerExtent(outer.height, inset);
+
+  const innerLeft = inner.x + inset;
+  const innerTop = inner.y + inset;
+  const innerRight = innerLeft + innerExtent(inner.width, inset);
+  const innerBottom = innerTop + innerExtent(inner.height, inset);
+
+  // Nunca negativo: um `inset()` negativo não expande o recorte, ele é
+  // tratado como zero por alguns motores e como erro por outros.
+  const top = Math.max(0, innerTop - outerTop);
+  const left = Math.max(0, innerLeft - outerLeft);
+  const right = Math.max(0, outerRight - innerRight);
+  const bottom = Math.max(0, outerBottom - innerBottom);
+
+  return `inset(${top}px ${right}px ${bottom}px ${left}px round ${radius}px)`;
+}
+
+/** Recorte que não esconde nada — o estado final de `resolveRevealClipPath`. */
+export function resolveFullClipPath(radius: number): string {
+  return `inset(0px 0px 0px 0px round ${radius}px)`;
+}
+
 export const ISLAND_IDENTITY_TRANSFORM = "translate3d(0px, 0px, 0) scale(1, 1)";
 
 /**
@@ -267,9 +359,17 @@ export function resolveRectFlip(
   const scaleY =
     innerExtent(target.height, inset) / innerExtent(base.height, inset);
 
+  const x = target.x - base.x;
+  const y = target.y - base.y;
+
   return {
-    transform: `translate3d(${target.x - base.x}px, ${target.y - base.y}px, 0) scale(${scaleX}, ${scaleY})`,
+    transform: `translate3d(${x}px, ${y}px, 0) scale(${scaleX}, ${scaleY})`,
+    x,
+    y,
     scaleX,
     scaleY,
   };
 }
+
+/** Estado sem transformação, na forma que o Motion anima. */
+export const ISLAND_IDENTITY_FLIP = { x: 0, y: 0, scaleX: 1, scaleY: 1 };

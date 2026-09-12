@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   clearStoredAppearance: vi.fn(),
   clearChatLocalCache: vi.fn(),
   clearStoredWorkspaceId: vi.fn(),
+  getStoredWorkspaceId: vi.fn(),
   clearOnboardingCompleted: vi.fn(),
   hasCompletedOnboarding: vi.fn(),
   isOnboardingForced: vi.fn(),
@@ -31,6 +32,8 @@ const mocks = vi.hoisted(() => ({
   notifyDesktopEvent: vi.fn(),
   closePanel: vi.fn(),
   enterLoggedInDesktop: vi.fn(),
+  setStoredWorkspaceId: vi.fn(),
+  saveActiveConversationId: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/auth-api", async () => {
@@ -56,6 +59,12 @@ vi.mock("@/lib/chat/chat-local-store", () => ({
 
 vi.mock("@/lib/workspace/workspace-store", () => ({
   clearStoredWorkspaceId: mocks.clearStoredWorkspaceId,
+  getStoredWorkspaceId: mocks.getStoredWorkspaceId,
+  setStoredWorkspaceId: mocks.setStoredWorkspaceId,
+}));
+
+vi.mock("@/lib/chat/active-conversation-store", () => ({
+  saveActiveConversationId: mocks.saveActiveConversationId,
 }));
 
 vi.mock("@/lib/onboarding/onboarding-store", () => ({
@@ -118,6 +127,7 @@ const user = {
   id: "user-1",
   name: "Renan",
   email: "renan@example.com",
+  activeWorkspaceId: "ws-1",
 } as UserPublic;
 
 describe("useAuth onboarding integration", () => {
@@ -125,6 +135,7 @@ describe("useAuth onboarding integration", () => {
     vi.clearAllMocks();
     mocks.reviewHandler = null;
     mocks.getTokens.mockResolvedValue(null);
+    mocks.getStoredWorkspaceId.mockReturnValue("ws-1");
     mocks.me.mockResolvedValue(user);
     mocks.hasCompletedOnboarding.mockReturnValue(true);
     mocks.isOnboardingForced.mockReturnValue(false);
@@ -153,6 +164,7 @@ describe("useAuth onboarding integration", () => {
 
     await waitFor(() => expect(result.current.phase).toBe("onboarding"));
     expect(mocks.enterLoggedInDesktop).not.toHaveBeenCalled();
+    expect(mocks.setStoredWorkspaceId).toHaveBeenCalledWith("ws-1");
     await waitFor(() =>
       expect(mocks.applyOnboardingWindowSurface).toHaveBeenCalled(),
     );
@@ -201,7 +213,32 @@ describe("useAuth onboarding integration", () => {
 
     expect(mocks.markOnboardingCompleted).toHaveBeenCalledWith("user-1");
     expect(mocks.clearOnboardingProgress).toHaveBeenCalledWith("user-1");
+    expect(mocks.setStoredWorkspaceId).toHaveBeenCalledWith("ws-1");
+    expect(mocks.saveActiveConversationId).toHaveBeenCalledWith(null, null);
     expect(mocks.enterLoggedInDesktop).toHaveBeenCalledWith(user, "/chat");
+  });
+
+  it("hands the first-question conversation to the island when onboarding completes", async () => {
+    mocks.getTokens.mockResolvedValue({
+      accessToken: "access",
+      refreshToken: "refresh",
+    });
+    mocks.isOnboardingForced.mockReturnValue(true);
+    const { result } = renderHook(() => useAuth());
+
+    await waitFor(() => expect(result.current.phase).toBe("onboarding"));
+    await act(async () =>
+      result.current.completeOnboarding("/chat/conversation-1"),
+    );
+
+    expect(mocks.saveActiveConversationId).toHaveBeenCalledWith(
+      "conversation-1",
+      { userId: "user-1", workspaceId: "ws-1" },
+    );
+    expect(mocks.enterLoggedInDesktop).toHaveBeenCalledWith(
+      user,
+      "/chat/conversation-1",
+    );
   });
 });
 
@@ -223,6 +260,7 @@ describe("useAuth boot invalidado no meio", () => {
       accessToken: "access",
       refreshToken: "refresh",
     });
+    mocks.getStoredWorkspaceId.mockReturnValue("ws-1");
     mocks.me.mockResolvedValue(user);
     mocks.hasCompletedOnboarding.mockReturnValue(true);
     mocks.isOnboardingForced.mockReturnValue(false);

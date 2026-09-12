@@ -1,14 +1,25 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  collapseToEdge,
   edgeHandleSize,
+  expandFromEdge,
   resolveEdgeHandleBounds,
   resolveNearestAnchor,
 } from "@/lib/floating-edge-mode";
 import {
   EDGE_HANDLE_LENGTH,
   EDGE_HANDLE_THICKNESS,
+  ISLAND_ENVELOPE_SIZE,
+  pillPositionForEnvelope,
 } from "@/lib/window-mode";
+import { loadIslandPillPosition } from "@/lib/window-storage";
+import {
+  invokeMock,
+  setPositionMock,
+  setSizeMock,
+  windowMock,
+} from "@/test/mocks/tauri";
 import type { MonitorInfo } from "@/lib/window-position";
 
 const workArea: MonitorInfo = {
@@ -94,5 +105,75 @@ describe("resolveNearestAnchor", () => {
       workArea,
     });
     expect(anchor).toEqual({ horizontal: null, vertical: "top" });
+  });
+});
+
+describe("collapseToEdge / expandFromEdge (envelope native transitions)", () => {
+  const nativeWorkArea = { x: 0, y: 0, width: 1920, height: 1080 };
+
+  beforeEach(() => {
+    localStorage.clear();
+    invokeMock.mockReset();
+    setPositionMock.mockClear();
+    setSizeMock.mockClear();
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === "monitor_work_area") {
+        return Promise.resolve(nativeWorkArea);
+      }
+      return Promise.resolve(undefined);
+    });
+    windowMock.scaleFactor.mockResolvedValue(1);
+  });
+
+  function regionCalls() {
+    return invokeMock.mock.calls.filter((call) => call[0] === "set_window_region");
+  }
+
+  it("clips to the handle's own bounds, not the envelope's — the window IS the handle now", async () => {
+    windowMock.outerPosition.mockResolvedValue({ x: 270, y: 176 });
+    windowMock.outerSize.mockResolvedValue(ISLAND_ENVELOPE_SIZE);
+
+    const anchor = await collapseToEdge("down");
+
+    // A pílula estava perto do topo (176px de folga acima vs. 846px abaixo):
+    // ancora no topo, handle horizontal (112x12).
+    expect(anchor).toEqual({ horizontal: null, vertical: "top" });
+    expect(regionCalls()).toEqual([
+      ["set_window_region", { region: { x: 1, y: 1, width: 110, height: 10 }, radius: 0 }],
+    ]);
+  });
+
+  it("round-trips the pill's screen position through collapse and expand", async () => {
+    const envelopePosition = { x: 270, y: 176 };
+    windowMock.outerPosition.mockResolvedValue(envelopePosition);
+    windowMock.outerSize.mockResolvedValue(ISLAND_ENVELOPE_SIZE);
+
+    const pillBefore = pillPositionForEnvelope({ envelopePosition, growth: "down" });
+
+    const anchor = await collapseToEdge("down");
+    expect(anchor).not.toBeNull();
+
+    // Simula o SetWindowPos que a animação nativa teria aplicado: a janela
+    // real agora tem os bounds da última chamada de fallback setSize/setPosition.
+    const positionCalls = setPositionMock.mock.calls as unknown as Array<
+      [{ x: number; y: number }]
+    >;
+    const sizeCalls = setSizeMock.mock.calls as unknown as Array<
+      [{ width: number; height: number }]
+    >;
+    const handlePosition = positionCalls[positionCalls.length - 1][0];
+    const handleSize = sizeCalls[sizeCalls.length - 1][0];
+    windowMock.outerPosition.mockResolvedValue({ x: handlePosition.x, y: handlePosition.y });
+    windowMock.outerSize.mockResolvedValue({
+      width: handleSize.width,
+      height: handleSize.height,
+    });
+
+    const resolvedGrowth = await expandFromEdge();
+
+    // A pílula volta perto do topo, com espaço de sobra abaixo: recalcula
+    // para "down" de novo, mesmo que a sessão nunca tivesse passado isso.
+    expect(resolvedGrowth).toBe("down");
+    expect(loadIslandPillPosition()).toEqual(pillBefore);
   });
 });
