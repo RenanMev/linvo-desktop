@@ -99,6 +99,15 @@ describe("ChatInput visual context", () => {
     expect(capture).toHaveBeenCalledWith("window");
   });
 
+  it("does not listen to live overlay capture on the panel", () => {
+    renderInput();
+
+    expect(useDisplaySnapshotMock).toHaveBeenCalledWith({
+      windowLabel: "panel",
+      listenOverlay: false,
+    });
+  });
+
   it("shows the preview and enables attachment-only send", async () => {
     const user = userEvent.setup();
     const file = new File(["image"], "context.png", { type: "image/png" });

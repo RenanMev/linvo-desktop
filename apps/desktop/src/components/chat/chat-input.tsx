@@ -123,7 +123,10 @@ export function ChatInput({
     editPending,
     clear: clearPending,
     clearError: clearCaptureError,
-  } = useDisplaySnapshot({ windowLabel: captureWindowLabel });
+  } = useDisplaySnapshot({
+    windowLabel: captureWindowLabel,
+    listenOverlay: captureWindowLabel !== "panel",
+  });
 
   /*
    * Uma vez só por montagem: `autoStartCapture` continua verdadeiro enquanto

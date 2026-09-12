@@ -1,10 +1,11 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PanelTitlebar } from "@/components/panel/panel-titlebar";
 import type { PanelSession } from "@/hooks/use-panel-session";
+import { invokeMock, panelWindowMock, windowMock } from "@/test/mocks/tauri";
 
 const session: PanelSession = {
   user: {
@@ -34,6 +35,12 @@ function renderTitlebar(overrides: Partial<React.ComponentProps<typeof PanelTitl
 }
 
 describe("PanelTitlebar", () => {
+  beforeEach(() => {
+    invokeMock.mockClear();
+    vi.mocked(windowMock.minimize).mockClear();
+    vi.mocked(panelWindowMock.minimize).mockClear();
+  });
+
   it("puts the sidebar toggle on the left, before the drag region", () => {
     renderTitlebar();
 
@@ -67,5 +74,17 @@ describe("PanelTitlebar", () => {
     expect(
       screen.getAllByRole("button", { name: "Expandir sidebar" }).length,
     ).toBeGreaterThan(0);
+  });
+
+  it("minimizes the panel window, not the floating bar", async () => {
+    const user = userEvent.setup();
+    renderTitlebar();
+
+    await user.click(screen.getByTitle("Minimizar"));
+
+    expect(panelWindowMock.minimize).toHaveBeenCalledTimes(1);
+    expect(windowMock.minimize).not.toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalledWith("panel_close");
+    expect(invokeMock).not.toHaveBeenCalledWith("show_window_no_activate");
   });
 });

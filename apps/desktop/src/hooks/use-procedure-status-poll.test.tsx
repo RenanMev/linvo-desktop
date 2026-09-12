@@ -188,4 +188,28 @@ describe("useProcedureStatusPoll", () => {
     );
     expect(notify).toHaveBeenCalledTimes(2);
   });
+
+  it("keeps a single poll across re-renders when notify is the default", async () => {
+    vi.mocked(procedureApi.listProcedures).mockResolvedValue([]);
+
+    const { rerender } = renderHook(() =>
+      useProcedureStatusPoll("ws-1", { intervalMs: 1000 }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(procedureApi.listProcedures).toHaveBeenCalledTimes(1);
+
+    // `notify` entra nas deps do efeito: uma arrow nova por render remontava o
+    // poll e disparava um request a cada render.
+    rerender();
+    rerender();
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(procedureApi.listProcedures).toHaveBeenCalledTimes(1);
+  });
 });

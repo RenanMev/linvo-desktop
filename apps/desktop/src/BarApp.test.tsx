@@ -25,6 +25,14 @@ vi.mock("@/hooks/use-floating-bootstrap", () => ({
   useFloatingBootstrap: () => ({ ready: true, growth: "down" }),
 }));
 
+vi.mock("@/hooks/use-overlay-chrome", () => ({
+  useOverlayChrome: () => undefined,
+}));
+
+vi.mock("@/hooks/use-compact-click-through", () => ({
+  useCompactClickThrough: () => undefined,
+}));
+
 vi.mock("@/hooks/use-api-health", () => ({
   useApiHealth: () => true,
 }));
@@ -229,6 +237,63 @@ describe("BarApp window modes", () => {
     );
   });
 
+  it("opens capture-and-ask from Ctrl+Shift+C with the Assist closed", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.keyboard("{Control>}{Shift>}c{/Shift}{/Control}");
+
+    await waitFor(() =>
+      expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
+    );
+    expect(await screen.findByRole("dialog", { name: "Assist" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("capture_overlay_open"),
+    );
+  });
+
+  it("shows session expiry on the compact pill instead of a live green", () => {
+    render(<BarApp sessionWarning="expired" user={user} />);
+
+    expect(
+      screen.getByRole("status", { name: "Sessão expirada" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the Assist open when magnetic capture is cancelled", async () => {
+    let cancelHandler: (() => void) | undefined;
+    const captureSources = await import(
+      "@/lib/context-capture/capture-sources"
+    );
+    vi.spyOn(captureSources, "listenOverlayCancel").mockImplementation(
+      (handler) => {
+        cancelHandler = handler;
+        return Promise.resolve(() => {});
+      },
+    );
+    vi.spyOn(captureSources, "listenOverlayResult").mockResolvedValue(() => {});
+    vi.spyOn(captureSources, "openCaptureOverlay").mockResolvedValue(undefined);
+
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(
+      screen.getByRole("button", { name: "Recorte" }),
+    );
+    expect(await screen.findByRole("dialog", { name: "Assist" })).toBeInTheDocument();
+    await waitFor(() => expect(cancelHandler).toBeDefined());
+
+    act(() => {
+      cancelHandler?.();
+    });
+
+    expect(collapseQuickMenuToFloating).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "Assist" })).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("Pergunte qualquer coisa..."),
+    ).toBeEnabled();
+  });
+
   it("expands to the quick menu when the local shortcut is pressed", async () => {
     const userEventInstance = userEvent.setup();
     render(<BarApp sessionWarning={null} user={user} />);
@@ -344,7 +409,6 @@ describe("BarApp window modes", () => {
 
     await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
     await waitFor(() => expect(finishExpand).toBeTypeOf("function"));
-
     /*
      * O morph já foi preparado (mesmo tick de `setWindowMode`), mas a
      * expansão nativa segue presa em `finishExpand` — só a pílula/fonte
@@ -357,7 +421,6 @@ describe("BarApp window modes", () => {
     await waitFor(() =>
       expect(collapseQuickMenuToFloating).toHaveBeenCalledTimes(1),
     );
-    act(() => finishExpand());
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "Assist" })).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument();

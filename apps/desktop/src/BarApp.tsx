@@ -13,9 +13,14 @@ import {
 import { ProcedureChecklistPanel } from "@/components/procedure/procedure-checklist-panel";
 import { IslandPanel } from "@/components/quick-center/island-panel";
 import { useApiHealth } from "@/hooks/use-api-health";
+import { useCompactClickThrough } from "@/hooks/use-compact-click-through";
 import { useFloatingBootstrap } from "@/hooks/use-floating-bootstrap";
+import { CAPTURE_AND_ASK_SHORTCUTS, useGlobalShortcut } from "@/hooks/use-global-shortcut";
+import { useOverlayChrome } from "@/hooks/use-overlay-chrome";
 import { useWindowPosition } from "@/hooks/use-window-position";
 import { hideAllWindows, showMainBar } from "@/lib/app-windows";
+import { rememberPreviousWindow } from "@/lib/focus-previous-window";
+import { deriveIslandStatus } from "@/lib/island-status";
 import {
   collapseChecklistToFloating,
   expandFloatingToChecklist,
@@ -36,6 +41,7 @@ import {
   resolveEnvelopeMorphGeometry,
   type IslandMorphGeometry,
 } from "@/lib/floating-island-transition";
+import { setClickThrough } from "@/lib/overlay-chrome";
 import { applyIslandEnvelopeRegion, applyIslandRegionForMode } from "@/lib/window-region";
 import {
   CHECKLIST_SIZE,
@@ -193,7 +199,26 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     applyGrowth(growth);
   }, [growth]);
 
-  const isActive = floatingReady && apiHealthy && !sessionWarning;
+  const islandStatus = deriveIslandStatus({
+    floatingReady,
+    apiHealthy,
+    sessionWarning,
+  });
+  const captureAndAskRef = useRef<() => void>(() => undefined);
+  const passthroughSuspended =
+    transitioning || Boolean(islandMorph && !islandMorph.settled);
+
+  useOverlayChrome(floatingReady);
+  useCompactClickThrough({
+    mode: windowMode,
+    suspended: passthroughSuspended,
+  });
+  useGlobalShortcut({
+    shortcuts: CAPTURE_AND_ASK_SHORTCUTS,
+    onTrigger: () => {
+      captureAndAskRef.current();
+    },
+  });
 
   function startTransition() {
     transitionCountRef.current += 1;
@@ -646,15 +671,23 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   }, []);
 
   async function handleCaptureContext() {
-    if (
-      windowModeRef.current !== "compact" ||
-      transitionCountRef.current > 0
-    ) {
+    if (transitionCountRef.current > 0) {
       return;
     }
+    if (windowModeRef.current === "checklist") {
+      return;
+    }
+    void rememberPreviousWindow();
     setCaptureAndSendPending(true);
-    await handleOpenQuickMenu();
+    await showMainBar();
+    if (windowModeRef.current === "compact") {
+      await handleOpenQuickMenu();
+    }
   }
+
+  captureAndAskRef.current = () => {
+    void handleCaptureContext();
+  };
 
   async function closeQuickMenu(
     options: CloseQuickMenuOptions = {},
@@ -826,7 +859,10 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     if (windowModeRef.current !== "compact") {
       return;
     }
-    startTransition();
+    flushSync(() => {
+      startTransition();
+    });
+    await setClickThrough({ enabled: false, holes: [] });
     try {
       const resolvedGrowth = await resetFloatingPosition();
       if (resolvedGrowth) {
@@ -849,8 +885,9 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   /*
    * Foca o handle ao encolher. É a única saída por teclado do modo encolhido:
    * `Ctrl+Shift+L` só alterna visibilidade, então sem isso um usuário de teclado
-   * fica preso na tira. Com o foco já posto, `showMainBar` (que dá setFocus na
-   * janela) deixa o handle pronto para `Enter`.
+   * fica preso na tira. A ilha passou a aparecer sem ativar (KAN-10), então o
+   * foco de DOM aqui só resolve porque o caminho do atalho global pede
+   * `toggleAppVisibility({ focus: true })` — tray e restore continuam sem ativar.
    */
   useEffect(() => {
     if (windowMode !== "edge-collapsed") {
@@ -862,6 +899,12 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.defaultPrevented || event.repeat) {
+        return;
+      }
+
+      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "c") {
+        event.preventDefault();
+        void handleCaptureContext();
         return;
       }
 
@@ -1079,7 +1122,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
       return (
         <EdgeHandle
           anchor={edgeAnchor}
-          isActive={isActive}
+          status={islandStatus}
           onExpand={() => void handleExpandFromEdge()}
           buttonRef={edgeHandleRef}
         />
@@ -1088,7 +1131,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
 
     return (
       <FloatingBar
-        isActive={isActive}
+        status={islandStatus}
         onOpenQuickMenu={() => void handleOpenQuickMenu()}
         onCaptureContext={() => void handleCaptureContext()}
         onCollapseToEdge={() => void handleCollapseToEdge()}

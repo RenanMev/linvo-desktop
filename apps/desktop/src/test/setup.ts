@@ -46,6 +46,14 @@ if (typeof Element !== "undefined") {
   }
 }
 
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 if (typeof globalThis.localStorage === "undefined") {
   const store = new Map<string, string>();
   const localStorageMock: Storage = {

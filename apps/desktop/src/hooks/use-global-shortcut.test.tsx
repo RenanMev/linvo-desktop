@@ -2,7 +2,10 @@ import { render, waitFor } from "@testing-library/react";
 import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useGlobalShortcut } from "@/hooks/use-global-shortcut";
+import {
+  CAPTURE_AND_ASK_SHORTCUTS,
+  useGlobalShortcut,
+} from "@/hooks/use-global-shortcut";
 import { toggleAppVisibility } from "@/lib/app-windows";
 
 vi.mock("@/lib/app-windows", () => ({
@@ -12,11 +15,13 @@ vi.mock("@/lib/app-windows", () => ({
 function Harness({
   enabled = true,
   onTrigger,
+  shortcuts,
 }: {
   enabled?: boolean;
   onTrigger?: () => void;
+  shortcuts?: readonly string[];
 }) {
-  useGlobalShortcut({ enabled, onTrigger });
+  useGlobalShortcut({ enabled, onTrigger, shortcuts });
   return null;
 }
 
@@ -102,5 +107,29 @@ describe("useGlobalShortcut", () => {
     unmount();
 
     expect(unregister).toHaveBeenCalledWith("CommandOrControl+Shift+L");
+  });
+
+  it("registers the capture-and-ask accelerators when asked", async () => {
+    const onTrigger = vi.fn();
+    render(
+      <Harness shortcuts={CAPTURE_AND_ASK_SHORTCUTS} onTrigger={onTrigger} />,
+    );
+
+    await waitFor(() =>
+      expect(register).toHaveBeenCalledWith(
+        "CommandOrControl+Shift+C",
+        expect.any(Function),
+      ),
+    );
+
+    const handler = vi.mocked(register).mock.calls[0]?.[1];
+    handler?.({
+      shortcut: "CommandOrControl+Shift+C",
+      id: 2,
+      state: "Pressed",
+    });
+
+    expect(onTrigger).toHaveBeenCalledTimes(1);
+    expect(toggleAppVisibility).not.toHaveBeenCalled();
   });
 });

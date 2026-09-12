@@ -4,6 +4,7 @@ mod capture;
 mod chat_store;
 mod checklist;
 mod documents;
+mod overlay_chrome;
 mod panel;
 mod win_capture_flags;
 
@@ -36,19 +37,26 @@ const FRAME_INTERVAL: Duration = Duration::from_micros(16667);
 /// Mesmo default do front (`DEFAULT_ANIMATION_DURATION_MS`).
 const DEFAULT_ANIMATION_DURATION_MS: u64 = 200;
 
-fn lock_window_mutation() -> MutexGuard<'static, ()> {
-    // Um panic em outra mutação não pode travar as janelas do app para sempre.
+pub(crate) fn lock_window_mutation() -> MutexGuard<'static, ()> {
     WINDOW_MUTATION
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+pub(crate) fn try_lock_window_mutation() -> Option<MutexGuard<'static, ()>> {
+    match WINDOW_MUTATION.try_lock() {
+        Ok(guard) => Some(guard),
+        Err(std::sync::TryLockError::Poisoned(poisoned)) => Some(poisoned.into_inner()),
+        Err(std::sync::TryLockError::WouldBlock) => None,
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Bounds {
-    x: i32,
-    y: i32,
-    width: u32,
-    height: u32,
+    pub(crate) x: i32,
+    pub(crate) y: i32,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
 }
 
 /// Como o `SetWindowPos` cruza para a thread dona da HWND.
@@ -130,6 +138,7 @@ fn apply_bounds(window: &WebviewWindow, bounds: Bounds, mode: ApplyMode) -> Resu
         )
     };
     if ok == 0 {
+        overlay_chrome::mark_win32_failed();
         return Err("SetWindowPos failed".into());
     }
     Ok(())
@@ -379,6 +388,8 @@ async fn animate_window_bounds(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_autostart::Builder::new().build())
+        .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -409,6 +420,13 @@ pub fn run() {
             set_window_bounds,
             set_window_region,
             monitor_work_area,
+            overlay_chrome::show_window_no_activate,
+            overlay_chrome::set_click_through,
+            overlay_chrome::set_exclude_from_capture,
+            overlay_chrome::set_topmost_guard,
+            overlay_chrome::overlay_chrome_status,
+            overlay_chrome::remember_previous_window,
+            overlay_chrome::focus_previous_window,
             app::app_quit,
             auth::auth_set_tokens,
             auth::auth_get_tokens,

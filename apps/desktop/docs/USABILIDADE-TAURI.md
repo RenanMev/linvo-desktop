@@ -115,8 +115,9 @@ useEffect(() => {
 
 - Toggle mostra a barra ou oculta `main` + `panel`
 - Mesmo comportamento do clique esquerdo no ícone da bandeja
+- `Ctrl+Shift+C` captura a tela e pergunta no Assist (`CAPTURE_AND_ASK_SHORTCUTS`). Pode colidir com "Copiar formatação" no Word/Chrome; o atalho da ilha ganha enquanto o Linvo está em execução. Preferências de atalho no painel continuam "Em breve".
 
-**Arquivos:** `hooks/use-global-shortcut.ts`, `lib/app-windows.ts`
+**Arquivos:** `hooks/use-global-shortcut.ts`, `lib/app-windows.ts`, `BarApp.tsx`
 
 ---
 

@@ -6,13 +6,25 @@ import {
   showMainBar,
   toggleAppVisibility,
 } from "@/lib/app-windows";
-import { emitToMock, invokeMock, panelWindowMock, showMock, windowMock } from "@/test/mocks/tauri";
+import { resetOverlayChromeCache } from "@/lib/overlay-chrome";
+import {
+  emitToMock,
+  invokeMock,
+  panelWindowMock,
+  setFocusMock,
+  showMock,
+  unminimizeMock,
+  windowMock,
+} from "@/test/mocks/tauri";
 
 describe("app-windows", () => {
   beforeEach(() => {
+    resetOverlayChromeCache();
     invokeMock.mockReset();
     emitToMock.mockReset();
     showMock.mockClear();
+    setFocusMock.mockClear();
+    unminimizeMock.mockClear();
     windowMock.isVisible.mockResolvedValue(true);
     panelWindowMock.isVisible.mockResolvedValue(false);
     invokeMock.mockImplementation((cmd: string) => {
@@ -22,15 +34,29 @@ describe("app-windows", () => {
       if (cmd === "panel_is_open" || cmd === "checklist_is_open") {
         return Promise.resolve(false);
       }
+      if (cmd === "show_window_no_activate") {
+        // Como no runtime: `Ok(())` chega no front como `null`.
+        return Promise.resolve(null);
+      }
       return Promise.resolve(undefined);
     });
     emitToMock.mockResolvedValue(undefined);
   });
 
-  it("showMainBar shows and focuses main window", async () => {
+  it("showMainBar shows without focusing the compact window", async () => {
     await showMainBar();
 
-    expect(showMock).toHaveBeenCalled();
+    expect(invokeMock).toHaveBeenCalledWith("show_window_no_activate");
+    expect(unminimizeMock).toHaveBeenCalled();
+    expect(setFocusMock).not.toHaveBeenCalled();
+    expect(showMock).not.toHaveBeenCalled();
+  });
+
+  it("showMainBar focuses only when the caller came from the keyboard", async () => {
+    await showMainBar({ focus: true });
+
+    expect(invokeMock).toHaveBeenCalledWith("show_window_no_activate");
+    expect(setFocusMock).toHaveBeenCalled();
   });
 
   it("hideAllWindows hides main and closes panel when no checklist is active", async () => {
@@ -80,6 +106,7 @@ describe("app-windows", () => {
 
     await toggleAppVisibility();
 
-    expect(showMock).toHaveBeenCalled();
+    expect(invokeMock).toHaveBeenCalledWith("show_window_no_activate");
+    expect(setFocusMock).not.toHaveBeenCalled();
   });
 });

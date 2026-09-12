@@ -1,0 +1,34 @@
+[[permission]]
+identifier = "allow-show-window-no-activate"
+description = "Allows showing a window without activating it"
+commands.allow = ["show_window_no_activate"]
+
+[[permission]]
+identifier = "allow-set-click-through"
+description = "Allows toggling click-through with hit-test holes"
+commands.allow = ["set_click_through"]
+
+[[permission]]
+identifier = "allow-set-exclude-from-capture"
+description = "Allows excluding Linvo windows from screen capture"
+commands.allow = ["set_exclude_from_capture"]
+
+[[permission]]
+identifier = "allow-set-topmost-guard"
+description = "Allows the topmost reassert loop"
+commands.allow = ["set_topmost_guard"]
+
+[[permission]]
+identifier = "allow-overlay-chrome-status"
+description = "Allows reading overlay chrome native status"
+commands.allow = ["overlay_chrome_status"]
+
+[[permission]]
+identifier = "allow-remember-previous-window"
+description = "Allows remembering the last foreign foreground window"
+commands.allow = ["remember_previous_window"]
+
+[[permission]]
+identifier = "allow-focus-previous-window"
+description = "Allows restoring focus to the previous application after copy"
+commands.allow = ["focus_previous_window"]

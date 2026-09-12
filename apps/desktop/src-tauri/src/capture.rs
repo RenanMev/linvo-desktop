@@ -7,6 +7,8 @@ use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 use tauri::ipc::Response;
 use xcap::{Monitor, Window};
 
+use crate::overlay_chrome::MAIN_LABEL;
+
 pub const OVERLAY_LABEL: &str = "capture-overlay";
 const OVERLAY_READY_EVENT: &str = "capture-overlay://ready";
 const THUMBNAIL_MAX: u32 = 320;
@@ -630,23 +632,33 @@ fn restore_own_windows(app: &AppHandle, focus: Option<&str>) {
     };
     let restored: Vec<String> = hidden.drain(..).collect();
 
-    for (label, window) in app.webview_windows() {
-        if label != OVERLAY_LABEL {
-            crate::win_capture_flags::set_excluded_from_capture(&window, false);
-        }
-    }
+    // A exclusão volta para o que o usuário escolheu no toggle, não para
+    // `false`: zerar aqui desligaria "ocultar ao compartilhar tela" a cada
+    // recorte.
+    crate::overlay_chrome::apply_exclude_state(app);
 
     for label in &restored {
         if let Some(window) = app.get_webview_window(label) {
-            let _ = window.show();
+            if label == MAIN_LABEL {
+                // A ilha reaparece sem ativar: o foco continua no canal.
+                let _ = crate::overlay_chrome::show_no_activate(&window);
+            } else {
+                let _ = window.show();
+            }
         }
     }
 
     // O foco vai para quem pediu a captura; sem isso ele caía numa janela
-    // qualquer e o chat não voltava em primeiro plano.
+    // qualquer e o chat não voltava em primeiro plano. A ilha nunca é alvo —
+    // por isso ela também sai do fallback, senão ninguém receberia o foco.
     let target = focus
-        .filter(|label| restored.iter().any(|l| l == label))
-        .or_else(|| restored.first().map(String::as_str));
+        .filter(|label| *label != MAIN_LABEL && restored.iter().any(|l| l == label))
+        .or_else(|| {
+            restored
+                .iter()
+                .find(|label| label.as_str() != MAIN_LABEL)
+                .map(String::as_str)
+        });
     if let Some(window) = target.and_then(|label| app.get_webview_window(label)) {
         let _ = window.set_focus();
     }

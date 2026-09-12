@@ -3,17 +3,7 @@ import { Copy, Minus, PanelLeft, PanelLeftClose, Square, X } from "lucide-react"
 import { AccountMenu } from "@/components/panel/account-menu";
 import { Button } from "@/components/ui/button";
 import type { PanelSession } from "@/hooks/use-panel-session";
-import { showMainBar } from "@/lib/app-windows";
-import { closePanel } from "@/lib/panel-window";
-
-/**
- * Minimizar fecha apenas o painel: a barra flutuante continua na tela.
- * (Antes chamava hideAllWindows(), que derrubava barra + checklist junto.)
- */
-async function minimizePanelKeepingBar(): Promise<void> {
-  await closePanel();
-  await showMainBar();
-}
+import { closePanel, minimizePanel } from "@/lib/panel-window";
 
 type PanelTitlebarProps = {
   session: PanelSession;
@@ -53,7 +43,7 @@ export function PanelTitlebar({
         <Button
           variant="ghost"
           size="icon-sm"
-          onClick={() => void minimizePanelKeepingBar()}
+          onClick={() => void minimizePanel()}
           title="Minimizar"
         >
           <Minus />

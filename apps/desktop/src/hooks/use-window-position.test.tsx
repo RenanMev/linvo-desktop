@@ -2,16 +2,19 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useWindowPosition } from "@/hooks/use-window-position";
+import { resetDesktopSettingsCache } from "@/lib/desktop-settings-store";
 import { ISLAND_ENVELOPE_SIZE } from "@/lib/window-mode";
 import {
   ISLAND_PILL_POSITION_STORAGE_KEY,
   loadSavedAnchor,
   loadSavedPosition,
+  resetWindowStorageCache,
   saveSavedAnchor,
   saveSavedPosition,
 } from "@/lib/window-storage";
 import {
   invokeMock,
+  resetPluginStoreMock,
   setPositionMock,
   windowMock,
 } from "@/test/mocks/tauri";
@@ -44,6 +47,9 @@ describe("useWindowPosition — magnetic snap", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     localStorage.clear();
+    resetPluginStoreMock();
+    resetDesktopSettingsCache();
+    resetWindowStorageCache();
     invokeMock.mockReset();
     invokeMock.mockImplementation((cmd: string) => {
       if (cmd === "monitor_work_area") {
@@ -247,6 +253,9 @@ describe("useWindowPosition — pillGrowth (envelope)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     localStorage.clear();
+    resetPluginStoreMock();
+    resetDesktopSettingsCache();
+    resetWindowStorageCache();
     invokeMock.mockReset();
     invokeMock.mockImplementation((cmd: string) => {
       if (cmd === "monitor_work_area") {

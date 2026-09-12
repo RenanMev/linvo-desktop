@@ -4,10 +4,15 @@ import {
   ensureCompactWindowBounds,
   isCompactWindowSize,
 } from "@/lib/floating-compact-bounds";
+import { resetDesktopSettingsCache } from "@/lib/desktop-settings-store";
 import { COMPACT_SIZE, ISLAND_ENVELOPE_SIZE, QUICK_MENU_SIZE } from "@/lib/window-mode";
-import { loadIslandPillPosition } from "@/lib/window-storage";
+import {
+  loadIslandPillPosition,
+  resetWindowStorageCache,
+} from "@/lib/window-storage";
 import {
   invokeMock,
+  resetPluginStoreMock,
   setMinSizeMock,
   setResizableMock,
   windowMock,
@@ -52,6 +57,9 @@ describe("isCompactWindowSize", () => {
 describe("ensureCompactWindowBounds", () => {
   beforeEach(() => {
     localStorage.clear();
+    resetPluginStoreMock();
+    resetDesktopSettingsCache();
+    resetWindowStorageCache();
     invokeMock.mockReset();
     setMinSizeMock.mockClear();
     setResizableMock.mockClear();

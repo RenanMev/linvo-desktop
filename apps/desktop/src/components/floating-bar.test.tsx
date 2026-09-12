@@ -8,7 +8,7 @@ type Overrides = Partial<React.ComponentProps<typeof FloatingBar>>;
 
 function renderBar(overrides: Overrides = {}) {
   const props = {
-    isActive: true,
+    status: "online" as const,
     onOpenQuickMenu: vi.fn(),
     onCaptureContext: vi.fn(),
     onCollapseToEdge: vi.fn(),
@@ -59,7 +59,14 @@ describe("FloatingBar", () => {
 
     expect(screen.getByText("Atalhos")).toBeInTheDocument();
     expect(screen.getByText("Ctrl Shift L")).toBeInTheDocument();
+    expect(screen.getByText("Capturar e perguntar")).toBeInTheDocument();
+    expect(screen.getByText("Ctrl Shift C")).toBeInTheDocument();
     expect(screen.getByText("Abrir chat")).toBeInTheDocument();
+  });
+
+  it("exposes an honest status on the pill", () => {
+    renderBar({ status: "api-down" });
+    expect(screen.getByRole("status", { name: "API indisponível" })).toBeInTheDocument();
   });
 
   it("calls onCollapseToEdge when Encolher is clicked", async () => {

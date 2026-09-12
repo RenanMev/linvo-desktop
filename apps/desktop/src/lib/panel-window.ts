@@ -1,11 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { Window } from "@tauri-apps/api/window";
 import type { UserPublic } from "@linvo/shared";
 
 import { emitPanelSession } from "@/lib/panel-session-sync";
 import type { StoredTokens } from "@/lib/auth/token-store";
 
 export const PANEL_NAVIGATE_EVENT = "panel://navigate";
+const PANEL_LABEL = "panel";
 
 export async function openPanel(
   route: string,
@@ -20,6 +22,14 @@ export async function openPanel(
 
 export async function closePanel(): Promise<void> {
   await invoke("panel_close");
+}
+
+export async function minimizePanel(): Promise<void> {
+  const panel = await Window.getByLabel(PANEL_LABEL);
+  if (!panel) {
+    return;
+  }
+  await panel.minimize();
 }
 
 export async function isPanelOpen(): Promise<boolean> {

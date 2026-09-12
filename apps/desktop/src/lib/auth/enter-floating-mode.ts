@@ -1,11 +1,21 @@
 import {
-  currentMonitor,
   getCurrentWindow,
   PhysicalPosition,
   PhysicalSize,
 } from "@tauri-apps/api/window";
 
 import { configForSurfaceMode } from "@/lib/auth/window-auth";
+import { updateTaskbarVisibility } from "@/lib/app-windows";
+import {
+  hydrateDesktopSettings,
+  loadHideFromCapture,
+} from "@/lib/desktop-settings-store";
+import {
+  overlayChromeStatus,
+  setExcludeFromCapture,
+  setTopmostGuard,
+  showWindowNoActivate,
+} from "@/lib/overlay-chrome";
 import {
   applyWindowBoundsWithFallback,
   logicalToPhysical,
@@ -23,34 +33,33 @@ import {
   computeTopCenter,
   type Position,
 } from "@/lib/window-position";
-import { updateTaskbarVisibility } from "@/lib/app-windows";
 import { applyIslandRegionForMode } from "@/lib/window-region";
-import { EDGE_MARGIN, loadIslandPillPosition } from "@/lib/window-storage";
+import {
+  EDGE_MARGIN,
+  hydrateWindowStorage,
+  ISLAND_PILL_POSITION_STORAGE_KEY,
+  loadIslandPillPosition,
+  loadSavedPlacement,
+  resolvePlacementMonitor,
+} from "@/lib/window-storage";
 import { readWorkArea } from "@/lib/window-work-area";
 
 async function resolveCompactPillPosition(
   targetSize: { width: number; height: number },
   scale: number,
 ): Promise<Position> {
-  const monitor = await currentMonitor();
   const saved = loadIslandPillPosition(scale);
+  const monitor = await resolvePlacementMonitor(
+    loadSavedPlacement(ISLAND_PILL_POSITION_STORAGE_KEY) ??
+      loadSavedPlacement(),
+  );
 
   if (saved && monitor) {
-    return clampToMonitor(saved, targetSize, {
-      position: { x: monitor.position.x, y: monitor.position.y },
-      size: { width: monitor.size.width, height: monitor.size.height },
-    });
+    return clampToMonitor(saved, targetSize, monitor);
   }
 
   if (monitor) {
-    return computeTopCenter(
-      {
-        position: { x: monitor.position.x, y: monitor.position.y },
-        size: { width: monitor.size.width, height: monitor.size.height },
-      },
-      targetSize,
-      EDGE_MARGIN,
-    );
+    return computeTopCenter(monitor, targetSize, EDGE_MARGIN);
   }
 
   return (await readWindowBounds(getCurrentWindow())).position;
@@ -67,6 +76,9 @@ async function resolveCompactPillPosition(
  * pílula.
  */
 export async function enterFloatingMode(): Promise<IslandGrowthDirection> {
+  await hydrateWindowStorage();
+  await hydrateDesktopSettings();
+
   const config = configForSurfaceMode("compact");
   const win = getCurrentWindow();
   const scale = await win.scaleFactor();
@@ -93,7 +105,6 @@ export async function enterFloatingMode(): Promise<IslandGrowthDirection> {
   });
 
   await win.setDecorations(config.decorations);
-  await win.setAlwaysOnTop(config.alwaysOnTop);
   await win.setSkipTaskbar(config.skipTaskbar);
   await win.setResizable(config.resizable);
   await win.setMaximizable(config.maximizable);
@@ -105,13 +116,13 @@ export async function enterFloatingMode(): Promise<IslandGrowthDirection> {
     new PhysicalPosition(envelopePosition.x, envelopePosition.y),
   );
 
-  // A janela nasce do tamanho do envelope; sem o recorte as faixas
-  // transparentes em volta da pílula captariam cliques do desktop.
   await applyIslandRegionForMode({ mode: "compact", growth, scaleFactor: scale });
 
+  await setTopmostGuard(true);
+  await setExcludeFromCapture(loadHideFromCapture());
+  await overlayChromeStatus();
   await updateTaskbarVisibility(true);
-  await win.show();
-  await win.setFocus();
+  await showWindowNoActivate();
 
   return growth;
 }

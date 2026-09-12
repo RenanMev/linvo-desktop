@@ -17,6 +17,7 @@ import {
 } from "@/lib/window-mode";
 import {
   EDGE_MARGIN,
+  hydrateWindowStorage,
   loadIslandPillPosition,
   loadSavedAnchor,
   loadSavedPosition,
@@ -82,6 +83,7 @@ export function useWindowPosition({
       }
       hasRestoredRef.current = true;
 
+      await hydrateWindowStorage();
       const growth = pillGrowthRef.current?.();
       const scale = growth ? await win.scaleFactor() : 1;
       const workArea = await readWorkArea();
