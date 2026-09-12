@@ -675,9 +675,9 @@ describe("BarApp window modes", () => {
     await waitFor(() =>
       expect(collapseQuickMenuToFloating).toHaveBeenCalledTimes(1),
     );
-    expect(collapseQuickMenuToFloating.mock.invocationCallOrder[0]).toBeLessThan(
-      hideAllWindows.mock.invocationCallOrder[0]!,
-    );
+    expect(
+      vi.mocked(collapseQuickMenuToFloating).mock.invocationCallOrder[0],
+    ).toBeLessThan(vi.mocked(hideAllWindows).mock.invocationCallOrder[0]!);
     expect(screen.queryByRole("dialog", { name: "Assist" })).not.toBeInTheDocument();
   });
 

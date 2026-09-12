@@ -6,7 +6,7 @@ import { createFloatingTrayHandlers, defaultTrayHandlers } from "@/lib/tray-hand
 describe("createFloatingTrayHandlers", () => {
   it("T6.1 openChat chama expandAssist e não openPanel", async () => {
     const expandAssist = vi.fn(async () => {});
-    const openPanel = vi.fn(async () => {});
+    const openPanel = vi.fn(async (_path: string) => {});
     const handlers = createFloatingTrayHandlers({
       expandAssist,
       openWorkspace: async () => {
@@ -22,7 +22,7 @@ describe("createFloatingTrayHandlers", () => {
 
   it("T6.2 openWorkspace chama openPanel(/chat)", async () => {
     const expandAssist = vi.fn(async () => {});
-    const openPanel = vi.fn(async () => {});
+    const openPanel = vi.fn(async (_path: string) => {});
     const handlers = createFloatingTrayHandlers({
       expandAssist,
       openWorkspace: async () => {
