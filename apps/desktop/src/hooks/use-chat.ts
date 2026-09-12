@@ -154,9 +154,30 @@ export function useChat({
   );
 
   const stopResponding = useCallback(() => {
-    abortRef.current?.abort();
+    const controller = abortRef.current;
+    const activeConversationId = streamConversationIdRef.current;
+    const assistantId = assistantIdRef.current;
+
+    if (!controller || !activeConversationId) {
+      setIsResponding(false);
+      return;
+    }
+
+    controller.abort();
+    abortRef.current = null;
+    streamConversationIdRef.current = null;
+    assistantIdRef.current = null;
+
+    if (activeConversationRef.current === activeConversationId && assistantId) {
+      setMessages((current) => {
+        const next = finalizeMessage(current, assistantId, "done");
+        persistMessages(activeConversationId, next);
+        return next;
+      });
+    }
+
     setIsResponding(false);
-  }, []);
+  }, [persistMessages]);
 
   useEffect(() => {
     const runningController = abortRef.current;
@@ -166,6 +187,9 @@ export function useChat({
       !runningController.signal.aborted &&
       streamConversationIdRef.current === conversationId
     ) {
+      if (skipHistoryForConversationRef.current === conversationId) {
+        skipHistoryForConversationRef.current = null;
+      }
       setIsLoadingHistory(false);
       return;
     }
@@ -174,6 +198,7 @@ export function useChat({
       conversationId &&
       skipHistoryForConversationRef.current === conversationId
     ) {
+      skipHistoryForConversationRef.current = null;
       setIsLoadingHistory(false);
       return;
     }
@@ -603,8 +628,8 @@ export function useChat({
       const optimisticAssistantId = crypto.randomUUID();
       const now = Date.now();
       const controller = beginRun(activeConversationId);
-      skipHistoryForConversationRef.current = activeConversationId;
       if (createdConversation) {
+        skipHistoryForConversationRef.current = activeConversationId;
         onConversationCreated?.(activeConversationId);
       }
       setIsResponding(true);

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   clearStoredAppearance: vi.fn(),
   clearChatLocalCache: vi.fn(),
   clearStoredWorkspaceId: vi.fn(),
+  getStoredWorkspaceId: vi.fn(),
   clearOnboardingCompleted: vi.fn(),
   hasCompletedOnboarding: vi.fn(),
   isOnboardingForced: vi.fn(),
@@ -58,6 +59,7 @@ vi.mock("@/lib/chat/chat-local-store", () => ({
 
 vi.mock("@/lib/workspace/workspace-store", () => ({
   clearStoredWorkspaceId: mocks.clearStoredWorkspaceId,
+  getStoredWorkspaceId: mocks.getStoredWorkspaceId,
   setStoredWorkspaceId: mocks.setStoredWorkspaceId,
 }));
 
@@ -133,6 +135,7 @@ describe("useAuth onboarding integration", () => {
     vi.clearAllMocks();
     mocks.reviewHandler = null;
     mocks.getTokens.mockResolvedValue(null);
+    mocks.getStoredWorkspaceId.mockReturnValue("ws-1");
     mocks.me.mockResolvedValue(user);
     mocks.hasCompletedOnboarding.mockReturnValue(true);
     mocks.isOnboardingForced.mockReturnValue(false);
@@ -211,7 +214,7 @@ describe("useAuth onboarding integration", () => {
     expect(mocks.markOnboardingCompleted).toHaveBeenCalledWith("user-1");
     expect(mocks.clearOnboardingProgress).toHaveBeenCalledWith("user-1");
     expect(mocks.setStoredWorkspaceId).toHaveBeenCalledWith("ws-1");
-    expect(mocks.saveActiveConversationId).not.toHaveBeenCalled();
+    expect(mocks.saveActiveConversationId).toHaveBeenCalledWith(null, null);
     expect(mocks.enterLoggedInDesktop).toHaveBeenCalledWith(user, "/chat");
   });
 
@@ -230,6 +233,7 @@ describe("useAuth onboarding integration", () => {
 
     expect(mocks.saveActiveConversationId).toHaveBeenCalledWith(
       "conversation-1",
+      { userId: "user-1", workspaceId: "ws-1" },
     );
     expect(mocks.enterLoggedInDesktop).toHaveBeenCalledWith(
       user,
@@ -256,6 +260,7 @@ describe("useAuth boot invalidado no meio", () => {
       accessToken: "access",
       refreshToken: "refresh",
     });
+    mocks.getStoredWorkspaceId.mockReturnValue("ws-1");
     mocks.me.mockResolvedValue(user);
     mocks.hasCompletedOnboarding.mockReturnValue(true);
     mocks.isOnboardingForced.mockReturnValue(false);

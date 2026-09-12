@@ -1,9 +1,14 @@
+import { StrictMode } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Conversation } from "@linvo/shared";
 
 import { IslandChat } from "@/components/quick-center/island-chat";
+import {
+  loadActiveConversationId,
+  saveActiveConversationId,
+} from "@/lib/chat/active-conversation-store";
 import * as chatApi from "@/lib/chat/chat-api";
 import { writeClipboardText } from "@/lib/clipboard";
 import { openPanel } from "@/lib/panel-window";
@@ -79,8 +84,11 @@ function deferred<T>(): Deferred<T> {
 }
 
 describe("IslandChat", () => {
+  const scope = { userId: "user-1", workspaceId: "ws-1" };
+
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem("linvo.activeWorkspaceId", scope.workspaceId);
     vi.clearAllMocks();
     vi.mocked(chatApi.listMessages).mockResolvedValue([]);
     URL.createObjectURL = vi.fn(() => "blob:optimistic");
@@ -98,7 +106,7 @@ describe("IslandChat", () => {
       })(),
     );
 
-    render(<IslandChat />);
+    render(<IslandChat userId={scope.userId} />);
 
     const textbox = await screen.findByPlaceholderText(
       "Pergunte qualquer coisa...",
@@ -123,7 +131,7 @@ describe("IslandChat", () => {
       })(),
     );
 
-    render(<IslandChat />);
+    render(<IslandChat userId={scope.userId} />);
 
     await user.type(
       await screen.findByPlaceholderText("Pergunte qualquer coisa..."),
@@ -135,7 +143,7 @@ describe("IslandChat", () => {
   });
 
   it("T2.3 id salvo hidrata via listMessages e não cria conversa", async () => {
-    localStorage.setItem("linvo:island-active-conversation", "conv-saved");
+    saveActiveConversationId("conv-saved", scope);
     vi.mocked(chatApi.listMessages).mockResolvedValue([
       {
         id: "m-user",
@@ -153,7 +161,7 @@ describe("IslandChat", () => {
       },
     ]);
 
-    render(<IslandChat />);
+    render(<IslandChat userId={scope.userId} />);
 
     expect(await screen.findByText("pergunta cacheada")).toBeInTheDocument();
     expect(screen.getByText("resposta cacheada")).toBeInTheDocument();
@@ -161,9 +169,24 @@ describe("IslandChat", () => {
     expect(chatApi.listMessages).toHaveBeenCalledWith("conv-saved");
   });
 
+  it("preserva a conversa ativa no replay de efeitos do StrictMode", async () => {
+    saveActiveConversationId("conv-saved", scope);
+
+    render(
+      <StrictMode>
+        <IslandChat userId={scope.userId} />
+      </StrictMode>,
+    );
+
+    await waitFor(() => {
+      expect(chatApi.listMessages).toHaveBeenCalledWith("conv-saved");
+    });
+    expect(loadActiveConversationId(scope)).toBe("conv-saved");
+  });
+
   it("T2.4 disabled não envia", async () => {
     const user = userEvent.setup();
-    render(<IslandChat disabled />);
+    render(<IslandChat userId={scope.userId} disabled />);
 
     const textbox = await screen.findByPlaceholderText(
       "Pergunte qualquer coisa...",
@@ -177,7 +200,7 @@ describe("IslandChat", () => {
   });
 
   it("T2.5 a ilha tem textbox de chat", async () => {
-    render(<IslandChat />);
+    render(<IslandChat userId={scope.userId} />);
 
     expect(
       await screen.findByPlaceholderText("Pergunte qualquer coisa..."),
@@ -206,7 +229,7 @@ describe("IslandChat", () => {
       })(),
     );
 
-    render(<IslandChat />);
+    render(<IslandChat userId={scope.userId} />);
 
     await user.type(
       await screen.findByPlaceholderText("Pergunte qualquer coisa..."),
@@ -233,7 +256,7 @@ describe("IslandChat", () => {
       })(),
     );
 
-    render(<IslandChat />);
+    render(<IslandChat userId={scope.userId} />);
 
     await user.type(
       await screen.findByPlaceholderText("Pergunte qualquer coisa..."),
@@ -254,7 +277,7 @@ describe("IslandChat", () => {
       })(),
     );
 
-    render(<IslandChat />);
+    render(<IslandChat userId={scope.userId} />);
 
     await user.type(
       await screen.findByPlaceholderText("Pergunte qualquer coisa..."),
@@ -277,7 +300,7 @@ describe("IslandChat", () => {
       })(),
     );
 
-    render(<IslandChat />);
+    render(<IslandChat userId={scope.userId} />);
 
     await user.type(
       await screen.findByPlaceholderText("Pergunte qualquer coisa..."),
@@ -301,7 +324,7 @@ describe("IslandChat", () => {
       })(),
     );
 
-    render(<IslandChat />);
+    render(<IslandChat userId={scope.userId} />);
 
     await user.type(
       await screen.findByPlaceholderText("Pergunte qualquer coisa..."),
@@ -325,7 +348,7 @@ describe("IslandChat", () => {
       })(),
     );
 
-    render(<IslandChat />);
+    render(<IslandChat userId={scope.userId} />);
 
     await user.type(
       await screen.findByPlaceholderText("Pergunte qualquer coisa..."),
@@ -356,7 +379,7 @@ describe("IslandChat", () => {
       })(),
     );
 
-    render(<IslandChat />);
+    render(<IslandChat userId={scope.userId} />);
 
     await user.type(
       await screen.findByPlaceholderText("Pergunte qualquer coisa..."),
@@ -387,7 +410,7 @@ describe("IslandChat", () => {
       })(),
     );
 
-    render(<IslandChat />);
+    render(<IslandChat userId={scope.userId} />);
 
     await user.type(
       await screen.findByPlaceholderText("Pergunte qualquer coisa..."),
@@ -410,7 +433,7 @@ describe("IslandChat", () => {
       })(),
     );
 
-    render(<IslandChat />);
+    render(<IslandChat userId={scope.userId} />);
 
     await user.type(
       await screen.findByPlaceholderText("Pergunte qualquer coisa..."),

@@ -1,4 +1,5 @@
 import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
+import type { UserPublic } from "@linvo/shared";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
@@ -59,6 +60,7 @@ import { createFloatingTrayHandlers } from "@/lib/tray-handlers";
 
 type BarAppProps = {
   sessionWarning: string | null;
+  user: UserPublic;
 };
 
 type WindowMode = FloatingIslandMode;
@@ -123,7 +125,7 @@ async function withDeadline<T>(task: Promise<T>, timeoutMs: number): Promise<T> 
   }
 }
 
-export function BarApp({ sessionWarning }: BarAppProps) {
+export function BarApp({ sessionWarning, user }: BarAppProps) {
   const { ready: floatingReady, growth } = useFloatingBootstrap();
   const apiHealthy = useApiHealth(true);
   const [checklist, setChecklist] = useState<ChecklistWindowPayload | null>(
@@ -1060,11 +1062,13 @@ export function BarApp({ sessionWarning }: BarAppProps) {
     if (mode === "quick-menu") {
       return (
         <IslandPanel
+          userId={user.id}
           apiHealthy={apiHealthy}
           sessionWarning={sessionWarning}
           ready={panelReady}
           closing={quickMenuClosing}
           captureRequested={captureAndSendPending}
+          onCaptureRequestConsumed={() => setCaptureAndSendPending(false)}
           onClose={() => void closeQuickMenu()}
           onHide={() => void handleHideQuickMenu()}
         />

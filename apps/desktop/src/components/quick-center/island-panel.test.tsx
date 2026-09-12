@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Conversation } from "@linvo/shared";
 
 import { IslandPanel } from "@/components/quick-center/island-panel";
-import { loadActiveConversationId } from "@/lib/chat/active-conversation-store";
+import {
+  loadActiveConversationId,
+  saveActiveConversationId,
+} from "@/lib/chat/active-conversation-store";
 import * as chatApi from "@/lib/chat/chat-api";
 import { openPanel } from "@/lib/panel-window";
 
@@ -82,6 +85,7 @@ function renderPanel(
 ) {
   return render(
     <IslandPanel
+      userId="user-1"
       apiHealthy
       sessionWarning={null}
       ready
@@ -92,8 +96,11 @@ function renderPanel(
 }
 
 describe("IslandPanel", () => {
+  const scope = { userId: "user-1", workspaceId: "ws-1" };
+
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem("linvo.activeWorkspaceId", scope.workspaceId);
     vi.clearAllMocks();
   });
 
@@ -120,7 +127,7 @@ describe("IslandPanel", () => {
 
   it("T2.8 Abrir na janela grande com id salvo chama openPanel da conversa", async () => {
     const user = userEvent.setup();
-    localStorage.setItem("linvo:island-active-conversation", "conv-42");
+    saveActiveConversationId("conv-42", scope);
     const onClose = vi.fn();
     renderPanel({ onClose });
 
@@ -144,7 +151,7 @@ describe("IslandPanel", () => {
 
   it("T5.2 Nova pergunta esvazia a lista e limpa o id ativo", async () => {
     const user = userEvent.setup();
-    localStorage.setItem("linvo:island-active-conversation", "conv-saved");
+    saveActiveConversationId("conv-saved", scope);
     vi.mocked(chatApi.listMessages).mockResolvedValue([
       {
         id: "m-user",
@@ -169,13 +176,13 @@ describe("IslandPanel", () => {
 
     await waitFor(() => {
       expect(screen.queryByText("pergunta antiga")).not.toBeInTheDocument();
-      expect(loadActiveConversationId()).toBeNull();
+      expect(loadActiveConversationId(scope)).toBeNull();
     });
   });
 
   it("T5.3 próximo send após Nova pergunta cria conversa de novo", async () => {
     const user = userEvent.setup();
-    localStorage.setItem("linvo:island-active-conversation", "conv-saved");
+    saveActiveConversationId("conv-saved", scope);
     vi.mocked(chatApi.listMessages).mockResolvedValue([
       {
         id: "m-user",

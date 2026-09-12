@@ -77,6 +77,7 @@ type ChatInputProps = {
    * recorte por cima de uma janela ainda em movimento.
    */
   autoStartCapture?: boolean;
+  onAutoCaptureConsumed?: () => void;
 };
 
 export function ChatInput({
@@ -92,6 +93,7 @@ export function ChatInput({
   onOpenProcedureChecklist,
   captureWindowLabel = "panel",
   autoStartCapture = false,
+  onAutoCaptureConsumed,
 }: ChatInputProps) {
   const autoCaptureStartedRef = useRef(false);
   const [value, setValue] = useState("");
@@ -129,12 +131,22 @@ export function ChatInput({
    * overlay de recorte.
    */
   useEffect(() => {
-    if (!autoStartCapture || disabled || autoCaptureStartedRef.current) {
+    if (!autoStartCapture) {
+      autoCaptureStartedRef.current = false;
+      return;
+    }
+    if (disabled || autoCaptureStartedRef.current) {
       return;
     }
     autoCaptureStartedRef.current = true;
+    onAutoCaptureConsumed?.();
     void startMagneticCapture();
-  }, [autoStartCapture, disabled, startMagneticCapture]);
+  }, [
+    autoStartCapture,
+    disabled,
+    onAutoCaptureConsumed,
+    startMagneticCapture,
+  ]);
 
   const hasAttachment = pending?.status === "ready";
   const canSend =

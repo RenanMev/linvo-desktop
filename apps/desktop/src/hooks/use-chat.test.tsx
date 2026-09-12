@@ -135,6 +135,75 @@ describe("useChat stream ownership", () => {
     );
   });
 
+  it("rehydrates history after sending in an existing conversation and switching away", async () => {
+    vi.mocked(chatApi.listMessages).mockImplementation(async (id) => {
+      if (id === "conv-a") {
+        return [
+          {
+            id: "a-user",
+            role: "user",
+            content: "pergunta A",
+            status: "done",
+            createdAt: "2026-01-01T00:00:00.000Z",
+          },
+        ];
+      }
+      return [
+        {
+          id: "b-user",
+          role: "user",
+          content: "pergunta B",
+          status: "done",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      ];
+    });
+    vi.mocked(chatApi.streamChatResponse).mockImplementation(() =>
+      (async function* () {
+        yield "resposta A";
+      })(),
+    );
+
+    const { result, rerender } = renderHook(
+      ({ conversationId }: { conversationId: string }) =>
+        useChat({ conversationId }),
+      { initialProps: { conversationId: "conv-a" } },
+    );
+
+    await waitFor(() => {
+      expect(result.current.messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ content: "pergunta A" }),
+        ]),
+      );
+    });
+
+    await act(async () => {
+      await result.current.sendMessage("hello");
+    });
+
+    rerender({ conversationId: "conv-b" });
+    await waitFor(() => {
+      expect(result.current.messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ content: "pergunta B" }),
+        ]),
+      );
+    });
+
+    rerender({ conversationId: "conv-a" });
+    await waitFor(() => {
+      expect(result.current.messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ content: "pergunta A" }),
+        ]),
+      );
+    });
+    expect(
+      result.current.messages.some((message) => message.content === "pergunta B"),
+    ).toBe(false);
+  });
+
   it("does not accept a draft when creating the conversation fails", async () => {
     const onAccepted = vi.fn();
     vi.mocked(chatApi.createConversation).mockRejectedValue(
@@ -412,6 +481,17 @@ describe("useChat stream ownership", () => {
         expect.objectContaining({
           role: "assistant",
           content: "parcial",
+          status: "done",
+        }),
+      ]),
+    );
+    expect(chatStore.saveCachedConversationMessages).toHaveBeenCalledWith(
+      "conv-a",
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "assistant",
+          content: "parcial",
+          status: "done",
         }),
       ]),
     );

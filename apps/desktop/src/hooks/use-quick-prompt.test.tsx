@@ -5,6 +5,7 @@ import { AuthApiError } from "@/lib/auth/auth-api";
 import * as chatApi from "@/lib/chat/chat-api";
 import { ChatApiError } from "@/lib/chat/chat-api";
 import { uploadChatAttachment } from "@/lib/chat/chat-attachments-api";
+import { loadActiveConversationId } from "@/lib/chat/active-conversation-store";
 import { useQuickPrompt } from "@/hooks/use-quick-prompt";
 
 vi.mock("@/lib/chat/chat-api", async () => {
@@ -38,8 +39,11 @@ async function* toAsyncGenerator(chunks: string[]) {
 }
 
 describe("useQuickPrompt", () => {
+  const scope = { userId: "user-1", workspaceId: "ws-1" };
+
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem("linvo.activeWorkspaceId", scope.workspaceId);
     vi.mocked(chatApi.createConversation).mockReset();
     vi.mocked(chatApi.streamChatResponse).mockReset();
     vi.mocked(uploadChatAttachment).mockReset();
@@ -50,7 +54,7 @@ describe("useQuickPrompt", () => {
   });
 
   it("ignores empty or whitespace-only input", async () => {
-    const { result } = renderHook(() => useQuickPrompt());
+    const { result } = renderHook(() => useQuickPrompt(scope.userId));
 
     await act(async () => {
       await expect(result.current.send("   ")).resolves.toBe(false);
@@ -69,7 +73,7 @@ describe("useQuickPrompt", () => {
       toAsyncGenerator(["Olá", ", ", "mundo"]),
     );
 
-    const { result } = renderHook(() => useQuickPrompt());
+    const { result } = renderHook(() => useQuickPrompt(scope.userId));
 
     await act(async () => {
       await expect(result.current.send("oi")).resolves.toBe(true);
@@ -79,9 +83,7 @@ describe("useQuickPrompt", () => {
     expect(result.current.conversationId).toBe("conv-1");
     expect(result.current.responseText).toBe("Olá, mundo");
     expect(result.current.status).toBe("done");
-    expect(localStorage.getItem("linvo:island-active-conversation")).toBe(
-      "conv-1",
-    );
+    expect(loadActiveConversationId(scope)).toBe("conv-1");
   });
 
   it("uploads the visual context and streams with its attachment id", async () => {

@@ -11,8 +11,10 @@ import { buildConversationTitle } from "@/lib/chat/conversation-title";
 import { getStoredWorkspaceId } from "@/lib/workspace/workspace-store";
 
 type IslandChatProps = {
+  userId: string;
   disabled?: boolean;
   autoStartCapture?: boolean;
+  onAutoCaptureConsumed?: () => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
   resetToken?: number;
 };
@@ -37,25 +39,29 @@ type IslandChatProps = {
  * reabrir exatamente onde parou, em vez de começar do zero a cada abertura.
  */
 export function IslandChat({
+  userId,
   disabled = false,
   autoStartCapture = false,
+  onAutoCaptureConsumed,
   onOpenProcedureChecklist,
   resetToken = 0,
 }: IslandChatProps) {
+  const workspaceId = getStoredWorkspaceId();
+  const conversationScope = useMemo(
+    () => (workspaceId ? { userId, workspaceId } : null),
+    [userId, workspaceId],
+  );
   const [conversationId, setConversationId] = useState<string | null>(() =>
-    loadActiveConversationId(),
+    loadActiveConversationId(conversationScope),
   );
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
-  const skipResetRef = useRef(true);
-
-  // Lido uma vez por render em vez de vir de contexto: a ilha não tem
-  // `WorkspaceProvider`, e o id é a mesma fonte que o painel usa.
-  const workspaceId = getStoredWorkspaceId();
+  const previousResetTokenRef = useRef(resetToken);
+  const previousScopeRef = useRef(conversationScope);
 
   const handleConversationCreated = useCallback((id: string) => {
     setConversationId(id);
-    saveActiveConversationId(id);
-  }, []);
+    saveActiveConversationId(id, conversationScope);
+  }, [conversationScope]);
 
   const {
     messages,
@@ -79,14 +85,27 @@ export function IslandChat({
   });
 
   useEffect(() => {
-    if (skipResetRef.current) {
-      skipResetRef.current = false;
+    if (previousResetTokenRef.current === resetToken) {
       return;
     }
+    previousResetTokenRef.current = resetToken;
     stopResponding();
     saveActiveConversationId(null);
     setConversationId(null);
   }, [resetToken, stopResponding]);
+
+  useEffect(() => {
+    const previousScope = previousScopeRef.current;
+    if (
+      previousScope?.userId === conversationScope?.userId &&
+      previousScope?.workspaceId === conversationScope?.workspaceId
+    ) {
+      return;
+    }
+    previousScopeRef.current = conversationScope;
+    stopResponding();
+    setConversationId(loadActiveConversationId(conversationScope));
+  }, [conversationScope, stopResponding]);
 
   /*
    * Título derivado da primeira mensagem do usuário.
@@ -140,6 +159,7 @@ export function IslandChat({
           onModelChange={setSelectedModel}
           captureWindowLabel="main"
           autoStartCapture={autoStartCapture}
+          {...(onAutoCaptureConsumed ? { onAutoCaptureConsumed } : {})}
           showToolbar={false}
           variant="assist"
           {...(onOpenProcedureChecklist

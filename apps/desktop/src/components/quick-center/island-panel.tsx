@@ -8,8 +8,10 @@ import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useQuickCenterWorkspace } from "@/hooks/use-quick-center-workspace";
 import { loadActiveConversationId, saveActiveConversationId } from "@/lib/chat/active-conversation-store";
 import { openPanel } from "@/lib/panel-window";
+import { getStoredWorkspaceId } from "@/lib/workspace/workspace-store";
 
 type IslandPanelProps = {
+  userId: string;
   apiHealthy: boolean;
   sessionWarning: string | null;
   /** Verdadeiro só depois que o morph assenta. */
@@ -17,6 +19,7 @@ type IslandPanelProps = {
   closing?: boolean;
   /** Pedido de recorte vindo do botão "Recorte" da pílula. */
   captureRequested?: boolean;
+  onCaptureRequestConsumed?: () => void;
   onClose: () => void;
   onHide?: () => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
@@ -35,11 +38,13 @@ type IslandPanelProps = {
  * inclusive com picker e recorte magnético).
  */
 export function IslandPanel({
+  userId,
   apiHealthy,
   sessionWarning,
   ready = false,
   closing = false,
   captureRequested = false,
+  onCaptureRequestConsumed,
   onClose,
   onHide,
   onOpenProcedureChecklist,
@@ -65,7 +70,10 @@ export function IslandPanel({
    * acabou de abrir.
    */
   function handleOpenInPanel() {
-    const conversationId = loadActiveConversationId();
+    const workspaceId = getStoredWorkspaceId();
+    const conversationId = loadActiveConversationId(
+      workspaceId ? { userId, workspaceId } : null,
+    );
     void openPanel(conversationId ? `/chat/${conversationId}` : "/chat").catch(
       () => undefined,
     );
@@ -152,11 +160,15 @@ export function IslandPanel({
       </div>
 
       <IslandChat
+        userId={userId}
         resetToken={chatEpoch}
         disabled={!apiHealthy || Boolean(sessionWarning)}
         // Só depois de assentar: armar durante o morph abriria o overlay de
         // recorte por cima de uma janela ainda em movimento.
         autoStartCapture={ready && captureRequested}
+        {...(onCaptureRequestConsumed
+          ? { onAutoCaptureConsumed: onCaptureRequestConsumed }
+          : {})}
         {...(onOpenProcedureChecklist ? { onOpenProcedureChecklist } : {})}
       />
     </div>

@@ -21,6 +21,7 @@ import { saveActiveConversationId } from "@/lib/chat/active-conversation-store";
 import { clearChatLocalCache } from "@/lib/chat/chat-local-store";
 import {
   clearStoredWorkspaceId,
+  getStoredWorkspaceId,
   setStoredWorkspaceId,
 } from "@/lib/workspace/workspace-store";
 import {
@@ -103,6 +104,7 @@ export function useAuth() {
   const handleUnauthorized = useCallback(() => {
     invalidateSession();
     clearStoredAppearance();
+    clearStoredWorkspaceId();
     void (async () => {
       await notifyDesktopEvent("Sessão expirada. Faça login novamente.");
       await closePanel();
@@ -152,6 +154,7 @@ export function useAuth() {
 
       const stored = await getTokens();
       if (!stored) {
+        clearStoredWorkspaceId();
         dispatch({ type: "BOOT_NO_TOKEN" });
         return;
       }
@@ -180,6 +183,7 @@ export function useAuth() {
             }
             await clearTokens();
             clearStoredAppearance();
+            clearStoredWorkspaceId();
             await emitAuthSync("unauthorized");
             dispatch({ type: "BOOT_SESSION_INVALID" });
             return;
@@ -193,6 +197,7 @@ export function useAuth() {
         }
         await clearTokens();
         clearStoredAppearance();
+        clearStoredWorkspaceId();
         await emitAuthSync("unauthorized");
         dispatch({ type: "BOOT_SESSION_INVALID" });
       }
@@ -238,6 +243,7 @@ export function useAuth() {
         clearOnboardingProgress(state.user.id);
       }
       clearStoredAppearance();
+      clearStoredWorkspaceId();
       void closePanel();
       dispatch({
         type: payload.type === "logout" ? "LOGOUT" : "UNAUTHORIZED",
@@ -346,9 +352,13 @@ export function useAuth() {
       clearOnboardingProgress(state.user.id);
       persistWorkspaceFromUser(state.user);
       const conversationId = conversationIdFromChatRoute(route);
-      if (conversationId) {
-        saveActiveConversationId(conversationId);
-      }
+      const workspaceId = getStoredWorkspaceId();
+      saveActiveConversationId(
+        conversationId,
+        conversationId && workspaceId
+          ? { userId: state.user.id, workspaceId }
+          : null,
+      );
       dispatch({ type: "START_FLOATING" });
       await enterLoggedInDesktop(state.user, route);
     },

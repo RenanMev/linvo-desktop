@@ -30,6 +30,7 @@ type ChatPanelProps = {
   captureWindowLabel?: string;
   /** Ver `autoStartCapture` em `ChatInput`. */
   autoStartCapture?: boolean;
+  onAutoCaptureConsumed?: () => void;
   /**
    * Mostra a barra com título da conversa e modelo.
    *
@@ -62,6 +63,7 @@ export function ChatPanel({
   onOpenProcedureChecklist,
   captureWindowLabel,
   autoStartCapture,
+  onAutoCaptureConsumed,
   showToolbar = true,
   onStop,
   variant,
@@ -114,6 +116,7 @@ export function ChatPanel({
         onOpenProcedureChecklist={onOpenProcedureChecklist}
         {...(captureWindowLabel ? { captureWindowLabel } : {})}
         {...(autoStartCapture ? { autoStartCapture } : {})}
+        {...(onAutoCaptureConsumed ? { onAutoCaptureConsumed } : {})}
       />
     </main>
   );

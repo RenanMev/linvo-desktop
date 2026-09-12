@@ -6,6 +6,7 @@ import { ChatApiError } from "@/lib/chat/chat-api";
 import { saveActiveConversationId } from "@/lib/chat/active-conversation-store";
 import { uploadChatAttachment } from "@/lib/chat/chat-attachments-api";
 import type { ChatSendAttachment } from "@/lib/chat/types";
+import { getStoredWorkspaceId } from "@/lib/workspace/workspace-store";
 
 export type QuickPromptStatus = "idle" | "streaming" | "done" | "error";
 
@@ -37,7 +38,7 @@ function formatError(error: unknown): string {
   return "Erro inesperado";
 }
 
-export function useQuickPrompt(): QuickPromptController {
+export function useQuickPrompt(userId: string | null = null): QuickPromptController {
   const [status, setStatus] = useState<QuickPromptStatus>("idle");
   const [responseText, setResponseText] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -96,7 +97,11 @@ export function useQuickPrompt(): QuickPromptController {
         activeConversationId = conversation.id;
         conversationIdRef.current = conversation.id;
         setConversationId(conversation.id);
-        saveActiveConversationId(conversation.id);
+        const workspaceId = getStoredWorkspaceId();
+        saveActiveConversationId(
+          conversation.id,
+          userId && workspaceId ? { userId, workspaceId } : null,
+        );
       }
 
       let attachmentIds: string[] | undefined;
@@ -160,7 +165,7 @@ export function useQuickPrompt(): QuickPromptController {
         abortRef.current = null;
       }
     }
-  }, []);
+  }, [userId]);
 
   return {
     status,

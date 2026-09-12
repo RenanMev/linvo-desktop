@@ -1,5 +1,7 @@
 import { WORKSPACE_ID_HEADER } from "@linvo/shared";
 
+import { saveActiveConversationId } from "@/lib/chat/active-conversation-store";
+
 const ACTIVE_WORKSPACE_KEY = "linvo.activeWorkspaceId";
 
 export function getStoredWorkspaceId(): string | null {
@@ -17,6 +19,7 @@ export function setStoredWorkspaceId(workspaceId: string | null): void {
     // não bate), mas apagar aqui evita deixar lixo indefinidamente.
     if (workspaceId !== getStoredWorkspaceId()) {
       setCachedWorkspaceName(null, null);
+      saveActiveConversationId(null);
     }
     if (!workspaceId) {
       localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
@@ -29,6 +32,7 @@ export function setStoredWorkspaceId(workspaceId: string | null): void {
 }
 
 export function clearStoredWorkspaceId(): void {
+  saveActiveConversationId(null);
   setStoredWorkspaceId(null);
 }
 
