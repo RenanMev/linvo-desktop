@@ -3,6 +3,7 @@ import { Bot, Check, Copy, RefreshCw, User } from "lucide-react";
 
 import { CaptureSummary } from "@/components/chat/capture-summary";
 import { ChatArtifactCard } from "@/components/chat/chat-artifact-card";
+import { AudioAttachmentChip } from "@/components/chat/audio-attachment-chip";
 import { ChatAttachmentImage } from "@/components/chat/chat-attachment-image";
 import { ChatCitations } from "@/components/chat/chat-citations";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
@@ -147,13 +148,24 @@ export function ChatMessageBubble({
                 <div
                   className={cn("flex flex-col gap-2", message.content && "mb-2")}
                 >
-                  {message.attachments?.map((attachment) => (
-                    <ChatAttachmentImage
-                      key={attachment.id}
-                      attachment={attachment}
-                      conversationId={conversationId}
-                    />
-                  ))}
+                  {message.attachments?.map((attachment) =>
+                    attachment.kind === "audio" ? (
+                      <AudioAttachmentChip
+                        key={attachment.id}
+                        filename={attachment.filename}
+                        sizeBytes={attachment.sizeBytes}
+                        {...(attachment.transcript
+                          ? { transcript: attachment.transcript }
+                          : {})}
+                      />
+                    ) : (
+                      <ChatAttachmentImage
+                        key={attachment.id}
+                        attachment={attachment}
+                        conversationId={conversationId}
+                      />
+                    ),
+                  )}
                 </div>
               ) : null}
 

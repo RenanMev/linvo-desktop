@@ -227,6 +227,31 @@ export function mergeAttachmentPreviewUrls(
   }));
 }
 
+export function createLocalAudioAttachment(input: {
+  id?: string;
+  file: File;
+  transcript?: string;
+}): ChatAttachment {
+  const type = input.file.type;
+  const mimeType =
+    type === "audio/ogg" ||
+    type === "audio/mpeg" ||
+    type === "audio/mp4" ||
+    type === "audio/webm" ||
+    type === "audio/wav"
+      ? type
+      : "audio/ogg";
+
+  return {
+    id: input.id ?? crypto.randomUUID(),
+    kind: "audio",
+    mimeType,
+    filename: input.file.name,
+    sizeBytes: input.file.size,
+    ...(input.transcript ? { transcript: input.transcript } : {}),
+  };
+}
+
 export function createLocalImageAttachment(input: {
   id?: string;
   file: File;

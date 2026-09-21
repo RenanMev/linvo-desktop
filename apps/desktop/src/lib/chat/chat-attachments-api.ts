@@ -38,14 +38,15 @@ export async function uploadChatAttachment(
   options?: {
     filename?: string;
     source?: ChatAttachmentSource;
+    kind?: "image" | "audio";
   },
 ): Promise<MessageAttachment> {
   const path = `/api/conversations/${conversationId}/attachments`;
-  authDebug("chat.attachment.upload", { path });
+  authDebug("chat.attachment.upload", { path, kind: options?.kind ?? "image" });
 
   const form = new FormData();
   form.append("file", file, options?.filename ?? "context.png");
-  form.append("kind", "image");
+  form.append("kind", options?.kind ?? "image");
   if (options?.source) {
     form.append("source", options.source);
   }

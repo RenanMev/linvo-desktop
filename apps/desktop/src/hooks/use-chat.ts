@@ -16,6 +16,7 @@ import {
   appendToolUse,
   canSendMessage,
   createAssistantPlaceholder,
+  createLocalAudioAttachment,
   createLocalImageAttachment,
   createReplyRef,
   createUserMessage,
@@ -40,6 +41,7 @@ import type {
   ChatMessage,
   ChatReplyRef,
   ChatSendAttachment,
+  ChatSendAudioAttachment,
 } from "@/lib/chat/types";
 import * as procedureApi from "@/lib/procedure/procedure-api";
 
@@ -596,11 +598,14 @@ export function useChat({
       options?: {
         forceTool?: ForceTool;
         attachment?: ChatSendAttachment;
+        audioAttachment?: ChatSendAudioAttachment;
         onAccepted?: () => void;
       },
     ) => {
       if (pendingToolRequest) return;
-      const hasAttachment = Boolean(options?.attachment);
+      const hasAttachment = Boolean(
+        options?.attachment || options?.audioAttachment,
+      );
       if (!canSendMessage(rawContent, isResponding, { hasAttachment })) return;
 
       let activeConversationId = conversationId;
@@ -624,6 +629,7 @@ export function useChat({
       const activeReply = replyTarget ?? undefined;
       const forceTool = options?.forceTool;
       const sendAttachment = options?.attachment;
+      const sendAudio = options?.audioAttachment;
       const optimisticUserId = crypto.randomUUID();
       const optimisticAssistantId = crypto.randomUUID();
       const now = Date.now();
@@ -666,6 +672,32 @@ export function useChat({
               width: uploaded.width ?? sendAttachment.width,
               height: uploaded.height ?? sendAttachment.height,
               previewUrl: URL.createObjectURL(sendAttachment.file),
+            }),
+          ];
+        }
+
+        if (sendAudio) {
+          // A API transcreve no upload; se falhar, o erro chega aqui antes de
+          // qualquer mensagem otimista aparecer.
+          const uploaded = await uploadChatAttachment(
+            activeConversationId,
+            sendAudio.file,
+            {
+              filename: sendAudio.file.name,
+              source: "file",
+              kind: "audio",
+            },
+          );
+          if (!isCurrentRun(activeConversationId, controller)) {
+            return;
+          }
+          attachmentIds = [...(attachmentIds ?? []), uploaded.id];
+          localAttachments = [
+            ...(localAttachments ?? []),
+            createLocalAudioAttachment({
+              id: uploaded.id,
+              file: sendAudio.file,
+              ...(uploaded.transcript ? { transcript: uploaded.transcript } : {}),
             }),
           ];
         }
