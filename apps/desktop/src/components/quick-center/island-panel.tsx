@@ -63,7 +63,10 @@ export function IslandPanel({
 }: IslandPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [chatEpoch, setChatEpoch] = useState(0);
-  const workspace = useQuickCenterWorkspace(true);
+  // Com a sessão caída, listar workspaces só renderia outro 401 — e o
+  // `handleUnauthorized` que ele dispara apaga tokens que o reauth acabou
+  // de gravar.
+  const workspace = useQuickCenterWorkspace(!reauth);
 
   /*
    * Ativo já na montagem, não só quando a ilha assenta: o painel monta quando
@@ -127,26 +130,30 @@ export function IslandPanel({
             {workspace.name ?? "Workspace"}
           </p>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          onClick={handleNewQuestion}
-          className="text-foreground/50 hover:text-foreground"
-        >
-          Nova pergunta
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          onClick={handleOpenInPanel}
-          title="Abrir na janela grande"
-          aria-label="Abrir na janela grande"
-          className="text-foreground/50 hover:text-foreground"
-        >
-          <Maximize2 />
-        </Button>
+        {reauth ? null : (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={handleNewQuestion}
+              className="text-foreground/50 hover:text-foreground"
+            >
+              Nova pergunta
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={handleOpenInPanel}
+              title="Abrir na janela grande"
+              aria-label="Abrir na janela grande"
+              className="text-foreground/50 hover:text-foreground"
+            >
+              <Maximize2 />
+            </Button>
+          </>
+        )}
         {onHide ? (
           <Button
             type="button"

@@ -168,6 +168,7 @@ export function BarApp({
   const chatButtonRef = useRef<HTMLButtonElement>(null);
   const edgeHandleRef = useRef<HTMLButtonElement>(null);
   const openQuickMenuRef = useRef<() => Promise<void>>(async () => {});
+  const expandFromEdgeRef = useRef<() => Promise<void>>(async () => {});
   const [continueRequest, setContinueRequest] =
     useState<AssistContinueRequest | null>(null);
   const islandMorphRef = useRef<FloatingIslandMorph | null>(null);
@@ -722,6 +723,9 @@ export function BarApp({
       }));
       void (async () => {
         await showMainBar();
+        if (windowModeRef.current === "edge-collapsed") {
+          await expandFromEdgeRef.current();
+        }
         if (windowModeRef.current === "compact") {
           await openQuickMenuRef.current();
         }
@@ -886,6 +890,8 @@ export function BarApp({
       finishTransition();
     }
   }
+
+  expandFromEdgeRef.current = handleExpandFromEdge;
 
   async function handleHideQuickMenu() {
     await closeQuickMenu({ restoreFocus: false });

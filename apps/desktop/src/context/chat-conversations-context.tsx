@@ -40,7 +40,6 @@ type ConversationsContextValue = {
   activeId: string | null;
   isLoading: boolean;
   error: string | null;
-  createConversation: () => Promise<Conversation>;
   deleteConversation: (id: string) => Promise<void>;
   selectConversation: (id: string) => void;
   syncActiveId: (id: string | null) => void;
@@ -126,24 +125,6 @@ export function ChatConversationsProvider({
     };
   }, [refreshList, enabled]);
 
-  const createConversation = useCallback(async () => {
-    setError(null);
-    try {
-      const conversation = await chatApi.createConversation();
-      setConversations((prev) => {
-        const next = [conversation, ...prev];
-        saveCachedConversations(next);
-        return next;
-      });
-      setActiveId(conversation.id);
-      navigate(`/chat/${conversation.id}`);
-      return conversation;
-    } catch (caught) {
-      setError(formatConversationsError(caught));
-      throw caught;
-    }
-  }, [navigate]);
-
   const selectConversation = useCallback(
     (id: string) => {
       setActiveId(id);
@@ -199,7 +180,6 @@ export function ChatConversationsProvider({
       activeId,
       isLoading,
       error,
-      createConversation,
       deleteConversation,
       selectConversation,
       syncActiveId,
@@ -211,7 +191,6 @@ export function ChatConversationsProvider({
       activeId,
       isLoading,
       error,
-      createConversation,
       deleteConversation,
       selectConversation,
       syncActiveId,

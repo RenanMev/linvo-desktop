@@ -278,6 +278,27 @@ describe("BarApp window modes", () => {
     expect(showMainBar).toHaveBeenCalled();
   });
 
+  it("KAN-33 Continuar no Assist com a barra na borda expande antes de abrir a ilha", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(
+      screen.getByRole("button", { name: "Encolher" }),
+    );
+    await waitFor(() => expect(collapseToEdge).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(assistContinueHandler).not.toBeNull());
+
+    await act(async () => {
+      assistContinueHandler!({ conversationId: "conv-1" });
+    });
+
+    await waitFor(() => expect(expandFromEdge).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
+    );
+    expect(await screen.findByRole("dialog", { name: "Assist" })).toBeInTheDocument();
+  });
+
   it("shows session expiry on the compact pill instead of a live green", () => {
     render(<BarApp sessionWarning="expired" user={user} />);
 

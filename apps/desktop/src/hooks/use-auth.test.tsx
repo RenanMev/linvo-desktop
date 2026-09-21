@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   applyWindowSurface: vi.fn(),
   applyOnboardingWindowSurface: vi.fn(),
   emitAuthSync: vi.fn(),
+  emitPanelSession: vi.fn(),
   listenAuthSync: vi.fn(),
   listenTokenSync: vi.fn(),
   notifyDesktopEvent: vi.fn(),
@@ -114,6 +115,10 @@ vi.mock("@/lib/desktop-notifications", () => ({
 
 vi.mock("@/lib/panel-window", () => ({
   closePanel: mocks.closePanel,
+}));
+
+vi.mock("@/lib/panel-session-sync", () => ({
+  emitPanelSession: mocks.emitPanelSession,
 }));
 
 vi.mock("@/lib/auth/enter-logged-in-desktop", () => ({
@@ -223,6 +228,41 @@ describe("useAuth onboarding integration", () => {
       user,
       "/settings/workspace/ws-1/rule-review",
     );
+  });
+
+  it("o workspace escolhido no onboarding vence o activeWorkspaceId velho do usuário", async () => {
+    mocks.getTokens.mockResolvedValue({
+      accessToken: "access",
+      refreshToken: "refresh",
+    });
+    mocks.isOnboardingForced.mockReturnValue(true);
+    const { result } = renderHook(() => useAuth());
+
+    await waitFor(() => expect(result.current.phase).toBe("onboarding"));
+    // O onboarding criou/escolheu ws-2; o state.user ainda diz ws-1.
+    mocks.getStoredWorkspaceId.mockReturnValue("ws-2");
+    mocks.setStoredWorkspaceId.mockClear();
+
+    await act(async () => result.current.completeOnboarding(null));
+
+    expect(mocks.setStoredWorkspaceId).not.toHaveBeenCalled();
+  });
+
+  it("sem workspace gravado, completeOnboarding persiste o do usuário", async () => {
+    mocks.getTokens.mockResolvedValue({
+      accessToken: "access",
+      refreshToken: "refresh",
+    });
+    mocks.isOnboardingForced.mockReturnValue(true);
+    const { result } = renderHook(() => useAuth());
+
+    await waitFor(() => expect(result.current.phase).toBe("onboarding"));
+    mocks.getStoredWorkspaceId.mockReturnValue(null);
+    mocks.setStoredWorkspaceId.mockClear();
+
+    await act(async () => result.current.completeOnboarding(null));
+
+    expect(mocks.setStoredWorkspaceId).toHaveBeenCalledWith("ws-1");
   });
 
   it("KAN-35 sem rota, o onboarding termina na ilha: sem painel e sem mexer na conversa salva", async () => {
@@ -414,6 +454,31 @@ describe("useAuth KAN-36 sessão cai no turno (floating)", () => {
     expect(result.current.sessionWarning).toBeNull();
     expect(result.current.user?.name).toBe("Renan M.");
     expect(mocks.enterLoggedInDesktop).not.toHaveBeenCalled();
+    // O painel zerou o usuário no broadcast; precisa da sessão de novo.
+    expect(mocks.emitPanelSession).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "user-1", name: "Renan M." }),
+      { accessToken: "access-2", refreshToken: "refresh-2" },
+    );
+  });
+
+  it("401 do http + eco do broadcast avisam o SO uma vez só", async () => {
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.phase).toBe("floating"));
+    await waitFor(() => expect(authSyncHandler).not.toBeNull());
+    const calls = mocks.setUnauthorizedHandler.mock.calls;
+    const httpHandler = calls[calls.length - 1]?.[0] as (() => void) | undefined;
+    mocks.notifyDesktopEvent.mockClear();
+
+    await act(async () => {
+      httpHandler?.();
+    });
+    await waitFor(() => expect(result.current.sessionWarning).not.toBeNull());
+    await act(async () => {
+      authSyncHandler?.({ type: "unauthorized" });
+    });
+
+    expect(mocks.notifyDesktopEvent).toHaveBeenCalledTimes(1);
+    expect(result.current.phase).toBe("floating");
   });
 
   it("reauthenticate com senha errada mantém o aviso e propaga o erro", async () => {

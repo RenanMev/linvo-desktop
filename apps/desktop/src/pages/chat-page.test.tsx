@@ -6,6 +6,7 @@ import { MemoryRouter, Outlet, Route, Routes } from "react-router";
 import { ChatPage } from "@/pages/chat-page";
 
 const mocks = vi.hoisted(() => ({
+  activeWorkspace: { id: "ws-1", name: "Loja" } as { id: string; name: string } | null,
   continueInAssist: vi.fn(() => Promise.resolve()),
   openChecklist: vi.fn(() => Promise.resolve()),
   syncActiveId: vi.fn(),
@@ -43,7 +44,7 @@ vi.mock("@/context/chat-conversations-context", () => ({
 
 vi.mock("@/context/workspace-context", () => ({
   useWorkspace: () => ({
-    activeWorkspace: { id: "ws-1", name: "Loja" },
+    activeWorkspace: mocks.activeWorkspace,
   }),
 }));
 
@@ -120,6 +121,8 @@ function renderAt(path: string) {
 describe("ChatPage (Histórico)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    mocks.activeWorkspace = { id: "ws-1", name: "Loja" };
     mocks.useChat.mockReturnValue(
       chatState([
         { id: "m1", role: "user", content: "oi", status: "done" },
@@ -165,6 +168,34 @@ describe("ChatPage (Histórico)", () => {
         workspaceId: "ws-1",
       });
     });
+  });
+
+  it("com o contexto ainda carregando, usa o workspace gravado em vez de apagar a chave", async () => {
+    const user = userEvent.setup();
+    mocks.activeWorkspace = null;
+    localStorage.setItem("linvo.activeWorkspaceId", "ws-9");
+    renderAt("/chat/conv-1");
+
+    await user.click(
+      screen.getByRole("button", { name: "Continuar no Assist" }),
+    );
+
+    await waitFor(() => {
+      expect(mocks.continueInAssist).toHaveBeenCalledWith("conv-1", {
+        userId: "user-1",
+        workspaceId: "ws-9",
+      });
+    });
+  });
+
+  it("sem workspace nenhum, Continuar fica desabilitado", () => {
+    mocks.activeWorkspace = null;
+    renderAt("/chat/conv-1");
+
+    expect(
+      screen.getByRole("button", { name: "Continuar no Assist" }),
+    ).toBeDisabled();
+    expect(mocks.continueInAssist).not.toHaveBeenCalled();
   });
 
   it("/chat sem id mostra o vazio do Histórico, não um chat novo", () => {

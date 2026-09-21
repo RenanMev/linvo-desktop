@@ -162,7 +162,14 @@ describe("IslandPanel", () => {
     });
 
     expect(screen.getByRole("form", { name: "Entrar de novo" })).toBeInTheDocument();
-    expect(screen.getByText("renan@test.com")).toBeInTheDocument();
+    expect(screen.getByLabelText("Email")).toHaveValue("renan@test.com");
+    expect(screen.getByLabelText("Email")).toHaveAttribute("readonly");
+    expect(
+      screen.queryByRole("button", { name: "Nova pergunta" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Abrir na janela grande" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByPlaceholderText("Pergunte qualquer coisa..."),
     ).not.toBeInTheDocument();

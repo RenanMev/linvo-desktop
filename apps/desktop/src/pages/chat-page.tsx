@@ -9,6 +9,7 @@ import { useConversations } from "@/context/chat-conversations-context";
 import { useWorkspace } from "@/context/workspace-context";
 import { useChat } from "@/hooks/use-chat";
 import { continueInAssist } from "@/lib/assist-handoff";
+import { getStoredWorkspaceId } from "@/lib/workspace/workspace-store";
 
 /*
  * /chat e /chat/:id são o Histórico.
@@ -31,6 +32,13 @@ export function ChatPage() {
 
   const conversationId = routeConversationId ?? null;
   const workspaceId = activeWorkspace?.id ?? null;
+  /*
+   * O contexto pode ainda não ter carregado quando o usuário clica; o id
+   * gravado cobre esse intervalo. Sem escopo nenhum, `saveActiveConversationId`
+   * REMOVERIA a chave em vez de gravar — daí o botão ficar desabilitado.
+   */
+  const handoffWorkspaceId = workspaceId ?? getStoredWorkspaceId();
+  const canContinue = Boolean(conversationId && handoffWorkspaceId);
   const activeConversation = conversations.find(
     (conversation) => conversation.id === conversationId,
   );
@@ -52,15 +60,15 @@ export function ChatPage() {
   const bannerError = handoffError ?? error ?? conversationsError;
 
   async function handleContinue() {
-    if (!conversationId) {
+    if (!conversationId || !handoffWorkspaceId) {
       return;
     }
     setHandoffError(null);
     try {
-      await continueInAssist(
-        conversationId,
-        workspaceId ? { userId: session.user.id, workspaceId } : null,
-      );
+      await continueInAssist(conversationId, {
+        userId: session.user.id,
+        workspaceId: handoffWorkspaceId,
+      });
     } catch {
       setHandoffError("Não foi possível abrir a conversa no Assist.");
     }
@@ -102,6 +110,7 @@ export function ChatPage() {
                 <Button
                   type="button"
                   size="sm"
+                  disabled={!canContinue}
                   onClick={() => void handleContinue()}
                 >
                   Continuar no Assist

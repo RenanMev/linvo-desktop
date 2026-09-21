@@ -12,15 +12,18 @@ import {
 import {
   authReducer,
   initialAuthState,
+  SESSION_EXPIRED_WARNING,
   type AuthPhase,
 } from "@/lib/auth/auth-state";
 import { enterLoggedInDesktop } from "@/lib/auth/enter-logged-in-desktop";
 import { applyOnboardingWindowSurface } from "@/lib/auth/onboarding-window-surface";
 import { clearStoredAppearance } from "@/lib/appearance/appearance-store";
 import { clearChatLocalCache } from "@/lib/chat/chat-local-store";
+import { emitPanelSession } from "@/lib/panel-session-sync";
 import type { OnboardingRoute } from "@/lib/onboarding/onboarding-routing";
 import {
   clearStoredWorkspaceId,
+  getStoredWorkspaceId,
   setStoredWorkspaceId,
 } from "@/lib/workspace/workspace-store";
 import {
@@ -84,6 +87,8 @@ export function useAuth() {
   const authEpochRef = useRef(0);
   const phaseRef = useRef<AuthPhase>(state.phase);
   phaseRef.current = state.phase;
+  const sessionWarningRef = useRef(state.sessionWarning);
+  sessionWarningRef.current = state.sessionWarning;
 
   const invalidateSession = useCallback(() => {
     authEpochRef.current += 1;
@@ -98,36 +103,50 @@ export function useAuth() {
   }, []);
 
   /*
-   * 401 no meio do turno (floating): a janela não vira login. Fecha o
-   * painel, avisa pelo SO e deixa a pílula em "Sessão expirada"; o workspace
-   * fica guardado porque o atendente vai retomar exatamente dali. Fora de
-   * floating (boot, onboarding) o caminho antigo continua.
+   * Único ponto de "a sessão caiu" — chamado tanto pelo handler de 401 do
+   * http quanto pelo broadcast `unauthorized` (que o próprio 401 emite, e
+   * que também chega quando o 401 foi no painel).
+   *
+   * Em floating a janela não vira login: fecha o painel, avisa pelo SO uma
+   * vez e deixa a pílula em "Sessão expirada"; o workspace fica guardado
+   * porque o atendente vai retomar exatamente dali. Fora de floating (boot,
+   * onboarding) cai para a tela de login como antes.
    */
-  const handleSessionExpiredInFloating = useCallback(() => {
-    invalidateSession();
-    void (async () => {
-      await notifyDesktopEvent(
-        "Sessão expirada. Abra o Assist para entrar de novo.",
-      );
-      await closePanel();
-      dispatch({ type: "SESSION_EXPIRED" });
-    })();
-  }, [invalidateSession]);
+  const handleSessionLost = useCallback(
+    (options: { notify: boolean }) => {
+      if (phaseRef.current === "floating") {
+        if (sessionWarningRef.current) {
+          // Já está em "Sessão expirada" — é o eco do broadcast.
+          return;
+        }
+        sessionWarningRef.current = SESSION_EXPIRED_WARNING;
+        invalidateSession();
+        void (async () => {
+          await notifyDesktopEvent(
+            "Sessão expirada. Abra o Assist para entrar de novo.",
+          );
+          await closePanel();
+          dispatch({ type: "SESSION_EXPIRED" });
+        })();
+        return;
+      }
+      invalidateSession();
+      clearStoredAppearance();
+      clearStoredWorkspaceId();
+      void (async () => {
+        if (options.notify) {
+          await notifyDesktopEvent("Sessão expirada. Faça login novamente.");
+        }
+        await closePanel();
+        dispatch({ type: "UNAUTHORIZED" });
+      })();
+    },
+    [invalidateSession],
+  );
 
   const handleUnauthorized = useCallback(() => {
-    if (phaseRef.current === "floating") {
-      handleSessionExpiredInFloating();
-      return;
-    }
-    invalidateSession();
-    clearStoredAppearance();
-    clearStoredWorkspaceId();
-    void (async () => {
-      await notifyDesktopEvent("Sessão expirada. Faça login novamente.");
-      await closePanel();
-      dispatch({ type: "UNAUTHORIZED" });
-    })();
-  }, [handleSessionExpiredInFloating, invalidateSession]);
+    handleSessionLost({ notify: true });
+  }, [handleSessionLost]);
 
   useEffect(() => {
     void applyWindowSurface("auth");
@@ -255,20 +274,18 @@ export function useAuth() {
     let unlisten: (() => void) | undefined;
 
     void listenAuthSync((payload) => {
-      if (payload.type === "unauthorized" && phaseRef.current === "floating") {
-        handleSessionExpiredInFloating();
+      if (payload.type === "unauthorized") {
+        handleSessionLost({ notify: false });
         return;
       }
       invalidateSession();
-      if (payload.type === "logout" && state.user) {
+      if (state.user) {
         clearOnboardingProgress(state.user.id);
       }
       clearStoredAppearance();
       clearStoredWorkspaceId();
       void closePanel();
-      dispatch({
-        type: payload.type === "logout" ? "LOGOUT" : "UNAUTHORIZED",
-      });
+      dispatch({ type: "LOGOUT" });
     }).then((dispose) => {
       unlisten = dispose;
     });
@@ -276,7 +293,7 @@ export function useAuth() {
     return () => {
       unlisten?.();
     };
-  }, [handleSessionExpiredInFloating, invalidateSession, state.user]);
+  }, [handleSessionLost, invalidateSession, state.user]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -339,6 +356,16 @@ export function useAuth() {
         const result = await loginRequest({ email: current.email, password });
         await persistSession(result.accessToken, result.refreshToken);
         persistWorkspaceFromUser(result.user);
+        /*
+         * O painel zerou o usuário no broadcast de `unauthorized` e o sync de
+         * tokens sozinho não o re-bootstrapa — sem isto, abrir o painel pela
+         * ilha (que não manda `user`) dava janela em branco.
+         */
+        await emitPanelSession(result.user, {
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
+        });
+        sessionWarningRef.current = null;
         dispatch({ type: "SESSION_RESTORED", user: result.user });
       } catch (error) {
         const message =
@@ -396,6 +423,11 @@ export function useAuth() {
    * `route` null: o onboarding termina na ilha, sem painel. A conversa da
    * primeira pergunta não passa por aqui — `useQuickPrompt` já a deixou na
    * chave que a ilha lê, e limpar/regravar aqui só apagaria isso.
+   *
+   * O workspace gravado pelo onboarding (o que o usuário acabou de criar ou
+   * escolher) vence o `activeWorkspaceId` do `state.user`, que é um retrato
+   * do login e pode estar velho — e `setStoredWorkspaceId` com outro id
+   * apagaria a conversa da primeira pergunta.
    */
   const completeOnboarding = useCallback(
     async (route: OnboardingRoute = null) => {
@@ -404,7 +436,9 @@ export function useAuth() {
       }
       markOnboardingCompleted(state.user.id);
       clearOnboardingProgress(state.user.id);
-      persistWorkspaceFromUser(state.user);
+      if (!getStoredWorkspaceId()) {
+        persistWorkspaceFromUser(state.user);
+      }
       dispatch({ type: "START_FLOATING" });
       if (route) {
         await enterLoggedInDesktop(state.user, route);

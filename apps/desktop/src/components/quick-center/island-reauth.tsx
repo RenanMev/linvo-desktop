@@ -3,6 +3,7 @@ import { KeyRound } from "lucide-react";
 
 import { AuthField } from "@/components/auth/auth-layout";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 type IslandReauthProps = {
   email: string;
@@ -71,12 +72,17 @@ export function IslandReauth({ email, onSubmit, onSignOut }: IslandReauthProps) 
           >
             Email
           </label>
-          <p
+          {/* Campo de verdade (readOnly): o gerenciador de senhas precisa de um
+              username para casar o current-password, e o label precisa de
+              um elemento rotulável. */}
+          <Input
             id="island-reauth-email"
-            className="truncate rounded-lg border border-hairline bg-surface-raise-1 px-3 py-2.5 font-technical text-xs text-muted-foreground"
-          >
-            {email}
-          </p>
+            type="email"
+            value={email}
+            readOnly
+            autoComplete="username"
+            className="h-11 font-technical text-xs text-muted-foreground"
+          />
         </div>
         <AuthField
           id="island-reauth-password"
@@ -101,13 +107,15 @@ export function IslandReauth({ email, onSubmit, onSignOut }: IslandReauthProps) 
         {submitting ? "Entrando..." : "Entrar"}
       </Button>
 
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="xs"
         onClick={() => void onSignOut()}
-        className="self-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        className="self-center text-muted-foreground"
       >
         Usar outra conta
-      </button>
+      </Button>
     </form>
   );
 }

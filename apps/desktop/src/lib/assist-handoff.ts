@@ -4,9 +4,9 @@ import {
   saveActiveConversationId,
   type ActiveConversationScope,
 } from "@/lib/chat/active-conversation-store";
+import { MAIN_LABEL } from "@/lib/checklist-window";
 
 export const ASSIST_CONTINUE_EVENT = "assist://continue";
-const MAIN_LABEL = "main";
 
 export type AssistContinuePayload = {
   conversationId: string;
