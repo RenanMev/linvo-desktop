@@ -85,7 +85,7 @@ const settingsGroups: NavGroup[] = [
     label: "Preferências",
     items: [
       { label: "Aparência", icon: Palette, to: "/settings/appearance" },
-      { label: "Atalhos", icon: Keyboard, soon: true },
+      { label: "Atalhos", icon: Keyboard, to: "/settings/shortcuts" },
       { label: "Notificações", icon: Bell, soon: true },
     ],
   },

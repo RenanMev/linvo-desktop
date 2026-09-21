@@ -12,7 +12,7 @@ import {
   type LlmModelOption,
   type Procedure,
 } from "@linvo/shared";
-import { ArrowUp, Paperclip, Square, X } from "lucide-react";
+import { ArrowUp, Mic, Paperclip, Square, X } from "lucide-react";
 
 import { CaptureContextChip } from "@/components/chat/capture-context-chip";
 import { CaptureMenu } from "@/components/chat/capture-menu";
@@ -38,12 +38,23 @@ import {
   parseSlashQuery,
 } from "@/lib/procedure/slash-procedure";
 import { cn } from "@/lib/utils";
+import { AudioAttachmentChip } from "@/components/chat/audio-attachment-chip";
+import type { ChatSendAudioAttachment } from "@/lib/chat/types";
+import { AUDIO_ATTACHMENT_ACCEPT, validateAudioFile } from "@/lib/voice/audio-file";
+import {
+  clearPushToTalkError,
+  onPushToTalkTranscript,
+  startPushToTalk,
+  stopPushToTalk,
+  usePushToTalkState,
+} from "@/lib/voice/push-to-talk";
 
 export type { ChatSendAttachment };
 
 export type ChatSendOptions = {
   forceTool?: ForceTool;
   attachment?: ChatSendAttachment;
+  audioAttachment?: ChatSendAudioAttachment;
   onAccepted?: () => void;
 };
 
@@ -78,6 +89,11 @@ type ChatInputProps = {
    */
   autoStartCapture?: boolean;
   onAutoCaptureConsumed?: () => void;
+  /**
+   * Voz (KAN-41/43): botão de segurar-para-falar e anexo de áudio. Ligado
+   * por padrão — o composer vive na ilha, onde a voz faz sentido.
+   */
+  enableVoice?: boolean;
 };
 
 export function ChatInput({
@@ -94,9 +110,32 @@ export function ChatInput({
   captureWindowLabel = "panel",
   autoStartCapture = false,
   onAutoCaptureConsumed,
+  enableVoice = true,
 }: ChatInputProps) {
   const autoCaptureStartedRef = useRef(false);
   const [value, setValue] = useState("");
+  const [pendingAudio, setPendingAudio] = useState<File | null>(null);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const voice = usePushToTalkState();
+  const micHeldRef = useRef(false);
+
+  /*
+   * A transcrição entra no composer, não vai direto: o atendente lê, corrige
+   * e decide enviar. Se já havia texto, concatena com espaço.
+   */
+  useEffect(() => {
+    if (!enableVoice) {
+      return;
+    }
+    return onPushToTalkTranscript((text) => {
+      setValue((current) => {
+        const head = current.trimEnd();
+        return head ? `${head} ${text}` : text;
+      });
+      textareaRef.current?.focus();
+    });
+  }, [enableVoice]);
   const [forceTool, setForceTool] = useState<ForceTool | null>(null);
   const [publishedSlugs, setPublishedSlugs] = useState<string[]>([]);
   const [slashError, setSlashError] = useState<string | null>(null);
@@ -151,9 +190,11 @@ export function ChatInput({
     startMagneticCapture,
   ]);
 
-  const hasAttachment = pending?.status === "ready";
+  const hasAttachment = pending?.status === "ready" || pendingAudio !== null;
   const canSend =
-    canSendMessage(value, isResponding, { hasAttachment }) && !disabled;
+    canSendMessage(value, isResponding, { hasAttachment }) &&
+    !disabled &&
+    voice.phase === "idle";
   const slashQuery = parseSlashQuery(value);
   const slashOpen =
     slashQuery !== null &&
@@ -281,14 +322,48 @@ export function ChatInput({
     }
   }
 
+  function handleAudioFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    const validation = validateAudioFile(file);
+    if (!validation.ok) {
+      setAudioError(validation.message);
+      return;
+    }
+    setAudioError(null);
+    setPendingAudio(file);
+  }
+
+  function handleMicPress() {
+    if (controlsDisabled || voice.phase !== "idle") {
+      return;
+    }
+    micHeldRef.current = true;
+    clearPushToTalkError();
+    void startPushToTalk();
+  }
+
+  function handleMicRelease() {
+    if (!micHeldRef.current) {
+      return;
+    }
+    micHeldRef.current = false;
+    void stopPushToTalk();
+  }
+
   function handleSend() {
     if (!canSend) return;
     const submittedValue = value;
     const submittedForceTool = forceTool;
     const submittedPending = pending?.status === "ready" ? pending : null;
+    const submittedAudio = pendingAudio;
 
     onSend(submittedValue, {
       ...(submittedForceTool ? { forceTool: submittedForceTool } : {}),
+      ...(submittedAudio ? { audioAttachment: { file: submittedAudio } } : {}),
       ...(submittedPending
         ? {
             attachment: {
@@ -310,7 +385,13 @@ export function ChatInput({
         if (submittedPending) {
           clearPending();
         }
+        if (submittedAudio) {
+          setPendingAudio((current) =>
+            current === submittedAudio ? null : current,
+          );
+        }
         setSlashError(null);
+        setAudioError(null);
         clearCaptureError();
         if (
           textareaRef.current &&
@@ -444,7 +525,7 @@ export function ChatInput({
             disabled && "opacity-50",
           )}
         >
-          {forceTool || pending ? (
+          {forceTool || pending || pendingAudio ? (
             <div className="flex flex-wrap items-center gap-1 px-1 pt-1">
               {forceTool ? (
                 <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-surface-raise-2 px-2 py-0.5 text-xs text-foreground/80">
@@ -474,6 +555,17 @@ export function ChatInput({
                   onEdit={editPending}
                 />
               ) : null}
+              {pendingAudio ? (
+                <AudioAttachmentChip
+                  filename={pendingAudio.name}
+                  sizeBytes={pendingAudio.size}
+                  disabled={controlsDisabled}
+                  onRemove={() => {
+                    setPendingAudio(null);
+                    setAudioError(null);
+                  }}
+                />
+              ) : null}
             </div>
           ) : null}
           <textarea
@@ -490,16 +582,78 @@ export function ChatInput({
           />
           <div className="flex items-center justify-between gap-2 px-1">
             <div className="flex min-w-0 items-center gap-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                disabled
-                title="Em breve"
-                className="text-muted-foreground"
-              >
-                <Paperclip />
-              </Button>
+              {enableVoice ? (
+                <>
+                  <input
+                    ref={audioInputRef}
+                    type="file"
+                    accept={AUDIO_ATTACHMENT_ACCEPT}
+                    className="hidden"
+                    aria-label="Arquivo de áudio"
+                    onChange={handleAudioFile}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={controlsDisabled || pendingAudio !== null}
+                    title="Anexar áudio (OGG, MP3, M4A)"
+                    aria-label="Anexar áudio"
+                    className="text-muted-foreground"
+                    onClick={() => audioInputRef.current?.click()}
+                  >
+                    <Paperclip />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={voice.phase === "recording" ? "default" : "ghost"}
+                    size="icon-sm"
+                    disabled={controlsDisabled || voice.phase === "transcribing"}
+                    title="Segure para falar"
+                    aria-label={
+                      voice.phase === "recording" ? "Ouvindo" : "Segure para falar"
+                    }
+                    aria-pressed={voice.phase === "recording"}
+                    className={cn(
+                      voice.phase === "recording"
+                        ? "animate-pulse"
+                        : "text-muted-foreground",
+                    )}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      handleMicPress();
+                    }}
+                    onPointerUp={handleMicRelease}
+                    onPointerLeave={handleMicRelease}
+                    onPointerCancel={handleMicRelease}
+                    onKeyDown={(event) => {
+                      if ((event.key === " " || event.key === "Enter") && !event.repeat) {
+                        event.preventDefault();
+                        handleMicPress();
+                      }
+                    }}
+                    onKeyUp={(event) => {
+                      if (event.key === " " || event.key === "Enter") {
+                        event.preventDefault();
+                        handleMicRelease();
+                      }
+                    }}
+                  >
+                    <Mic />
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled
+                  title="Em breve"
+                  className="text-muted-foreground"
+                >
+                  <Paperclip />
+                </Button>
+              )}
               <CaptureMenu
                 disabled={controlsDisabled}
                 onPickSource={openPicker}
@@ -554,6 +708,28 @@ export function ChatInput({
       ) : captureError ? (
         <p className="mt-2 text-center text-xs text-destructive" role="alert">
           {captureError}
+        </p>
+      ) : audioError ? (
+        <p className="mt-2 text-center text-xs text-destructive" role="alert">
+          {audioError}
+        </p>
+      ) : enableVoice && voice.error ? (
+        <p className="mt-2 text-center text-xs text-destructive" role="alert">
+          {voice.error}
+        </p>
+      ) : enableVoice && voice.phase === "recording" ? (
+        <p
+          className="mt-2.5 text-center font-technical text-[10px] tracking-wide text-foreground"
+          role="status"
+        >
+          Ouvindo… solte para transcrever
+        </p>
+      ) : enableVoice && voice.phase === "transcribing" ? (
+        <p
+          className="mt-2.5 text-center font-technical text-[10px] tracking-wide text-muted-foreground"
+          role="status"
+        >
+          Transcrevendo…
         </p>
       ) : (
         <p className="mt-2.5 text-center font-technical text-[10px] tracking-wide text-muted-foreground/70">

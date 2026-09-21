@@ -12,6 +12,7 @@ import { AccountSettingsPage } from "@/pages/settings/account-settings-page";
 import { AppearancePage } from "@/pages/settings/appearance-page";
 import { GeneralSettingsPage } from "@/pages/settings/general-settings-page";
 import { ModelsSettingsPage } from "@/pages/settings/models-settings-page";
+import { ShortcutsSettingsPage } from "@/pages/settings/shortcuts-settings-page";
 import { WorkspaceCreatePage } from "@/pages/settings/workspace-create-page";
 import { WorkspaceDetailPage } from "@/pages/settings/workspace-detail-page";
 import { RuleReviewPage } from "@/pages/settings/rule-review-page";
@@ -90,6 +91,7 @@ function PanelRoutes() {
         />
         <Route path="/settings/general" element={<GeneralSettingsPage />} />
         <Route path="/settings/appearance" element={<AppearancePage />} />
+        <Route path="/settings/shortcuts" element={<ShortcutsSettingsPage />} />
         <Route path="/settings/models" element={<ModelsSettingsPage />} />
         <Route path="/settings/workspace" element={<WorkspaceSettingsPage />} />
         <Route
