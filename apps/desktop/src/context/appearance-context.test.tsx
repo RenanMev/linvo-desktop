@@ -350,7 +350,7 @@ describe("AppearanceProvider", () => {
       ([eventName]) => eventName === AUTH_SYNC_EVENT,
     )?.[1] as
       | ((event: {
-          payload: { type: "logout"; source: string };
+          payload: { type: "logout" | "unauthorized"; source: string };
         }) => void)
       | undefined;
 
@@ -366,6 +366,39 @@ describe("AppearanceProvider", () => {
     );
     expect(loadStoredAppearance()).toBeNull();
     expect(hasPendingSync()).toBe(false);
+  });
+
+  it("KAN-69 unauthorized broadcast does not reset appearance", async () => {
+    saveStoredAppearance(makePrefs({ themeMode: "dark", panelOpacity: 77 }));
+
+    const { result } = renderHook(() => useAppearance(), {
+      wrapper: ({ children }) => (
+        <AppearanceProvider windowLabel="main" readOnly>
+          {children}
+        </AppearanceProvider>
+      ),
+    });
+
+    expect(result.current.preferences.themeMode).toBe("dark");
+    expect(result.current.preferences.panelOpacity).toBe(77);
+
+    const authListener = listenMock.mock.calls.find(
+      ([eventName]) => eventName === AUTH_SYNC_EVENT,
+    )?.[1] as
+      | ((event: {
+          payload: { type: "logout" | "unauthorized"; source: string };
+        }) => void)
+      | undefined;
+
+    act(() => {
+      authListener?.({
+        payload: { type: "unauthorized", source: "main" },
+      });
+    });
+
+    expect(result.current.preferences.themeMode).toBe("dark");
+    expect(result.current.preferences.panelOpacity).toBe(77);
+    expect(loadStoredAppearance()?.prefs.themeMode).toBe("dark");
   });
 
   it("keeps defaults unpersisted after logout until the next account GET resolves", async () => {

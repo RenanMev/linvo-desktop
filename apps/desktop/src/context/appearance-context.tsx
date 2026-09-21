@@ -245,7 +245,10 @@ export function AppearanceProvider({
     let cancelled = false;
 
     void listenAuthSync(
-      () => {
+      (payload) => {
+        if (payload.type !== "logout") {
+          return;
+        }
         resetSignedOutAppearance();
       },
       { includeSelf: true },
