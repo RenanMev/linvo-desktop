@@ -15,14 +15,12 @@ import {
   type AuthPhase,
 } from "@/lib/auth/auth-state";
 import { enterLoggedInDesktop } from "@/lib/auth/enter-logged-in-desktop";
-import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
 import { applyOnboardingWindowSurface } from "@/lib/auth/onboarding-window-surface";
 import { clearStoredAppearance } from "@/lib/appearance/appearance-store";
-import { saveActiveConversationId } from "@/lib/chat/active-conversation-store";
 import { clearChatLocalCache } from "@/lib/chat/chat-local-store";
+import type { OnboardingRoute } from "@/lib/onboarding/onboarding-routing";
 import {
   clearStoredWorkspaceId,
-  getStoredWorkspaceId,
   setStoredWorkspaceId,
 } from "@/lib/workspace/workspace-store";
 import {
@@ -59,11 +57,6 @@ function persistWorkspaceFromUser(user: UserPublic): void {
   if (user.activeWorkspaceId) {
     setStoredWorkspaceId(user.activeWorkspaceId);
   }
-}
-
-function conversationIdFromChatRoute(route: string): string | null {
-  const match = /^\/chat\/([^/?#]+)$/.exec(route);
-  return match?.[1] ?? null;
 }
 
 async function enterSession(user: UserPublic): Promise<void> {
@@ -344,24 +337,23 @@ export function useAuth() {
     dispatch({ type: "LOGOUT" });
   }, [invalidateSession, state.user]);
 
+  /*
+   * `route` null: o onboarding termina na ilha, sem painel. A conversa da
+   * primeira pergunta não passa por aqui — `useQuickPrompt` já a deixou na
+   * chave que a ilha lê, e limpar/regravar aqui só apagaria isso.
+   */
   const completeOnboarding = useCallback(
-    async (route = PANEL_HOME_ROUTE) => {
+    async (route: OnboardingRoute = null) => {
       if (!state.user) {
         return;
       }
       markOnboardingCompleted(state.user.id);
       clearOnboardingProgress(state.user.id);
       persistWorkspaceFromUser(state.user);
-      const conversationId = conversationIdFromChatRoute(route);
-      const workspaceId = getStoredWorkspaceId();
-      saveActiveConversationId(
-        conversationId,
-        conversationId && workspaceId
-          ? { userId: state.user.id, workspaceId }
-          : null,
-      );
       dispatch({ type: "START_FLOATING" });
-      await enterLoggedInDesktop(state.user, route);
+      if (route) {
+        await enterLoggedInDesktop(state.user, route);
+      }
     },
     [state.user],
   );

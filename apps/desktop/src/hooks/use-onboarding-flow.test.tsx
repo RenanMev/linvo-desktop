@@ -183,7 +183,7 @@ describe("useOnboardingFlow", () => {
     mocks.ruleDiscovery.refresh.mockResolvedValue(mocks.ruleDiscovery.session);
     rerender();
     await act(async () => result.current.finish());
-    expect(onComplete).toHaveBeenLastCalledWith("/settings/workspace");
+    expect(onComplete).toHaveBeenLastCalledWith(null);
   });
 
   it("persists progress on every navigation transition", async () => {

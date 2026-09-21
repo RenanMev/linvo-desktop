@@ -13,14 +13,14 @@ describe("resolveOnboardingRoute", () => {
     ).toBe("/settings/workspace/ws-1/rule-review");
   });
 
-  it("routes to the panel home when rule-review intent has no candidates", () => {
+  it("stays on the island (null) when rule-review intent has no candidates", () => {
     expect(
       resolveOnboardingRoute({
         workspaceId: "ws-1",
         knowledgeIntent: "rule-review",
         candidateCount: 0,
       }),
-    ).toBe("/settings/workspace");
+    ).toBeNull();
   });
 
   it("routes to procedures regardless of candidate count", () => {
@@ -33,14 +33,14 @@ describe("resolveOnboardingRoute", () => {
     ).toBe("/settings/workspace/ws-1/procedures");
   });
 
-  it("routes to the panel home when there is no intent or no workspace", () => {
+  it("stays on the island (null) when there is no intent or no workspace", () => {
     expect(
       resolveOnboardingRoute({
         workspaceId: "ws-1",
         knowledgeIntent: null,
         candidateCount: 0,
       }),
-    ).toBe("/settings/workspace");
+    ).toBeNull();
 
     expect(
       resolveOnboardingRoute({
@@ -48,6 +48,6 @@ describe("resolveOnboardingRoute", () => {
         knowledgeIntent: "rule-review",
         candidateCount: 5,
       }),
-    ).toBe("/settings/workspace");
+    ).toBeNull();
   });
 });

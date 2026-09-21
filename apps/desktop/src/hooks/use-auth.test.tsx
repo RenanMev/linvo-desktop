@@ -200,43 +200,7 @@ describe("useAuth onboarding integration", () => {
     expect(mocks.clearOnboardingCompleted).not.toHaveBeenCalled();
   });
 
-  it("clears saved progress when onboarding completes", async () => {
-    mocks.getTokens.mockResolvedValue({
-      accessToken: "access",
-      refreshToken: "refresh",
-    });
-    mocks.isOnboardingForced.mockReturnValue(true);
-    const { result } = renderHook(() => useAuth());
-
-    await waitFor(() => expect(result.current.phase).toBe("onboarding"));
-    await act(async () => result.current.completeOnboarding("/chat"));
-
-    expect(mocks.markOnboardingCompleted).toHaveBeenCalledWith("user-1");
-    expect(mocks.clearOnboardingProgress).toHaveBeenCalledWith("user-1");
-    expect(mocks.setStoredWorkspaceId).toHaveBeenCalledWith("ws-1");
-    expect(mocks.saveActiveConversationId).toHaveBeenCalledWith(null, null);
-    expect(mocks.enterLoggedInDesktop).toHaveBeenCalledWith(user, "/chat");
-  });
-
-  it("lands on the panel home when onboarding completes without a route", async () => {
-    mocks.getTokens.mockResolvedValue({
-      accessToken: "access",
-      refreshToken: "refresh",
-    });
-    mocks.isOnboardingForced.mockReturnValue(true);
-    const { result } = renderHook(() => useAuth());
-
-    await waitFor(() => expect(result.current.phase).toBe("onboarding"));
-    await act(async () => result.current.completeOnboarding());
-
-    expect(mocks.saveActiveConversationId).toHaveBeenCalledWith(null, null);
-    expect(mocks.enterLoggedInDesktop).toHaveBeenCalledWith(
-      user,
-      "/settings/workspace",
-    );
-  });
-
-  it("hands the first-question conversation to the island when onboarding completes", async () => {
+  it("clears saved progress and opens the panel when onboarding ends with a route", async () => {
     mocks.getTokens.mockResolvedValue({
       accessToken: "access",
       refreshToken: "refresh",
@@ -246,17 +210,36 @@ describe("useAuth onboarding integration", () => {
 
     await waitFor(() => expect(result.current.phase).toBe("onboarding"));
     await act(async () =>
-      result.current.completeOnboarding("/chat/conversation-1"),
+      result.current.completeOnboarding(
+        "/settings/workspace/ws-1/rule-review",
+      ),
     );
 
-    expect(mocks.saveActiveConversationId).toHaveBeenCalledWith(
-      "conversation-1",
-      { userId: "user-1", workspaceId: "ws-1" },
-    );
+    expect(mocks.markOnboardingCompleted).toHaveBeenCalledWith("user-1");
+    expect(mocks.clearOnboardingProgress).toHaveBeenCalledWith("user-1");
+    expect(mocks.setStoredWorkspaceId).toHaveBeenCalledWith("ws-1");
+    expect(result.current.phase).toBe("floating");
     expect(mocks.enterLoggedInDesktop).toHaveBeenCalledWith(
       user,
-      "/chat/conversation-1",
+      "/settings/workspace/ws-1/rule-review",
     );
+  });
+
+  it("KAN-35 sem rota, o onboarding termina na ilha: sem painel e sem mexer na conversa salva", async () => {
+    mocks.getTokens.mockResolvedValue({
+      accessToken: "access",
+      refreshToken: "refresh",
+    });
+    mocks.isOnboardingForced.mockReturnValue(true);
+    const { result } = renderHook(() => useAuth());
+
+    await waitFor(() => expect(result.current.phase).toBe("onboarding"));
+    await act(async () => result.current.completeOnboarding(null));
+
+    expect(result.current.phase).toBe("floating");
+    expect(mocks.markOnboardingCompleted).toHaveBeenCalledWith("user-1");
+    expect(mocks.enterLoggedInDesktop).not.toHaveBeenCalled();
+    expect(mocks.saveActiveConversationId).not.toHaveBeenCalled();
   });
 });
 

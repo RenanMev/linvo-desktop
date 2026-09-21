@@ -9,12 +9,13 @@ import {
 } from "@/components/onboarding/step-shell";
 import { Button } from "@/components/ui/button";
 import { useQuickPrompt } from "@/hooks/use-quick-prompt";
+import type { OnboardingRoute } from "@/lib/onboarding/onboarding-routing";
 
 type FirstQuestionStepProps = {
   userId: string;
   workspaceName: string;
   busy: boolean;
-  finish: (routeOverride?: string) => Promise<void>;
+  finish: (routeOverride?: OnboardingRoute) => Promise<void>;
   onBack?: () => void;
 };
 
@@ -50,12 +51,13 @@ export function FirstQuestionStep({
     await prompt.send(question);
   }
 
+  /*
+   * Com pergunta feita, o tour acaba na ilha: `useQuickPrompt` já gravou o
+   * id da conversa na chave que a ilha lê, então ela reabre onde parou. Sem
+   * pergunta, o destino segue o que o onboarding coletou.
+   */
   async function handleFinish() {
-    await finish(
-      prompt.conversationId
-        ? `/chat/${prompt.conversationId}`
-        : undefined,
-    );
+    await finish(prompt.conversationId ? null : undefined);
   }
 
   return (
@@ -161,7 +163,7 @@ export function FirstQuestionStep({
           onClick={() => void handleFinish()}
         >
           {canOpenConversation
-            ? "Concluir e abrir no chat"
+            ? "Concluir e continuar no Assist"
             : "Concluir sem pergunta"}
         </StepPrimary>
       </StepActions>

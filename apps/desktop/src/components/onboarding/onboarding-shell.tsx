@@ -10,12 +10,13 @@ import { FirstQuestionStep } from "@/components/onboarding/steps/first-question-
 import { KnowledgeStep } from "@/components/onboarding/steps/knowledge-step";
 import { WelcomeStep } from "@/components/onboarding/steps/welcome-step";
 import { WorkspaceStep } from "@/components/onboarding/steps/workspace-step";
+import type { OnboardingRoute } from "@/lib/onboarding/onboarding-routing";
 import { useOnboardingFlow } from "@/hooks/use-onboarding-flow";
 import { isOnboardingForced } from "@/lib/onboarding/onboarding-store";
 
 type OnboardingShellProps = {
   user: UserPublic;
-  onComplete: (route?: string) => Promise<void>;
+  onComplete: (route: OnboardingRoute) => Promise<void>;
 };
 
 export function OnboardingShell({
