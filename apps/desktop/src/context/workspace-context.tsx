@@ -12,6 +12,7 @@ import type { Workspace, WorkspacePermission } from "@linvo/shared";
 
 import { useConversations } from "@/context/chat-conversations-context";
 import { clearChatLocalCache } from "@/lib/chat/chat-local-store";
+import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
 import * as workspaceApi from "@/lib/workspace/workspace-api";
 import {
   getStoredWorkspaceId,
@@ -19,11 +20,11 @@ import {
 } from "@/lib/workspace/workspace-store";
 
 type SelectWorkspaceOptions = {
-  navigateToChat?: boolean;
+  navigateHome?: boolean;
 };
 
 type CreateWorkspaceOptions = {
-  navigateToChat?: boolean;
+  navigateHome?: boolean;
 };
 
 type WorkspaceContextValue = {
@@ -141,7 +142,7 @@ export function WorkspaceProvider({
 
   const selectWorkspace = useCallback(
     async (workspaceId: string, options?: SelectWorkspaceOptions) => {
-      const navigateToChat = options?.navigateToChat ?? true;
+      const navigateHome = options?.navigateHome ?? true;
       const activated = await workspaceApi.activateWorkspace(workspaceId);
       setStoredWorkspaceId(activated.id);
       setActiveWorkspaceId(activated.id);
@@ -150,8 +151,8 @@ export function WorkspaceProvider({
       );
       await clearChatLocalCache();
       await refreshList();
-      if (navigateToChat) {
-        navigate("/chat");
+      if (navigateHome) {
+        navigate(PANEL_HOME_ROUTE);
       }
     },
     [navigate, refreshList],
@@ -163,7 +164,7 @@ export function WorkspaceProvider({
       imageFile?: File | null,
       options?: CreateWorkspaceOptions,
     ) => {
-      const navigateToChat = options?.navigateToChat ?? true;
+      const navigateHome = options?.navigateHome ?? true;
       let created = await workspaceApi.createWorkspace({ name });
       if (imageFile) {
         created = await workspaceApi.uploadWorkspaceImage(created.id, imageFile);
@@ -173,8 +174,8 @@ export function WorkspaceProvider({
       setActiveWorkspaceId(created.id);
       await clearChatLocalCache();
       await refreshList();
-      if (navigateToChat) {
-        navigate("/chat");
+      if (navigateHome) {
+        navigate(PANEL_HOME_ROUTE);
       }
       return created;
     },

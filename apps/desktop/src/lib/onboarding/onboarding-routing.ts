@@ -1,3 +1,5 @@
+import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
+
 export type OnboardingKnowledgeIntent = "rule-review" | "procedures" | null;
 
 export function resolveOnboardingRoute(input: {
@@ -8,18 +10,18 @@ export function resolveOnboardingRoute(input: {
   const { workspaceId, knowledgeIntent, candidateCount } = input;
 
   if (!workspaceId) {
-    return "/chat";
+    return PANEL_HOME_ROUTE;
   }
 
   if (knowledgeIntent === "rule-review") {
     return candidateCount > 0
       ? `/settings/workspace/${workspaceId}/rule-review`
-      : "/chat";
+      : PANEL_HOME_ROUTE;
   }
 
   if (knowledgeIntent === "procedures") {
     return `/settings/workspace/${workspaceId}/procedures`;
   }
 
-  return "/chat";
+  return PANEL_HOME_ROUTE;
 }

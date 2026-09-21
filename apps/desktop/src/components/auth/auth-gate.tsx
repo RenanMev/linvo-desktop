@@ -6,6 +6,7 @@ import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 import { useWindowChrome } from "@/context/window-chrome-context";
 import { useAuth } from "@/hooks/use-auth";
 import { quitApp } from "@/lib/app-windows";
+import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
 import { openPanel } from "@/lib/panel-window";
 
 export function AuthGate() {
@@ -35,7 +36,7 @@ export function AuthGate() {
         if (!auth.user) {
           return;
         }
-        await openPanel("/chat", auth.user);
+        await openPanel(PANEL_HOME_ROUTE, auth.user);
       },
       ...(auth.phase === "floating"
         ? {}

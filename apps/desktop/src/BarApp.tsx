@@ -60,6 +60,7 @@ import {
   rememberChecklistConversation,
   type ChecklistWindowPayload,
 } from "@/lib/checklist-window";
+import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
 import { openPanel } from "@/lib/panel-window";
 import { registerTrayHandlers } from "@/lib/system-tray";
 import { createFloatingTrayHandlers } from "@/lib/tray-handlers";
@@ -661,7 +662,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
         await openQuickMenuRef.current();
       },
       openWorkspace: async () => {
-        await openPanel("/chat");
+        await openPanel(PANEL_HOME_ROUTE);
       },
     });
     registerTrayHandlers({

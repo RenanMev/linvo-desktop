@@ -15,6 +15,7 @@ import {
   type AuthPhase,
 } from "@/lib/auth/auth-state";
 import { enterLoggedInDesktop } from "@/lib/auth/enter-logged-in-desktop";
+import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
 import { applyOnboardingWindowSurface } from "@/lib/auth/onboarding-window-surface";
 import { clearStoredAppearance } from "@/lib/appearance/appearance-store";
 import { saveActiveConversationId } from "@/lib/chat/active-conversation-store";
@@ -344,7 +345,7 @@ export function useAuth() {
   }, [invalidateSession, state.user]);
 
   const completeOnboarding = useCallback(
-    async (route = "/chat") => {
+    async (route = PANEL_HOME_ROUTE) => {
       if (!state.user) {
         return;
       }

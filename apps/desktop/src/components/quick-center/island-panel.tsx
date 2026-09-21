@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useQuickCenterWorkspace } from "@/hooks/use-quick-center-workspace";
 import { loadActiveConversationId, saveActiveConversationId } from "@/lib/chat/active-conversation-store";
+import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
 import { openPanel } from "@/lib/panel-window";
 import { getStoredWorkspaceId } from "@/lib/workspace/workspace-store";
 
@@ -74,7 +75,9 @@ export function IslandPanel({
     const conversationId = loadActiveConversationId(
       workspaceId ? { userId, workspaceId } : null,
     );
-    void openPanel(conversationId ? `/chat/${conversationId}` : "/chat").catch(
+    void openPanel(
+      conversationId ? `/chat/${conversationId}` : PANEL_HOME_ROUTE,
+    ).catch(
       () => undefined,
     );
     onClose();

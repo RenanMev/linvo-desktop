@@ -218,6 +218,24 @@ describe("useAuth onboarding integration", () => {
     expect(mocks.enterLoggedInDesktop).toHaveBeenCalledWith(user, "/chat");
   });
 
+  it("lands on the panel home when onboarding completes without a route", async () => {
+    mocks.getTokens.mockResolvedValue({
+      accessToken: "access",
+      refreshToken: "refresh",
+    });
+    mocks.isOnboardingForced.mockReturnValue(true);
+    const { result } = renderHook(() => useAuth());
+
+    await waitFor(() => expect(result.current.phase).toBe("onboarding"));
+    await act(async () => result.current.completeOnboarding());
+
+    expect(mocks.saveActiveConversationId).toHaveBeenCalledWith(null, null);
+    expect(mocks.enterLoggedInDesktop).toHaveBeenCalledWith(
+      user,
+      "/settings/workspace",
+    );
+  });
+
   it("hands the first-question conversation to the island when onboarding completes", async () => {
     mocks.getTokens.mockResolvedValue({
       accessToken: "access",

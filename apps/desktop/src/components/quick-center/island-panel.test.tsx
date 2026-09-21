@@ -139,6 +139,19 @@ describe("IslandPanel", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("T2.9 Abrir na janela grande sem conversa cai na home do painel, não em /chat", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderPanel({ onClose });
+
+    await user.click(
+      screen.getByRole("button", { name: "Abrir na janela grande" }),
+    );
+
+    expect(openPanel).toHaveBeenCalledWith("/settings/workspace");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("T5.1 botão Nova pergunta existe e não há lista de conversas", () => {
     renderPanel();
 

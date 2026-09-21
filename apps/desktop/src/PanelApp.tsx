@@ -21,6 +21,7 @@ import { WorkspaceSettingsPage } from "@/pages/settings/workspace-settings-page"
 import { ChatPage } from "@/pages/chat-page";
 import { DocumentsPage } from "@/pages/documents-page";
 import { usePanelSession } from "@/hooks/use-panel-session";
+import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
 import { listenPanelNavigate } from "@/lib/panel-window";
 
 function PanelRoutes() {
@@ -115,7 +116,7 @@ function PanelRoutes() {
           path="/settings/account"
           element={<AccountSettingsPage session={session} />}
         />
-        <Route path="*" element={<Navigate to="/chat" replace />} />
+        <Route path="*" element={<Navigate to={PANEL_HOME_ROUTE} replace />} />
       </Route>
     </Routes>
   );
