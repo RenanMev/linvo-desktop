@@ -4,6 +4,7 @@ import {
   authReducer,
   initialAuthState,
   isAuthWindowPhase,
+  SESSION_EXPIRED_WARNING,
 } from "@/lib/auth/auth-state";
 
 const sampleUser = {
@@ -79,6 +80,41 @@ describe("authReducer", () => {
     const floating = authReducer(initialAuthState, { type: "START_FLOATING" });
     const next = authReducer(floating, { type: "UNAUTHORIZED" });
     expect(next.phase).toBe("unauthenticated");
+  });
+
+  it("KAN-36 SESSION_EXPIRED em floating mantém a fase e o usuário, só avisa", () => {
+    const floating = authReducer(initialAuthState, {
+      type: "LOGIN_SUCCESS",
+      user: sampleUser,
+    });
+    const next = authReducer(floating, { type: "SESSION_EXPIRED" });
+    expect(next.phase).toBe("floating");
+    expect(next.user?.id).toBe("u1");
+    expect(next.sessionWarning).toBe(SESSION_EXPIRED_WARNING);
+  });
+
+  it("KAN-36 SESSION_EXPIRED fora de floating cai para unauthenticated", () => {
+    const onboarding = authReducer(initialAuthState, {
+      type: "START_ONBOARDING",
+      user: sampleUser,
+    });
+    const next = authReducer(onboarding, { type: "SESSION_EXPIRED" });
+    expect(next.phase).toBe("unauthenticated");
+    expect(next.user).toBeNull();
+  });
+
+  it("KAN-36 SESSION_RESTORED limpa o aviso e volta ao floating com o usuário", () => {
+    const expired = authReducer(
+      authReducer(initialAuthState, { type: "LOGIN_SUCCESS", user: sampleUser }),
+      { type: "SESSION_EXPIRED" },
+    );
+    const next = authReducer(expired, {
+      type: "SESSION_RESTORED",
+      user: { ...sampleUser, name: "Renan M." },
+    });
+    expect(next.phase).toBe("floating");
+    expect(next.sessionWarning).toBeNull();
+    expect(next.user?.name).toBe("Renan M.");
   });
 });
 

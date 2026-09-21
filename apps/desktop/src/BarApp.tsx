@@ -72,6 +72,9 @@ import { createFloatingTrayHandlers } from "@/lib/tray-handlers";
 type BarAppProps = {
   sessionWarning: string | null;
   user: UserPublic;
+  /** Reauth compacto na ilha quando a sessão cai em floating (KAN-36). */
+  onReauthenticate?: (password: string) => Promise<void>;
+  onSignOut?: () => Promise<void>;
 };
 
 type WindowMode = FloatingIslandMode;
@@ -136,7 +139,12 @@ async function withDeadline<T>(task: Promise<T>, timeoutMs: number): Promise<T> 
   }
 }
 
-export function BarApp({ sessionWarning, user }: BarAppProps) {
+export function BarApp({
+  sessionWarning,
+  user,
+  onReauthenticate,
+  onSignOut,
+}: BarAppProps) {
   const { ready: floatingReady, growth } = useFloatingBootstrap();
   const apiHealthy = useApiHealth(true);
   const [checklist, setChecklist] = useState<ChecklistWindowPayload | null>(
@@ -1153,6 +1161,11 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
           onClose={() => void closeQuickMenu()}
           onHide={() => void handleHideQuickMenu()}
           continueRequest={continueRequest}
+          reauth={
+            sessionWarning && onReauthenticate && onSignOut
+              ? { email: user.email, onSubmit: onReauthenticate, onSignOut }
+              : null
+          }
         />
       );
     }

@@ -3,6 +3,7 @@ import { GripVertical, Maximize2, Minus, X } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { IslandChat } from "@/components/quick-center/island-chat";
+import { IslandReauth } from "@/components/quick-center/island-reauth";
 import { Button } from "@/components/ui/button";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useQuickCenterWorkspace } from "@/hooks/use-quick-center-workspace";
@@ -26,6 +27,12 @@ type IslandPanelProps = {
   onHide?: () => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
   continueRequest?: AssistContinueRequest | null;
+  /** Presente = sessão caiu; o corpo vira o reauth em vez do chat. */
+  reauth?: {
+    email: string;
+    onSubmit: (password: string) => Promise<void>;
+    onSignOut: () => Promise<void>;
+  } | null;
 };
 
 /**
@@ -52,6 +59,7 @@ export function IslandPanel({
   onHide,
   onOpenProcedureChecklist,
   continueRequest = null,
+  reauth = null,
 }: IslandPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [chatEpoch, setChatEpoch] = useState(0);
@@ -165,19 +173,27 @@ export function IslandPanel({
         </Button>
       </div>
 
-      <IslandChat
-        userId={userId}
-        resetToken={chatEpoch}
-        continueRequest={continueRequest}
-        disabled={!apiHealthy || Boolean(sessionWarning)}
-        // Só depois de assentar: armar durante o morph abriria o overlay de
-        // recorte por cima de uma janela ainda em movimento.
-        autoStartCapture={ready && captureRequested}
-        {...(onCaptureRequestConsumed
-          ? { onAutoCaptureConsumed: onCaptureRequestConsumed }
-          : {})}
-        {...(onOpenProcedureChecklist ? { onOpenProcedureChecklist } : {})}
-      />
+      {reauth ? (
+        <IslandReauth
+          email={reauth.email}
+          onSubmit={reauth.onSubmit}
+          onSignOut={reauth.onSignOut}
+        />
+      ) : (
+        <IslandChat
+          userId={userId}
+          resetToken={chatEpoch}
+          continueRequest={continueRequest}
+          disabled={!apiHealthy || Boolean(sessionWarning)}
+          // Só depois de assentar: armar durante o morph abriria o overlay de
+          // recorte por cima de uma janela ainda em movimento.
+          autoStartCapture={ready && captureRequested}
+          {...(onCaptureRequestConsumed
+            ? { onAutoCaptureConsumed: onCaptureRequestConsumed }
+            : {})}
+          {...(onOpenProcedureChecklist ? { onOpenProcedureChecklist } : {})}
+        />
+      )}
     </div>
   );
 }

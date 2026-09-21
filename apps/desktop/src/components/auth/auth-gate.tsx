@@ -87,7 +87,14 @@ export function AuthGate() {
   }
 
   if (auth.phase === "floating" && auth.user) {
-    return <BarApp sessionWarning={auth.sessionWarning} user={auth.user} />;
+    return (
+      <BarApp
+        sessionWarning={auth.sessionWarning}
+        user={auth.user}
+        onReauthenticate={auth.reauthenticate}
+        onSignOut={auth.logout}
+      />
+    );
   }
 
   return null;

@@ -82,6 +82,8 @@ export function useAuth() {
    * sessão é o que impede uma cadeia obsoleta de reabrir o desktop logado.
    */
   const authEpochRef = useRef(0);
+  const phaseRef = useRef<AuthPhase>(state.phase);
+  phaseRef.current = state.phase;
 
   const invalidateSession = useCallback(() => {
     authEpochRef.current += 1;
@@ -95,7 +97,28 @@ export function useAuth() {
     await applyWindowSurface(surfaceModeForAuthPhase(phase));
   }, []);
 
+  /*
+   * 401 no meio do turno (floating): a janela não vira login. Fecha o
+   * painel, avisa pelo SO e deixa a pílula em "Sessão expirada"; o workspace
+   * fica guardado porque o atendente vai retomar exatamente dali. Fora de
+   * floating (boot, onboarding) o caminho antigo continua.
+   */
+  const handleSessionExpiredInFloating = useCallback(() => {
+    invalidateSession();
+    void (async () => {
+      await notifyDesktopEvent(
+        "Sessão expirada. Abra o Assist para entrar de novo.",
+      );
+      await closePanel();
+      dispatch({ type: "SESSION_EXPIRED" });
+    })();
+  }, [invalidateSession]);
+
   const handleUnauthorized = useCallback(() => {
+    if (phaseRef.current === "floating") {
+      handleSessionExpiredInFloating();
+      return;
+    }
     invalidateSession();
     clearStoredAppearance();
     clearStoredWorkspaceId();
@@ -104,7 +127,7 @@ export function useAuth() {
       await closePanel();
       dispatch({ type: "UNAUTHORIZED" });
     })();
-  }, [invalidateSession]);
+  }, [handleSessionExpiredInFloating, invalidateSession]);
 
   useEffect(() => {
     void applyWindowSurface("auth");
@@ -232,6 +255,10 @@ export function useAuth() {
     let unlisten: (() => void) | undefined;
 
     void listenAuthSync((payload) => {
+      if (payload.type === "unauthorized" && phaseRef.current === "floating") {
+        handleSessionExpiredInFloating();
+        return;
+      }
       invalidateSession();
       if (payload.type === "logout" && state.user) {
         clearOnboardingProgress(state.user.id);
@@ -249,7 +276,7 @@ export function useAuth() {
     return () => {
       unlisten?.();
     };
-  }, [invalidateSession, state.user]);
+  }, [handleSessionExpiredInFloating, invalidateSession, state.user]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -296,6 +323,34 @@ export function useAuth() {
       throw error;
     }
   }, []);
+
+  /*
+   * Entra de novo sem sair de floating: mesmo e-mail, só a senha. Não passa
+   * por `enterSession` de propósito — reautenticar não abre o painel.
+   */
+  const reauthenticate = useCallback(
+    async (password: string) => {
+      const current = state.user;
+      if (!current) {
+        return;
+      }
+      dispatch({ type: "SET_ERROR", error: null });
+      try {
+        const result = await loginRequest({ email: current.email, password });
+        await persistSession(result.accessToken, result.refreshToken);
+        persistWorkspaceFromUser(result.user);
+        dispatch({ type: "SESSION_RESTORED", user: result.user });
+      } catch (error) {
+        const message =
+          error instanceof AuthApiError || error instanceof AuthNetworkError
+            ? error.message
+            : "Erro inesperado";
+        dispatch({ type: "SET_ERROR", error: message });
+        throw error;
+      }
+    },
+    [state.user],
+  );
 
   const register = useCallback(async (input: RegisterInput) => {
     dispatch({ type: "SET_ERROR", error: null });
@@ -369,5 +424,6 @@ export function useAuth() {
     register,
     logout,
     completeOnboarding,
+    reauthenticate,
   };
 }
