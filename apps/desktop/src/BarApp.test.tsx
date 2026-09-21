@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Procedure, UserPublic } from "@linvo/shared";
 
 import { BarApp } from "@/BarApp";
-import { hideAllWindows } from "@/lib/app-windows";
+import { hideAllWindows, showMainBar } from "@/lib/app-windows";
 import { expandFloatingToChecklist } from "@/lib/floating-checklist-mode";
 import { collapseToEdge, expandFromEdge } from "@/lib/floating-edge-mode";
 import {
@@ -81,6 +81,16 @@ vi.mock("@/lib/floating-edge-mode", () => ({
 let payloadHandler:
   | ((payload: ChecklistWindowPayload) => void | Promise<void>)
   | null = null;
+let assistContinueHandler:
+  | ((payload: { conversationId: string }) => void)
+  | null = null;
+
+vi.mock("@/lib/assist-handoff", () => ({
+  listenAssistContinue: vi.fn((handler) => {
+    assistContinueHandler = handler;
+    return Promise.resolve(() => {});
+  }),
+}));
 
 vi.mock("@/lib/checklist-window", () => ({
   rememberChecklistConversation: vi.fn(),
@@ -188,6 +198,7 @@ function makeChecklistPayload(): ChecklistWindowPayload {
 describe("BarApp window modes", () => {
   beforeEach(() => {
     payloadHandler = null;
+    assistContinueHandler = null;
     localStorage.clear();
     vi.clearAllMocks();
     windowMock.outerSize.mockResolvedValue({ width: 140, height: 40 });
@@ -250,6 +261,21 @@ describe("BarApp window modes", () => {
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith("capture_overlay_open"),
     );
+  });
+
+  it("KAN-33 Continuar no Assist vindo do painel expande a ilha fechada", async () => {
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await waitFor(() => expect(assistContinueHandler).not.toBeNull());
+    await act(async () => {
+      assistContinueHandler!({ conversationId: "conv-1" });
+    });
+
+    await waitFor(() =>
+      expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
+    );
+    expect(await screen.findByRole("dialog", { name: "Assist" })).toBeInTheDocument();
+    expect(showMainBar).toHaveBeenCalled();
   });
 
   it("shows session expiry on the compact pill instead of a live green", () => {

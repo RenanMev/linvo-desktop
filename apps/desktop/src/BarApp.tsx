@@ -60,6 +60,10 @@ import {
   rememberChecklistConversation,
   type ChecklistWindowPayload,
 } from "@/lib/checklist-window";
+import {
+  listenAssistContinue,
+  type AssistContinueRequest,
+} from "@/lib/assist-handoff";
 import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
 import { openPanel } from "@/lib/panel-window";
 import { registerTrayHandlers } from "@/lib/system-tray";
@@ -156,6 +160,8 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   const chatButtonRef = useRef<HTMLButtonElement>(null);
   const edgeHandleRef = useRef<HTMLButtonElement>(null);
   const openQuickMenuRef = useRef<() => Promise<void>>(async () => {});
+  const [continueRequest, setContinueRequest] =
+    useState<AssistContinueRequest | null>(null);
   const islandMorphRef = useRef<FloatingIslandMorph | null>(null);
   const islandMorphIdRef = useRef(0);
   const islandMorphCompletionRef = useRef<{
@@ -690,6 +696,37 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
     void handleCaptureContext();
   };
 
+  /*
+   * "Continuar no Assist" vindo do Histórico do painel. Mesmo caminho do
+   * atalho de captura: mostra a barra e expande se estiver compacta. Em modo
+   * checklist não interrompe — o atendente está no meio de um procedimento.
+   */
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    void listenAssistContinue(({ conversationId }) => {
+      if (windowModeRef.current === "checklist") {
+        return;
+      }
+      setContinueRequest((previous) => ({
+        conversationId,
+        token: (previous?.token ?? 0) + 1,
+      }));
+      void (async () => {
+        await showMainBar();
+        if (windowModeRef.current === "compact") {
+          await openQuickMenuRef.current();
+        }
+      })();
+    }).then((dispose) => {
+      unlisten = dispose;
+    });
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
   async function closeQuickMenu(
     options: CloseQuickMenuOptions = {},
   ): Promise<void> {
@@ -1115,6 +1152,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
           onCaptureRequestConsumed={() => setCaptureAndSendPending(false)}
           onClose={() => void closeQuickMenu()}
           onHide={() => void handleHideQuickMenu()}
+          continueRequest={continueRequest}
         />
       );
     }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Procedure } from "@linvo/shared";
 
 import { ChatPanel } from "@/components/chat/chat-panel";
+import type { AssistContinueRequest } from "@/lib/assist-handoff";
 import { useChat } from "@/hooks/use-chat";
 import {
   loadActiveConversationId,
@@ -17,6 +18,8 @@ type IslandChatProps = {
   onAutoCaptureConsumed?: () => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
   resetToken?: number;
+  /** Pedido do painel (Histórico) para retomar uma conversa aqui. */
+  continueRequest?: AssistContinueRequest | null;
 };
 
 /**
@@ -45,6 +48,7 @@ export function IslandChat({
   onAutoCaptureConsumed,
   onOpenProcedureChecklist,
   resetToken = 0,
+  continueRequest = null,
 }: IslandChatProps) {
   const workspaceId = getStoredWorkspaceId();
   const conversationScope = useMemo(
@@ -56,6 +60,7 @@ export function IslandChat({
   );
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const previousResetTokenRef = useRef(resetToken);
+  const previousContinueTokenRef = useRef(continueRequest?.token ?? 0);
   const previousScopeRef = useRef(conversationScope);
 
   const handleConversationCreated = useCallback((id: string) => {
@@ -93,6 +98,27 @@ export function IslandChat({
     saveActiveConversationId(null);
     setConversationId(null);
   }, [resetToken, stopResponding]);
+
+  /*
+   * Token e não só o id: retomar a mesma conversa duas vezes seguidas ainda
+   * é um pedido novo. Se a ilha acabou de montar, o estado inicial já leu o id
+   * que o painel gravou — o ref nasce igual ao token e nada roda.
+   */
+  useEffect(() => {
+    if (
+      !continueRequest ||
+      previousContinueTokenRef.current === continueRequest.token
+    ) {
+      return;
+    }
+    previousContinueTokenRef.current = continueRequest.token;
+    if (continueRequest.conversationId === conversationId) {
+      return;
+    }
+    stopResponding();
+    saveActiveConversationId(continueRequest.conversationId, conversationScope);
+    setConversationId(continueRequest.conversationId);
+  }, [continueRequest, conversationId, conversationScope, stopResponding]);
 
   useEffect(() => {
     const previousScope = previousScopeRef.current;

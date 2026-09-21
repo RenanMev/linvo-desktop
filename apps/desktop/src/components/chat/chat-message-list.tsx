@@ -6,7 +6,7 @@ import type { ChatMessage, ChatToolRequest } from "@/lib/chat/types";
 
 type ChatMessageListProps = {
   messages: ChatMessage[];
-  onReply: (message: ChatMessage) => void;
+  onReply?: (message: ChatMessage) => void;
   onRegenerate?: (message: ChatMessage) => void;
   regenerateDisabled?: boolean;
   onSuggestion?: (prompt: string) => void;

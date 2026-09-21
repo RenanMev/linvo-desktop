@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useQuickCenterWorkspace } from "@/hooks/use-quick-center-workspace";
 import { loadActiveConversationId, saveActiveConversationId } from "@/lib/chat/active-conversation-store";
+import type { AssistContinueRequest } from "@/lib/assist-handoff";
 import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
 import { openPanel } from "@/lib/panel-window";
 import { getStoredWorkspaceId } from "@/lib/workspace/workspace-store";
@@ -24,6 +25,7 @@ type IslandPanelProps = {
   onClose: () => void;
   onHide?: () => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
+  continueRequest?: AssistContinueRequest | null;
 };
 
 /**
@@ -49,6 +51,7 @@ export function IslandPanel({
   onClose,
   onHide,
   onOpenProcedureChecklist,
+  continueRequest = null,
 }: IslandPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [chatEpoch, setChatEpoch] = useState(0);
@@ -165,6 +168,7 @@ export function IslandPanel({
       <IslandChat
         userId={userId}
         resetToken={chatEpoch}
+        continueRequest={continueRequest}
         disabled={!apiHealthy || Boolean(sessionWarning)}
         // Só depois de assentar: armar durante o morph abriria o overlay de
         // recorte por cima de uma janela ainda em movimento.

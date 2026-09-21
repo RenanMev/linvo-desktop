@@ -50,4 +50,25 @@ describe("ChatPanel", () => {
 
     expect(screen.queryByText("Contexto pendente")).not.toBeInTheDocument();
   });
+
+  it("readOnly troca o composer pelo footer", () => {
+    render(
+      <ChatPanel
+        conversationKey="conv-1"
+        conversationTitle="Conversa"
+        messages={[]}
+        isResponding={false}
+        replyTarget={null}
+        readOnly
+        footer={<button type="button">Continuar no Assist</button>}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Continuar no Assist" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Adicionar contexto" }),
+    ).not.toBeInTheDocument();
+  });
 });

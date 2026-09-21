@@ -184,6 +184,52 @@ describe("IslandChat", () => {
     expect(loadActiveConversationId(scope)).toBe("conv-saved");
   });
 
+  it("KAN-33 continueRequest troca para a conversa pedida e persiste o id", async () => {
+    saveActiveConversationId("conv-a", scope);
+    vi.mocked(chatApi.listMessages).mockImplementation(async (id: string) => [
+      {
+        id: `${id}-user`,
+        role: "user",
+        content: `pergunta ${id}`,
+        status: "done",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+
+    const rendered = render(
+      <IslandChat userId={scope.userId} continueRequest={null} />,
+    );
+    expect(await screen.findByText("pergunta conv-a")).toBeInTheDocument();
+
+    rendered.rerender(
+      <IslandChat
+        userId={scope.userId}
+        continueRequest={{ conversationId: "conv-b", token: 1 }}
+      />,
+    );
+
+    expect(await screen.findByText("pergunta conv-b")).toBeInTheDocument();
+    expect(screen.queryByText("pergunta conv-a")).not.toBeInTheDocument();
+    expect(loadActiveConversationId(scope)).toBe("conv-b");
+    expect(chatApi.createConversation).not.toHaveBeenCalled();
+  });
+
+  it("KAN-33 continueRequest presente na montagem não refaz a carga", async () => {
+    saveActiveConversationId("conv-a", scope);
+
+    render(
+      <IslandChat
+        userId={scope.userId}
+        continueRequest={{ conversationId: "conv-a", token: 3 }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(chatApi.listMessages).toHaveBeenCalledWith("conv-a");
+    });
+    expect(chatApi.listMessages).toHaveBeenCalledTimes(1);
+  });
+
   it("T2.4 disabled não envia", async () => {
     const user = userEvent.setup();
     render(<IslandChat userId={scope.userId} disabled />);
