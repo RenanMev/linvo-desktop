@@ -3,7 +3,6 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-import { ChecklistApp } from "@/ChecklistApp";
 import { CaptureOverlayApp } from "@/CaptureOverlayApp";
 import { PanelApp } from "@/PanelApp";
 import { AuthGate } from "@/components/auth/auth-gate";
@@ -15,9 +14,6 @@ import "./index.css";
 function resolveWindowLabel(label: string): WindowLabel {
   if (label === "panel") {
     return "panel";
-  }
-  if (label === "checklist") {
-    return "checklist";
   }
   if (label === "capture-overlay") {
     return "capture-overlay";
@@ -45,16 +41,6 @@ function Bootstrap() {
   }
 
   const isPanel = windowLabel === "panel";
-
-  if (windowLabel === "checklist") {
-    return (
-      <AppearanceProvider windowLabel={windowLabel} readOnly>
-        <WindowChromeProvider windowLabel={windowLabel}>
-          <ChecklistApp />
-        </WindowChromeProvider>
-      </AppearanceProvider>
-    );
-  }
 
   return (
     <AppearanceProvider windowLabel={windowLabel} readOnly={!isPanel}>

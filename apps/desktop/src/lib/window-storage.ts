@@ -13,7 +13,6 @@ import {
 } from "@/lib/window-position";
 
 export const POSITION_STORAGE_KEY = "linvo:window-position";
-export const CHECKLIST_POSITION_STORAGE_KEY = "linvo:checklist-window-position";
 export const ANCHOR_STORAGE_KEY = "linvo:window-anchor";
 export const ISLAND_PILL_POSITION_STORAGE_KEY = "linvo:island-pill-position";
 
@@ -28,7 +27,6 @@ export type SavedIslandPlacement = {
 
 const PLACEMENT_STORE_KEYS: Record<string, string> = {
   [POSITION_STORAGE_KEY]: "placement",
-  [CHECKLIST_POSITION_STORAGE_KEY]: "checklistPlacement",
 };
 
 const ANCHOR_STORE_KEY = "anchor";
@@ -414,7 +412,6 @@ async function hydrateAnchor(): Promise<void> {
 
 async function doHydrate(): Promise<void> {
   await hydratePlacement(POSITION_STORAGE_KEY);
-  await hydratePlacement(CHECKLIST_POSITION_STORAGE_KEY);
   await hydratePlacement(ISLAND_PILL_POSITION_STORAGE_KEY);
   await hydrateAnchor();
 }

@@ -75,9 +75,9 @@ describe("appearance-sync", () => {
     expect(typeof dispose).toBe("function");
   });
 
-  it("does not throw when emitting with the checklist window closed", async () => {
+  it("does not throw when emitting with the capture overlay closed", async () => {
     await expect(
-      emitAppearanceChanged(makePrefs(), "checklist"),
+      emitAppearanceChanged(makePrefs(), "capture-overlay"),
     ).resolves.toBeUndefined();
   });
 });

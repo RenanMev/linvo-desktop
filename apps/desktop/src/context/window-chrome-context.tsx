@@ -9,7 +9,6 @@ import {
 
 import { hideAllWindows, toggleAppVisibility } from "@/lib/app-windows";
 import type { AuthPhase } from "@/lib/auth/auth-state";
-import { closeChecklist } from "@/lib/checklist-window";
 import {
   closeCaptureOverlay,
 } from "@/lib/context-capture/capture-sources";
@@ -75,9 +74,6 @@ export function WindowChromeProvider({
     switch (action) {
       case "close-panel":
         await closePanel();
-        return;
-      case "close-checklist":
-        await closeChecklist({ emitClosed: true });
         return;
       case "close-overlay":
         await closeCaptureOverlay();
