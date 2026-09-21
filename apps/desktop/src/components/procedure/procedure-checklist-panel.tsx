@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, GripVertical, X } from "lucide-react";
+import { Check, GripVertical, Minus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { ChecklistProgress } from "@/lib/chat/desk-state";
@@ -12,6 +12,8 @@ type ProcedureChecklistPanelProps = {
   initialCompleted?: number[];
   onProgressChange?: (progress: ChecklistProgress) => void;
   onClose: () => void;
+  /** Recolhe para a pílula sem encerrar: o progresso continua na barra. */
+  onCollapse?: () => void;
 };
 
 export function ProcedureChecklistPanel({
@@ -21,6 +23,7 @@ export function ProcedureChecklistPanel({
   initialCompleted = [],
   onProgressChange,
   onClose,
+  onCollapse,
 }: ProcedureChecklistPanelProps) {
   const [checked, setChecked] = useState<Record<number, boolean>>(() => {
     const initial: Record<number, boolean> = {};
@@ -74,6 +77,19 @@ export function ProcedureChecklistPanel({
             /{slug}
           </p>
         </div>
+        {onCollapse ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            onClick={onCollapse}
+            title="Recolher"
+            aria-label="Recolher"
+            className="rounded-full text-foreground/50 hover:text-foreground"
+          >
+            <Minus />
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="ghost"
