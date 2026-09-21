@@ -4,7 +4,6 @@ import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PanelSidebar } from "@/components/panel/panel-sidebar";
-import type { PanelSession } from "@/hooks/use-panel-session";
 
 const deleteConversation = vi.fn();
 const selectConversation = vi.fn();
@@ -49,16 +48,6 @@ vi.mock("@/context/workspace-context", () => ({
   }),
 }));
 
-const session: PanelSession = {
-  user: {
-    id: "u1",
-    name: "Renan",
-    email: "renan@example.com",
-    createdAt: "2026-01-01T00:00:00.000Z",
-  },
-  logout: vi.fn(async () => undefined),
-};
-
 describe("PanelSidebar delete conversation", () => {
   beforeEach(() => {
     deleteConversation.mockReset();
@@ -73,7 +62,7 @@ describe("PanelSidebar delete conversation", () => {
 
     render(
       <MemoryRouter initialEntries={["/chat/conv-1"]}>
-        <PanelSidebar session={session} collapsed={false} />
+        <PanelSidebar collapsed={false} />
       </MemoryRouter>,
     );
 
@@ -94,7 +83,7 @@ describe("PanelSidebar delete conversation", () => {
 
     render(
       <MemoryRouter initialEntries={["/chat/conv-1"]}>
-        <PanelSidebar session={session} collapsed={false} />
+        <PanelSidebar collapsed={false} />
       </MemoryRouter>,
     );
 
