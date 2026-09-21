@@ -140,6 +140,11 @@ describe("IslandChat", () => {
 
     await screen.findByText("resposta");
     expect(openPanel).not.toHaveBeenCalled();
+    expect(chatApi.streamChatResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deskState: { screenKey: "chat", openProcedure: null },
+      }),
+    );
   });
 
   it("T2.3 id salvo hidrata via listMessages e não cria conversa", async () => {
