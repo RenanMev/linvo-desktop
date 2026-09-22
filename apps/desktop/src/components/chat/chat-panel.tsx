@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Procedure } from "@linvo/shared";
 
 import {
@@ -15,10 +16,10 @@ type ChatPanelProps = {
   isResponding: boolean;
   replyTarget: ChatReplyRef | null;
   pendingToolRequest?: ChatToolRequest | null;
-  onSend: (content: string, options?: ChatSendOptions) => void;
-  onReply: (message: ChatMessage) => void;
+  onSend?: (content: string, options?: ChatSendOptions) => void;
+  onReply?: (message: ChatMessage) => void;
   onRegenerate?: (message: ChatMessage) => void;
-  onCancelReply: () => void;
+  onCancelReply?: () => void;
   onApproveTool?: () => void;
   onDenyTool?: () => void;
   disabled?: boolean;
@@ -41,6 +42,12 @@ type ChatPanelProps = {
   showToolbar?: boolean;
   onStop?: () => void;
   variant?: "assist";
+  /**
+   * Histórico: só leitura. Sem composer, responder, regenerar ou sugestões —
+   * quem conversa é a ilha. `footer` ocupa o lugar do composer.
+   */
+  readOnly?: boolean;
+  footer?: ReactNode;
 };
 
 export function ChatPanel({
@@ -50,10 +57,10 @@ export function ChatPanel({
   isResponding,
   replyTarget,
   pendingToolRequest = null,
-  onSend,
+  onSend = () => undefined,
   onReply,
   onRegenerate,
-  onCancelReply,
+  onCancelReply = () => undefined,
   onApproveTool,
   onDenyTool,
   disabled = false,
@@ -67,6 +74,8 @@ export function ChatPanel({
   showToolbar = true,
   onStop,
   variant,
+  readOnly = false,
+  footer,
 }: ChatPanelProps) {
   const inputDisabled = disabled || Boolean(pendingToolRequest);
   const activeModel =
@@ -88,11 +97,11 @@ export function ChatPanel({
         <ChatMessageList
           key={conversationKey ?? "draft"}
           messages={messages}
-          onReply={onReply}
-          onRegenerate={onRegenerate}
+          onReply={readOnly ? undefined : onReply}
+          onRegenerate={readOnly ? undefined : onRegenerate}
           regenerateDisabled={isResponding || Boolean(pendingToolRequest)}
-          onSuggestion={(prompt) => onSend(prompt)}
-          suggestionsDisabled={inputDisabled || isResponding}
+          onSuggestion={readOnly ? undefined : (prompt) => onSend(prompt)}
+          suggestionsDisabled={readOnly || inputDisabled || isResponding}
           pendingToolRequest={pendingToolRequest}
           onApproveTool={onApproveTool}
           onDenyTool={onDenyTool}
@@ -102,22 +111,26 @@ export function ChatPanel({
           variant={variant}
         />
       </div>
-      <ChatInput
-        key={conversationKey ?? "draft"}
-        onSend={onSend}
-        isResponding={isResponding}
-        onStop={onStop}
-        replyTarget={replyTarget}
-        onCancelReply={onCancelReply}
-        disabled={inputDisabled}
-        workspaceId={workspaceId}
-        selectedModel={selectedModel}
-        onModelChange={onModelChange}
-        onOpenProcedureChecklist={onOpenProcedureChecklist}
-        {...(captureWindowLabel ? { captureWindowLabel } : {})}
-        {...(autoStartCapture ? { autoStartCapture } : {})}
-        {...(onAutoCaptureConsumed ? { onAutoCaptureConsumed } : {})}
-      />
+      {readOnly ? (
+        footer
+      ) : (
+        <ChatInput
+          key={conversationKey ?? "draft"}
+          onSend={onSend}
+          isResponding={isResponding}
+          onStop={onStop}
+          replyTarget={replyTarget}
+          onCancelReply={onCancelReply}
+          disabled={inputDisabled}
+          workspaceId={workspaceId}
+          selectedModel={selectedModel}
+          onModelChange={onModelChange}
+          onOpenProcedureChecklist={onOpenProcedureChecklist}
+          {...(captureWindowLabel ? { captureWindowLabel } : {})}
+          {...(autoStartCapture ? { autoStartCapture } : {})}
+          {...(onAutoCaptureConsumed ? { onAutoCaptureConsumed } : {})}
+        />
+      )}
     </main>
   );
 }

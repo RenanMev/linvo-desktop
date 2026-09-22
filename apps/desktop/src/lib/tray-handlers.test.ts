@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
 import { buildTrayMenuItems } from "@/lib/system-tray";
 import { createFloatingTrayHandlers, defaultTrayHandlers } from "@/lib/tray-handlers";
 
@@ -20,19 +21,20 @@ describe("createFloatingTrayHandlers", () => {
     expect(openPanel).not.toHaveBeenCalled();
   });
 
-  it("T6.2 openWorkspace chama openPanel(/chat)", async () => {
+  it("T6.2 openWorkspace abre o painel na home, não em /chat", async () => {
     const expandAssist = vi.fn(async () => {});
     const openPanel = vi.fn(async (_path: string) => {});
     const handlers = createFloatingTrayHandlers({
       expandAssist,
       openWorkspace: async () => {
-        await openPanel("/chat");
+        await openPanel(PANEL_HOME_ROUTE);
       },
     });
 
     await handlers.openWorkspace();
 
-    expect(openPanel).toHaveBeenCalledWith("/chat");
+    expect(openPanel).toHaveBeenCalledWith("/settings/workspace");
+    expect(openPanel).not.toHaveBeenCalledWith("/chat");
     expect(expandAssist).not.toHaveBeenCalled();
   });
 });

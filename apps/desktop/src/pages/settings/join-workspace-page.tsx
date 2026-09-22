@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useWorkspace } from "@/context/workspace-context";
 import { AuthApiError } from "@/lib/auth/auth-api";
+import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
 import { inviteCopy } from "@/lib/workspace/invite-copy";
 import * as inviteApi from "@/lib/workspace/invite-api";
 
@@ -78,7 +79,7 @@ export function JoinWorkspacePage() {
           window.setTimeout(resolve, 1200);
         });
       }
-      navigate("/chat");
+      navigate(PANEL_HOME_ROUTE);
     } catch (err) {
       if (err instanceof AuthApiError && err.status === 429) {
         setError(inviteCopy.tooManyAttempts);

@@ -3,10 +3,13 @@ import { GripVertical, Maximize2, Minus, X } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { IslandChat } from "@/components/quick-center/island-chat";
+import { IslandReauth } from "@/components/quick-center/island-reauth";
 import { Button } from "@/components/ui/button";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useQuickCenterWorkspace } from "@/hooks/use-quick-center-workspace";
 import { loadActiveConversationId, saveActiveConversationId } from "@/lib/chat/active-conversation-store";
+import type { AssistContinueRequest } from "@/lib/assist-handoff";
+import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
 import { openPanel } from "@/lib/panel-window";
 import { getStoredWorkspaceId } from "@/lib/workspace/workspace-store";
 
@@ -23,6 +26,13 @@ type IslandPanelProps = {
   onClose: () => void;
   onHide?: () => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
+  continueRequest?: AssistContinueRequest | null;
+  /** Presente = sessão caiu; o corpo vira o reauth em vez do chat. */
+  reauth?: {
+    email: string;
+    onSubmit: (password: string) => Promise<void>;
+    onSignOut: () => Promise<void>;
+  } | null;
 };
 
 /**
@@ -48,10 +58,15 @@ export function IslandPanel({
   onClose,
   onHide,
   onOpenProcedureChecklist,
+  continueRequest = null,
+  reauth = null,
 }: IslandPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [chatEpoch, setChatEpoch] = useState(0);
-  const workspace = useQuickCenterWorkspace(true);
+  // Com a sessão caída, listar workspaces só renderia outro 401 — e o
+  // `handleUnauthorized` que ele dispara apaga tokens que o reauth acabou
+  // de gravar.
+  const workspace = useQuickCenterWorkspace(!reauth);
 
   /*
    * Ativo já na montagem, não só quando a ilha assenta: o painel monta quando
@@ -74,7 +89,9 @@ export function IslandPanel({
     const conversationId = loadActiveConversationId(
       workspaceId ? { userId, workspaceId } : null,
     );
-    void openPanel(conversationId ? `/chat/${conversationId}` : "/chat").catch(
+    void openPanel(
+      conversationId ? `/chat/${conversationId}` : PANEL_HOME_ROUTE,
+    ).catch(
       () => undefined,
     );
     onClose();
@@ -113,26 +130,30 @@ export function IslandPanel({
             {workspace.name ?? "Workspace"}
           </p>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          onClick={handleNewQuestion}
-          className="text-foreground/50 hover:text-foreground"
-        >
-          Nova pergunta
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          onClick={handleOpenInPanel}
-          title="Abrir na janela grande"
-          aria-label="Abrir na janela grande"
-          className="text-foreground/50 hover:text-foreground"
-        >
-          <Maximize2 />
-        </Button>
+        {reauth ? null : (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={handleNewQuestion}
+              className="text-foreground/50 hover:text-foreground"
+            >
+              Nova pergunta
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={handleOpenInPanel}
+              title="Abrir na janela grande"
+              aria-label="Abrir na janela grande"
+              className="text-foreground/50 hover:text-foreground"
+            >
+              <Maximize2 />
+            </Button>
+          </>
+        )}
         {onHide ? (
           <Button
             type="button"
@@ -159,18 +180,27 @@ export function IslandPanel({
         </Button>
       </div>
 
-      <IslandChat
-        userId={userId}
-        resetToken={chatEpoch}
-        disabled={!apiHealthy || Boolean(sessionWarning)}
-        // Só depois de assentar: armar durante o morph abriria o overlay de
-        // recorte por cima de uma janela ainda em movimento.
-        autoStartCapture={ready && captureRequested}
-        {...(onCaptureRequestConsumed
-          ? { onAutoCaptureConsumed: onCaptureRequestConsumed }
-          : {})}
-        {...(onOpenProcedureChecklist ? { onOpenProcedureChecklist } : {})}
-      />
+      {reauth ? (
+        <IslandReauth
+          email={reauth.email}
+          onSubmit={reauth.onSubmit}
+          onSignOut={reauth.onSignOut}
+        />
+      ) : (
+        <IslandChat
+          userId={userId}
+          resetToken={chatEpoch}
+          continueRequest={continueRequest}
+          disabled={!apiHealthy || Boolean(sessionWarning)}
+          // Só depois de assentar: armar durante o morph abriria o overlay de
+          // recorte por cima de uma janela ainda em movimento.
+          autoStartCapture={ready && captureRequested}
+          {...(onCaptureRequestConsumed
+            ? { onAutoCaptureConsumed: onCaptureRequestConsumed }
+            : {})}
+          {...(onOpenProcedureChecklist ? { onOpenProcedureChecklist } : {})}
+        />
+      )}
     </div>
   );
 }

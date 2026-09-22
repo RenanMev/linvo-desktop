@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   applyWindowSurface: vi.fn(),
   applyOnboardingWindowSurface: vi.fn(),
   emitAuthSync: vi.fn(),
+  emitPanelSession: vi.fn(),
   listenAuthSync: vi.fn(),
   listenTokenSync: vi.fn(),
   notifyDesktopEvent: vi.fn(),
@@ -116,6 +117,10 @@ vi.mock("@/lib/panel-window", () => ({
   closePanel: mocks.closePanel,
 }));
 
+vi.mock("@/lib/panel-session-sync", () => ({
+  emitPanelSession: mocks.emitPanelSession,
+}));
+
 vi.mock("@/lib/auth/enter-logged-in-desktop", () => ({
   enterLoggedInDesktop: mocks.enterLoggedInDesktop,
 }));
@@ -200,25 +205,7 @@ describe("useAuth onboarding integration", () => {
     expect(mocks.clearOnboardingCompleted).not.toHaveBeenCalled();
   });
 
-  it("clears saved progress when onboarding completes", async () => {
-    mocks.getTokens.mockResolvedValue({
-      accessToken: "access",
-      refreshToken: "refresh",
-    });
-    mocks.isOnboardingForced.mockReturnValue(true);
-    const { result } = renderHook(() => useAuth());
-
-    await waitFor(() => expect(result.current.phase).toBe("onboarding"));
-    await act(async () => result.current.completeOnboarding("/chat"));
-
-    expect(mocks.markOnboardingCompleted).toHaveBeenCalledWith("user-1");
-    expect(mocks.clearOnboardingProgress).toHaveBeenCalledWith("user-1");
-    expect(mocks.setStoredWorkspaceId).toHaveBeenCalledWith("ws-1");
-    expect(mocks.saveActiveConversationId).toHaveBeenCalledWith(null, null);
-    expect(mocks.enterLoggedInDesktop).toHaveBeenCalledWith(user, "/chat");
-  });
-
-  it("hands the first-question conversation to the island when onboarding completes", async () => {
+  it("clears saved progress and opens the panel when onboarding ends with a route", async () => {
     mocks.getTokens.mockResolvedValue({
       accessToken: "access",
       refreshToken: "refresh",
@@ -228,17 +215,71 @@ describe("useAuth onboarding integration", () => {
 
     await waitFor(() => expect(result.current.phase).toBe("onboarding"));
     await act(async () =>
-      result.current.completeOnboarding("/chat/conversation-1"),
+      result.current.completeOnboarding(
+        "/settings/workspace/ws-1/rule-review",
+      ),
     );
 
-    expect(mocks.saveActiveConversationId).toHaveBeenCalledWith(
-      "conversation-1",
-      { userId: "user-1", workspaceId: "ws-1" },
-    );
+    expect(mocks.markOnboardingCompleted).toHaveBeenCalledWith("user-1");
+    expect(mocks.clearOnboardingProgress).toHaveBeenCalledWith("user-1");
+    expect(mocks.setStoredWorkspaceId).toHaveBeenCalledWith("ws-1");
+    expect(result.current.phase).toBe("floating");
     expect(mocks.enterLoggedInDesktop).toHaveBeenCalledWith(
       user,
-      "/chat/conversation-1",
+      "/settings/workspace/ws-1/rule-review",
     );
+  });
+
+  it("o workspace escolhido no onboarding vence o activeWorkspaceId velho do usuário", async () => {
+    mocks.getTokens.mockResolvedValue({
+      accessToken: "access",
+      refreshToken: "refresh",
+    });
+    mocks.isOnboardingForced.mockReturnValue(true);
+    const { result } = renderHook(() => useAuth());
+
+    await waitFor(() => expect(result.current.phase).toBe("onboarding"));
+    // O onboarding criou/escolheu ws-2; o state.user ainda diz ws-1.
+    mocks.getStoredWorkspaceId.mockReturnValue("ws-2");
+    mocks.setStoredWorkspaceId.mockClear();
+
+    await act(async () => result.current.completeOnboarding(null));
+
+    expect(mocks.setStoredWorkspaceId).not.toHaveBeenCalled();
+  });
+
+  it("sem workspace gravado, completeOnboarding persiste o do usuário", async () => {
+    mocks.getTokens.mockResolvedValue({
+      accessToken: "access",
+      refreshToken: "refresh",
+    });
+    mocks.isOnboardingForced.mockReturnValue(true);
+    const { result } = renderHook(() => useAuth());
+
+    await waitFor(() => expect(result.current.phase).toBe("onboarding"));
+    mocks.getStoredWorkspaceId.mockReturnValue(null);
+    mocks.setStoredWorkspaceId.mockClear();
+
+    await act(async () => result.current.completeOnboarding(null));
+
+    expect(mocks.setStoredWorkspaceId).toHaveBeenCalledWith("ws-1");
+  });
+
+  it("KAN-35 sem rota, o onboarding termina na ilha: sem painel e sem mexer na conversa salva", async () => {
+    mocks.getTokens.mockResolvedValue({
+      accessToken: "access",
+      refreshToken: "refresh",
+    });
+    mocks.isOnboardingForced.mockReturnValue(true);
+    const { result } = renderHook(() => useAuth());
+
+    await waitFor(() => expect(result.current.phase).toBe("onboarding"));
+    await act(async () => result.current.completeOnboarding(null));
+
+    expect(result.current.phase).toBe("floating");
+    expect(mocks.markOnboardingCompleted).toHaveBeenCalledWith("user-1");
+    expect(mocks.enterLoggedInDesktop).not.toHaveBeenCalled();
+    expect(mocks.saveActiveConversationId).not.toHaveBeenCalled();
   });
 });
 
@@ -310,5 +351,153 @@ describe("useAuth boot invalidado no meio", () => {
     await waitFor(() => expect(result.current.phase).toBe("unauthenticated"));
     await waitFor(() => expect(mocks.closePanel).toHaveBeenCalled());
     expect(mocks.enterLoggedInDesktop).not.toHaveBeenCalled();
+  });
+});
+
+describe("useAuth KAN-36 sessão cai no turno (floating)", () => {
+  let authSyncHandler:
+    | ((payload: { type: "logout" | "unauthorized" }) => void)
+    | null = null;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authSyncHandler = null;
+    mocks.getTokens.mockResolvedValue({
+      accessToken: "access",
+      refreshToken: "refresh",
+    });
+    mocks.getStoredWorkspaceId.mockReturnValue("ws-1");
+    mocks.me.mockResolvedValue(user);
+    mocks.hasCompletedOnboarding.mockReturnValue(true);
+    mocks.isOnboardingForced.mockReturnValue(false);
+    mocks.listenOnboardingReview.mockResolvedValue(vi.fn());
+    mocks.listenTokenSync.mockResolvedValue(vi.fn());
+    mocks.listenAuthSync.mockImplementation(
+      async (handler: (payload: { type: "logout" | "unauthorized" }) => void) => {
+        authSyncHandler = handler;
+        return vi.fn();
+      },
+    );
+    mocks.applyWindowSurface.mockResolvedValue(undefined);
+    mocks.applyOnboardingWindowSurface.mockResolvedValue(undefined);
+    mocks.enterLoggedInDesktop.mockResolvedValue(undefined);
+    mocks.closePanel.mockResolvedValue(undefined);
+    mocks.notifyDesktopEvent.mockResolvedValue(undefined);
+    mocks.setTokens.mockResolvedValue(undefined);
+  });
+
+  it("401 em floating não vira tela de login: fica floating com aviso na pílula", async () => {
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.phase).toBe("floating"));
+    await waitFor(() => expect(authSyncHandler).not.toBeNull());
+    mocks.applyWindowSurface.mockClear();
+    mocks.clearStoredWorkspaceId.mockClear();
+
+    await act(async () => {
+      authSyncHandler?.({ type: "unauthorized" });
+    });
+
+    await waitFor(() => expect(result.current.sessionWarning).not.toBeNull());
+    expect(result.current.phase).toBe("floating");
+    expect(result.current.user?.id).toBe("user-1");
+    expect(mocks.closePanel).toHaveBeenCalled();
+    expect(mocks.notifyDesktopEvent).toHaveBeenCalled();
+    // A janela não é redimensionada para a superfície de login.
+    expect(mocks.applyWindowSurface).not.toHaveBeenCalledWith("auth");
+    // O workspace fica: o atendente vai retomar dali.
+    expect(mocks.clearStoredWorkspaceId).not.toHaveBeenCalled();
+  });
+
+  it("o handler de 401 do http também fica em floating", async () => {
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.phase).toBe("floating"));
+    const calls = mocks.setUnauthorizedHandler.mock.calls;
+    const handler = calls[calls.length - 1]?.[0] as (() => void) | undefined;
+    expect(handler).toBeDefined();
+
+    await act(async () => {
+      handler?.();
+    });
+
+    await waitFor(() => expect(result.current.sessionWarning).not.toBeNull());
+    expect(result.current.phase).toBe("floating");
+  });
+
+  it("reauthenticate entra com o mesmo e-mail, limpa o aviso e não abre o painel", async () => {
+    mocks.login.mockResolvedValue({
+      user: { ...user, name: "Renan M." },
+      accessToken: "access-2",
+      refreshToken: "refresh-2",
+    });
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.phase).toBe("floating"));
+    await waitFor(() => expect(authSyncHandler).not.toBeNull());
+    await act(async () => {
+      authSyncHandler?.({ type: "unauthorized" });
+    });
+    await waitFor(() => expect(result.current.sessionWarning).not.toBeNull());
+    mocks.enterLoggedInDesktop.mockClear();
+
+    await act(async () => {
+      await result.current.reauthenticate("segredo");
+    });
+
+    expect(mocks.login).toHaveBeenCalledWith({
+      email: "renan@example.com",
+      password: "segredo",
+    });
+    expect(mocks.setTokens).toHaveBeenCalledWith({
+      accessToken: "access-2",
+      refreshToken: "refresh-2",
+    });
+    expect(result.current.phase).toBe("floating");
+    expect(result.current.sessionWarning).toBeNull();
+    expect(result.current.user?.name).toBe("Renan M.");
+    expect(mocks.enterLoggedInDesktop).not.toHaveBeenCalled();
+    // O painel zerou o usuário no broadcast; precisa da sessão de novo.
+    expect(mocks.emitPanelSession).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "user-1", name: "Renan M." }),
+      { accessToken: "access-2", refreshToken: "refresh-2" },
+    );
+  });
+
+  it("401 do http + eco do broadcast avisam o SO uma vez só", async () => {
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.phase).toBe("floating"));
+    await waitFor(() => expect(authSyncHandler).not.toBeNull());
+    const calls = mocks.setUnauthorizedHandler.mock.calls;
+    const httpHandler = calls[calls.length - 1]?.[0] as (() => void) | undefined;
+    mocks.notifyDesktopEvent.mockClear();
+
+    await act(async () => {
+      httpHandler?.();
+    });
+    await waitFor(() => expect(result.current.sessionWarning).not.toBeNull());
+    await act(async () => {
+      authSyncHandler?.({ type: "unauthorized" });
+    });
+
+    expect(mocks.notifyDesktopEvent).toHaveBeenCalledTimes(1);
+    expect(result.current.phase).toBe("floating");
+  });
+
+  it("reauthenticate com senha errada mantém o aviso e propaga o erro", async () => {
+    mocks.login.mockRejectedValue(new AuthApiError("Credenciais inválidas", 401));
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.phase).toBe("floating"));
+    await waitFor(() => expect(authSyncHandler).not.toBeNull());
+    await act(async () => {
+      authSyncHandler?.({ type: "unauthorized" });
+    });
+    await waitFor(() => expect(result.current.sessionWarning).not.toBeNull());
+
+    await expect(
+      act(async () => {
+        await result.current.reauthenticate("errada");
+      }),
+    ).rejects.toThrow("Credenciais inválidas");
+
+    expect(result.current.phase).toBe("floating");
+    expect(result.current.sessionWarning).not.toBeNull();
   });
 });

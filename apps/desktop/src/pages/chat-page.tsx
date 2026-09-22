@@ -1,187 +1,78 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Procedure } from "@linvo/shared";
-import { useNavigate, useParams } from "react-router";
+import { useEffect, useState } from "react";
+import { useOutletContext, useParams } from "react-router";
+import { MessageSquareText } from "lucide-react";
 
 import { ChatPanel } from "@/components/chat/chat-panel";
+import type { PanelOutletContext } from "@/components/panel/panel-shell";
+import { Button } from "@/components/ui/button";
 import { useConversations } from "@/context/chat-conversations-context";
 import { useWorkspace } from "@/context/workspace-context";
 import { useChat } from "@/hooks/use-chat";
-import { buildConversationTitle } from "@/lib/chat/conversation-title";
-import {
-  buildDeskState,
-  type ChecklistByConversation,
-  type ChecklistProgress,
-} from "@/lib/chat/desk-state";
-import {
-  closeChecklist,
-  listenChecklistClosed,
-  listenChecklistProgress,
-  openChecklist,
-} from "@/lib/checklist-window";
+import { continueInAssist } from "@/lib/assist-handoff";
+import { getStoredWorkspaceId } from "@/lib/workspace/workspace-store";
 
+/*
+ * /chat e /chat/:id são o Histórico.
+ *
+ * O painel não conversa mais: a ilha é o chat live (stream, parar, anexos,
+ * checklist). Aqui só se lê o que já aconteceu e, se quiser retomar, manda
+ * para a ilha — não existe composer nem janela de checklist saindo daqui.
+ */
 export function ChatPage() {
-  const navigate = useNavigate();
   const { conversationId: routeConversationId } = useParams();
+  const { session } = useOutletContext<PanelOutletContext>();
   const { activeWorkspace } = useWorkspace();
   const {
     conversations,
     isLoading: isLoadingConversations,
     error: conversationsError,
     syncActiveId,
-    updateConversationTitle,
-    refreshList,
   } = useConversations();
-  const [checklistByConversation, setChecklistByConversation] =
-    useState<ChecklistByConversation>({});
-  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
 
   const conversationId = routeConversationId ?? null;
+  const workspaceId = activeWorkspace?.id ?? null;
+  /*
+   * O contexto pode ainda não ter carregado quando o usuário clica; o id
+   * gravado cobre esse intervalo. Sem escopo nenhum, `saveActiveConversationId`
+   * REMOVERIA a chave em vez de gravar — daí o botão ficar desabilitado.
+   */
+  const handoffWorkspaceId = workspaceId ?? getStoredWorkspaceId();
+  const canContinue = Boolean(conversationId && handoffWorkspaceId);
   const activeConversation = conversations.find(
     (conversation) => conversation.id === conversationId,
   );
-  const conversationTitle = activeConversation?.title ?? "Nova conversa";
+  const conversationTitle = activeConversation?.title ?? "Histórico";
 
   useEffect(() => {
     syncActiveId(conversationId);
   }, [conversationId, syncActiveId]);
 
-  const deskState = useMemo(
-    () =>
-      buildDeskState({
-        conversationId,
-        checklistByConversation,
-      }),
-    [conversationId, checklistByConversation],
-  );
-
-  const applyProgress = useCallback(
-    (targetConversationId: string, progress: ChecklistProgress) => {
-      setChecklistByConversation((prev) => {
-        const entry = prev[targetConversationId];
-        if (!entry) {
-          return prev;
-        }
-        const same =
-          entry.progress.currentStepIndex === progress.currentStepIndex &&
-          entry.progress.completedStepIndexes.length ===
-            progress.completedStepIndexes.length &&
-          entry.progress.completedStepIndexes.every(
-            (value, index) => value === progress.completedStepIndexes[index],
-          );
-        if (same) {
-          return prev;
-        }
-        return {
-          ...prev,
-          [targetConversationId]: {
-            ...entry,
-            progress,
-          },
-        };
-      });
-    },
-    [],
-  );
-
-  useEffect(() => {
-    let unlistenProgress: (() => void) | undefined;
-    let unlistenClosed: (() => void) | undefined;
-
-    void listenChecklistProgress((event) => {
-      applyProgress(event.conversationId, event.progress);
-    }).then((dispose) => {
-      unlistenProgress = dispose;
-    });
-
-    void listenChecklistClosed((event) => {
-      setChecklistByConversation((prev) => {
-        if (!prev[event.conversationId]) {
-          return prev;
-        }
-        const next = { ...prev };
-        delete next[event.conversationId];
-        return next;
-      });
-    }).then((dispose) => {
-      unlistenClosed = dispose;
-    });
-
-    return () => {
-      unlistenProgress?.();
-      unlistenClosed?.();
-    };
-  }, [applyProgress]);
-
-  function setChecklistForActive(procedure: Procedure | null) {
-    if (!conversationId) {
-      return;
-    }
-
-    if (!procedure) {
-      setChecklistByConversation((prev) => {
-        if (!prev[conversationId]) {
-          return prev;
-        }
-        const next = { ...prev };
-        delete next[conversationId];
-        return next;
-      });
-      void closeChecklist();
-      return;
-    }
-
-    const progress: ChecklistProgress = checklistByConversation[conversationId]
-      ?.progress ?? {
-      completedStepIndexes: [],
-      currentStepIndex: 0,
-    };
-
-    setChecklistByConversation((prev) => ({
-      ...prev,
-      [conversationId]: {
-        procedure,
-        progress: prev[conversationId]?.progress ?? progress,
-      },
-    }));
-
-    void openChecklist({
+  const { messages, isResponding, isLoadingHistory, replyTarget, error } =
+    useChat({
       conversationId,
-      procedure,
-      progress,
+      workspaceId,
     });
-  }
-
-  const {
-    messages,
-    isResponding,
-    isLoadingHistory,
-    replyTarget,
-    error,
-    pendingToolRequest,
-    sendMessage,
-    regenerateMessage,
-    startReply,
-    cancelReply,
-    resolveToolRequest,
-  } = useChat({
-    conversationId,
-    workspaceId: activeWorkspace?.id ?? null,
-    deskState,
-    model: selectedModel,
-    onConversationCreated: (id) => {
-      void refreshList();
-      navigate(`/chat/${id}`, { replace: true });
-    },
-    onConversationTitleChange: (id, content) => {
-      updateConversationTitle(id, buildConversationTitle(content));
-    },
-    onOpenProcedureChecklist: setChecklistForActive,
-  });
 
   const isLoadingHistoryForConversation =
     Boolean(conversationId) && isLoadingHistory && messages.length === 0;
 
-  const bannerError = error ?? conversationsError;
+  const bannerError = handoffError ?? error ?? conversationsError;
+
+  async function handleContinue() {
+    if (!conversationId || !handoffWorkspaceId) {
+      return;
+    }
+    setHandoffError(null);
+    try {
+      await continueInAssist(conversationId, {
+        userId: session.user.id,
+        workspaceId: handoffWorkspaceId,
+      });
+    } catch {
+      setHandoffError("Não foi possível abrir a conversa no Assist.");
+    }
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -195,7 +86,9 @@ export function ChatPage() {
           Carregando conversas...
         </div>
       ) : null}
-      {isLoadingHistoryForConversation ? (
+      {!conversationId ? (
+        <ChatHistoryEmpty />
+      ) : isLoadingHistoryForConversation ? (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
           Carregando conversa...
         </div>
@@ -207,21 +100,47 @@ export function ChatPage() {
             messages={messages}
             isResponding={isResponding}
             replyTarget={replyTarget}
-            pendingToolRequest={pendingToolRequest}
-            onSend={(content, options) => void sendMessage(content, options)}
-            onReply={startReply}
-            onRegenerate={(message) => void regenerateMessage(message.id)}
-            onCancelReply={cancelReply}
-            onApproveTool={() => void resolveToolRequest(true)}
-            onDenyTool={() => void resolveToolRequest(false)}
-            disabled={isResponding || Boolean(pendingToolRequest)}
-            workspaceId={activeWorkspace?.id ?? null}
-            selectedModel={selectedModel}
-            onModelChange={setSelectedModel}
-            onOpenProcedureChecklist={setChecklistForActive}
+            workspaceId={workspaceId}
+            readOnly
+            footer={
+              <div className="flex items-center justify-between gap-3 border-t border-hairline px-4 py-3">
+                <p className="font-technical text-xs text-muted-foreground">
+                  Só leitura. Para continuar, use o Assist.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={!canContinue}
+                  onClick={() => void handleContinue()}
+                >
+                  Continuar no Assist
+                </Button>
+              </div>
+            }
           />
         </div>
       )}
+    </div>
+  );
+}
+
+function ChatHistoryEmpty() {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center px-6 py-8">
+      <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+        <span className="grid size-10 place-items-center rounded-lg bg-popover text-text-tertiary">
+          <MessageSquareText className="size-5" />
+        </span>
+        <div className="space-y-1">
+          <h2 className="font-display text-[22px] font-bold text-foreground">
+            Histórico
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Suas conversas ficam aqui. Para perguntar, abra o Assist com{" "}
+            <kbd className="font-technical text-xs">Ctrl+Shift+L</kbd>.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

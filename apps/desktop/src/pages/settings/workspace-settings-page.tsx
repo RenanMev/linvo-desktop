@@ -137,7 +137,7 @@ export function WorkspaceSettingsPage() {
     setBusy(true);
     setLocalError(null);
     try {
-      await selectWorkspace(workspaceId, { navigateToChat: false });
+      await selectWorkspace(workspaceId, { navigateHome: false });
     } catch {
       setLocalError("Não foi possível ativar o workspace");
     } finally {

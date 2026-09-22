@@ -37,7 +37,7 @@ export function WorkspaceCreatePage() {
     setError(null);
     try {
       const created = await createWorkspace(newName.trim(), imageFile, {
-        navigateToChat: false,
+        navigateHome: false,
       });
       navigate(`/settings/workspace/${created.id}`);
     } catch {

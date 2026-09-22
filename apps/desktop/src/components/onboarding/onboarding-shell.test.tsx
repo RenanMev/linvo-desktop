@@ -174,7 +174,7 @@ describe("OnboardingShell", () => {
       ["context", "Adicione contexto inicial"],
       ["knowledge", "Traga conhecimento para o workspace"],
       ["appearance", "Deixe o Linvo com a sua cara"],
-      ["bar_tour", "Experimente a barra flutuante"],
+      ["bar_tour", "O atendimento acontece na barra"],
       ["first_question", "Faça sua primeira pergunta real"],
     ] as const;
 

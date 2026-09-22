@@ -64,8 +64,8 @@ export function BarTourStep({
   return (
     <section className="flex h-full min-h-0 flex-col">
       <StepHeader
-        title="Experimente a barra flutuante"
-        description="Faça os dois gestos agora. Você também pode seguir quando quiser."
+        title="O atendimento acontece na barra"
+        description="É nela que você pergunta, captura a tela e copia a resposta, sem sair do seu sistema. Faça os dois gestos agora — ou siga quando quiser."
       />
 
       <div className="min-h-0 flex-1 space-y-2.5">

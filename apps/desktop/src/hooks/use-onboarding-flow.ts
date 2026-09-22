@@ -22,6 +22,7 @@ import {
 import {
   resolveOnboardingRoute,
   type OnboardingKnowledgeIntent,
+  type OnboardingRoute,
 } from "@/lib/onboarding/onboarding-routing";
 import * as workspaceApi from "@/lib/workspace/workspace-api";
 import { setStoredWorkspaceId } from "@/lib/workspace/workspace-store";
@@ -42,7 +43,7 @@ export type OnboardingRulePreset = {
 
 type UseOnboardingFlowOptions = {
   userId: string;
-  onComplete: (route?: string) => Promise<void>;
+  onComplete: (route: OnboardingRoute) => Promise<void>;
 };
 
 export function useOnboardingFlow({
@@ -444,16 +445,21 @@ export function useOnboardingFlow({
     [ruleDiscovery],
   );
 
-  const finish = useCallback(async (routeOverride?: string) => {
+  /*
+   * `routeOverride` omitido resolve o destino pelo que o onboarding coletou;
+   * `null` explícito é "fica na ilha" e vale mesmo com regras para revisar.
+   */
+  const finish = useCallback(async (routeOverride?: OnboardingRoute) => {
     setBusy(true);
     setError(null);
     try {
-      const latestSession = !routeOverride && ruleDiscovery.session?.id
+      const resolveRoute = routeOverride === undefined;
+      const latestSession = resolveRoute && ruleDiscovery.session?.id
         ? await ruleDiscovery.refresh()
         : null;
-      const route =
-        routeOverride ??
-        resolveOnboardingRoute({
+      const route = !resolveRoute
+        ? routeOverride
+        : resolveOnboardingRoute({
           workspaceId: activeWorkspaceId ?? createdWorkspaceId,
           knowledgeIntent: knowledgeIntentValue,
           candidateCount:

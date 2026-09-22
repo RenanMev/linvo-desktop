@@ -55,7 +55,7 @@ export function PanelShell({ session, sessionReady, sessionError }: PanelShellPr
           ) : null}
           <DesktopUpdateBanner update={update} />
           <div className="flex min-h-0 flex-1">
-            <PanelSidebar session={session} collapsed={collapsed} />
+            <PanelSidebar collapsed={collapsed} />
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
               <Outlet context={{ session } satisfies PanelOutletContext} />
             </div>

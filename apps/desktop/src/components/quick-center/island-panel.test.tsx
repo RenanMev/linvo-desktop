@@ -139,6 +139,63 @@ describe("IslandPanel", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("T2.9 Abrir na janela grande sem conversa cai na home do painel, não em /chat", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderPanel({ onClose });
+
+    await user.click(
+      screen.getByRole("button", { name: "Abrir na janela grande" }),
+    );
+
+    expect(openPanel).toHaveBeenCalledWith("/settings/workspace");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("KAN-36 com reauth, o corpo é o formulário compacto, não o chat", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn(() => Promise.resolve());
+    const onSignOut = vi.fn(() => Promise.resolve());
+    renderPanel({
+      sessionWarning: "Sua sessão expirou",
+      reauth: { email: "renan@test.com", onSubmit, onSignOut },
+    });
+
+    expect(screen.getByRole("form", { name: "Entrar de novo" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Email")).toHaveValue("renan@test.com");
+    expect(screen.getByLabelText("Email")).toHaveAttribute("readonly");
+    expect(
+      screen.queryByRole("button", { name: "Nova pergunta" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Abrir na janela grande" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText("Pergunte qualquer coisa..."),
+    ).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Senha"), "segredo");
+    await user.click(screen.getByRole("button", { name: "Entrar" }));
+    expect(onSubmit).toHaveBeenCalledWith("segredo");
+
+    await user.click(screen.getByRole("button", { name: "Usar outra conta" }));
+    expect(onSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("KAN-36 erro do reauth aparece no formulário", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn(() => Promise.reject(new Error("Credenciais inválidas")));
+    renderPanel({
+      sessionWarning: "Sua sessão expirou",
+      reauth: { email: "renan@test.com", onSubmit, onSignOut: vi.fn(() => Promise.resolve()) },
+    });
+
+    await user.type(screen.getByLabelText("Senha"), "errada");
+    await user.click(screen.getByRole("button", { name: "Entrar" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Credenciais inválidas");
+  });
+
   it("T5.1 botão Nova pergunta existe e não há lista de conversas", () => {
     renderPanel();
 

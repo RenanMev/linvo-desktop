@@ -60,6 +60,11 @@ import {
   rememberChecklistConversation,
   type ChecklistWindowPayload,
 } from "@/lib/checklist-window";
+import {
+  listenAssistContinue,
+  type AssistContinueRequest,
+} from "@/lib/assist-handoff";
+import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
 import { openPanel } from "@/lib/panel-window";
 import { registerTrayHandlers } from "@/lib/system-tray";
 import { createFloatingTrayHandlers } from "@/lib/tray-handlers";
@@ -67,6 +72,9 @@ import { createFloatingTrayHandlers } from "@/lib/tray-handlers";
 type BarAppProps = {
   sessionWarning: string | null;
   user: UserPublic;
+  /** Reauth compacto na ilha quando a sessão cai em floating (KAN-36). */
+  onReauthenticate?: (password: string) => Promise<void>;
+  onSignOut?: () => Promise<void>;
 };
 
 type WindowMode = FloatingIslandMode;
@@ -131,7 +139,12 @@ async function withDeadline<T>(task: Promise<T>, timeoutMs: number): Promise<T> 
   }
 }
 
-export function BarApp({ sessionWarning, user }: BarAppProps) {
+export function BarApp({
+  sessionWarning,
+  user,
+  onReauthenticate,
+  onSignOut,
+}: BarAppProps) {
   const { ready: floatingReady, growth } = useFloatingBootstrap();
   const apiHealthy = useApiHealth(true);
   const [checklist, setChecklist] = useState<ChecklistWindowPayload | null>(
@@ -155,6 +168,9 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   const chatButtonRef = useRef<HTMLButtonElement>(null);
   const edgeHandleRef = useRef<HTMLButtonElement>(null);
   const openQuickMenuRef = useRef<() => Promise<void>>(async () => {});
+  const expandFromEdgeRef = useRef<() => Promise<void>>(async () => {});
+  const [continueRequest, setContinueRequest] =
+    useState<AssistContinueRequest | null>(null);
   const islandMorphRef = useRef<FloatingIslandMorph | null>(null);
   const islandMorphIdRef = useRef(0);
   const islandMorphCompletionRef = useRef<{
@@ -661,7 +677,7 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
         await openQuickMenuRef.current();
       },
       openWorkspace: async () => {
-        await openPanel("/chat");
+        await openPanel(PANEL_HOME_ROUTE);
       },
     });
     registerTrayHandlers({
@@ -688,6 +704,40 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
   captureAndAskRef.current = () => {
     void handleCaptureContext();
   };
+
+  /*
+   * "Continuar no Assist" vindo do Histórico do painel. Mesmo caminho do
+   * atalho de captura: mostra a barra e expande se estiver compacta. Em modo
+   * checklist não interrompe — o atendente está no meio de um procedimento.
+   */
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    void listenAssistContinue(({ conversationId }) => {
+      if (windowModeRef.current === "checklist") {
+        return;
+      }
+      setContinueRequest((previous) => ({
+        conversationId,
+        token: (previous?.token ?? 0) + 1,
+      }));
+      void (async () => {
+        await showMainBar();
+        if (windowModeRef.current === "edge-collapsed") {
+          await expandFromEdgeRef.current();
+        }
+        if (windowModeRef.current === "compact") {
+          await openQuickMenuRef.current();
+        }
+      })();
+    }).then((dispose) => {
+      unlisten = dispose;
+    });
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
 
   async function closeQuickMenu(
     options: CloseQuickMenuOptions = {},
@@ -840,6 +890,8 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
       finishTransition();
     }
   }
+
+  expandFromEdgeRef.current = handleExpandFromEdge;
 
   async function handleHideQuickMenu() {
     await closeQuickMenu({ restoreFocus: false });
@@ -1114,6 +1166,12 @@ export function BarApp({ sessionWarning, user }: BarAppProps) {
           onCaptureRequestConsumed={() => setCaptureAndSendPending(false)}
           onClose={() => void closeQuickMenu()}
           onHide={() => void handleHideQuickMenu()}
+          continueRequest={continueRequest}
+          reauth={
+            sessionWarning && onReauthenticate && onSignOut
+              ? { email: user.email, onSubmit: onReauthenticate, onSignOut }
+              : null
+          }
         />
       );
     }

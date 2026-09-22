@@ -23,7 +23,7 @@ function renderPage() {
     <MemoryRouter initialEntries={["/settings/workspace/join"]}>
       <Routes>
         <Route path="/settings/workspace/join" element={<JoinWorkspacePage />} />
-        <Route path="/chat" element={<div>Chat</div>} />
+        <Route path="/settings/workspace" element={<div>Workspace home</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -145,6 +145,6 @@ describe("JoinWorkspacePage", () => {
     await waitFor(() => {
       expect(applyRedeemedWorkspace).toHaveBeenCalledWith(workspace);
     });
-    expect(await screen.findByText("Chat")).toBeInTheDocument();
+    expect(await screen.findByText("Workspace home")).toBeInTheDocument();
   });
 });

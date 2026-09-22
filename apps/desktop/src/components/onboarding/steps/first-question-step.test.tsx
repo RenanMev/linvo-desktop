@@ -107,7 +107,7 @@ describe("FirstQuestionStep", () => {
     expect(finish).toHaveBeenCalledWith(undefined);
   });
 
-  it("finishes directly in the created conversation", async () => {
+  it("KAN-35 com pergunta feita, conclui na ilha (rota null), não no painel", async () => {
     const pointer = userEvent.setup();
     mocks.prompt.status = "done";
     mocks.prompt.responseText = "Resposta final";
@@ -124,8 +124,8 @@ describe("FirstQuestionStep", () => {
     );
 
     await pointer.click(
-      screen.getByRole("button", { name: "Concluir e abrir no chat" }),
+      screen.getByRole("button", { name: "Concluir e continuar no Assist" }),
     );
-    expect(finish).toHaveBeenCalledWith("/chat/conversation-1");
+    expect(finish).toHaveBeenCalledWith(null);
   });
 });

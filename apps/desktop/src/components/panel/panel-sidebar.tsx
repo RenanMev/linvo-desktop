@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft,
   Archive,
   Bell,
   Building2,
@@ -8,11 +7,12 @@ import {
   ChevronDown,
   CreditCard,
   FileText,
+  History,
   Keyboard,
   Layers,
   LibraryBig,
   LifeBuoy,
-  MessageSquarePlus,
+  ListChecks,
   Palette,
   Search,
   Settings,
@@ -21,9 +21,8 @@ import {
   User,
   type LucideIcon,
 } from "lucide-react";
-import { NavLink, useLocation, useNavigate } from "react-router";
+import { Link, NavLink, useLocation, useNavigate } from "react-router";
 
-import { LinvoLogo } from "@/components/linvo-logo";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,8 +32,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { useConversations } from "@/context/chat-conversations-context";
 import { useWorkspace } from "@/context/workspace-context";
-import type { PanelSession } from "@/hooks/use-panel-session";
 import { useWorkspaceFileBlob } from "@/hooks/use-workspace-file-blob";
+import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
 import { resolveWorkspaceImageUrl } from "@/lib/workspace/workspace-api";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +50,30 @@ type NavGroup = {
   label?: string;
   items: NavItem[];
 };
+
+/*
+ * Seção que a rota atual pertence. Decide o que a área contextual mostra
+ * (lista de conversas, grupos de configuração ou nada) e qual item do topo
+ * fica aceso — "Procedimentos" mora sob /settings/workspace/:id/, então a
+ * checagem por prefixo de /settings sozinha acenderia os dois.
+ */
+type SidebarSection = "history" | "documents" | "procedures" | "settings";
+
+function resolveSection(
+  pathname: string,
+  proceduresRoute: string | null,
+): SidebarSection {
+  if (pathname.startsWith("/chat")) {
+    return "history";
+  }
+  if (pathname === "/documents") {
+    return "documents";
+  }
+  if (proceduresRoute && pathname.startsWith(proceduresRoute)) {
+    return "procedures";
+  }
+  return "settings";
+}
 
 const settingsGroups: NavGroup[] = [
   {
@@ -91,10 +114,10 @@ const settingsGroups: NavGroup[] = [
   },
 ];
 
-const chatExploreItems: NavItem[] = [
-  { label: "Documentos", icon: FileText, to: "/documents" },
+const footerItems: NavItem[] = [
   { label: "Arquivadas", icon: Archive, soon: true },
   { label: "Biblioteca", icon: LibraryBig, soon: true },
+  { label: "Central de ajuda", icon: LifeBuoy, soon: true },
 ];
 
 const sidebarSectionX = "px-3";
@@ -123,17 +146,6 @@ function formatConversationDate(isoDate: string): string {
 
 function matchesQuery(value: string, query: string): boolean {
   return value.toLowerCase().includes(query.trim().toLowerCase());
-}
-
-function accountInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) {
-    return "?";
-  }
-  if (parts.length === 1) {
-    return parts[0]!.slice(0, 2).toUpperCase();
-  }
-  return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
 }
 
 function SoonHint() {
@@ -216,6 +228,52 @@ function SidebarNavRow({
   );
 }
 
+/*
+ * Linha do topo: o "ativo" vem da seção resolvida, não do NavLink — ver
+ * `resolveSection`. Sem rota (Procedimentos sem workspace ativo) fica
+ * desabilitada sem o selo "Em breve": não é futuro, é pré-condição.
+ */
+function TopNavRow({
+  label,
+  icon: Icon,
+  to,
+  active,
+  onNavigate,
+}: {
+  label: string;
+  icon: LucideIcon;
+  to: string | null;
+  active: boolean;
+  onNavigate?: () => void;
+}) {
+  if (!to) {
+    return (
+      <div
+        className={cn(
+          navRowBase,
+          "cursor-default text-sidebar-foreground/35 [&_svg]:opacity-40",
+        )}
+        aria-disabled="true"
+      >
+        <Icon className={navIcon} />
+        {label}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      to={to}
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      className={cn(navRowBase, active ? navRowActive : navRowIdle)}
+    >
+      <Icon className={navIcon} />
+      {label}
+    </Link>
+  );
+}
+
 function CollapsedIconButton({
   title,
   icon: Icon,
@@ -287,21 +345,22 @@ function CollapsedSettingsNavItem({
   );
 }
 
+function CollapsedDivider() {
+  return <div className="my-1 h-px w-6 shrink-0 bg-hairline" />;
+}
+
 type PanelSidebarProps = {
-  session: PanelSession;
   collapsed: boolean;
 };
 
-export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
+export function PanelSidebar({ collapsed }: PanelSidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const inSettings = location.pathname.startsWith("/settings");
   const [searchQuery, setSearchQuery] = useState("");
   const {
     conversations,
     activeId,
     isLoading,
-    createConversation,
     deleteConversation,
     selectConversation,
   } = useConversations();
@@ -313,9 +372,41 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
     activeWorkspaceImageUrl,
   );
 
+  const proceduresRoute = activeWorkspace
+    ? `/settings/workspace/${activeWorkspace.id}/procedures`
+    : null;
+  const section = resolveSection(location.pathname, proceduresRoute);
+
+  const topNav = [
+    {
+      label: "Histórico",
+      icon: History,
+      to: "/chat",
+      active: section === "history",
+    },
+    {
+      label: "Documentos",
+      icon: FileText,
+      to: "/documents",
+      active: section === "documents",
+    },
+    {
+      label: "Procedimentos",
+      icon: ListChecks,
+      to: proceduresRoute,
+      active: section === "procedures",
+    },
+    {
+      label: "Configurações",
+      icon: Settings,
+      to: "/settings/general",
+      active: section === "settings",
+    },
+  ];
+
   useEffect(() => {
     setSearchQuery("");
-  }, [inSettings]);
+  }, [section]);
 
   const filteredConversations = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -346,6 +437,10 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
     [],
   );
 
+  const workspaceInitial = (activeWorkspace?.name ?? "L")
+    .slice(0, 1)
+    .toUpperCase();
+
   return (
     <aside
       className={cn(
@@ -363,94 +458,75 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
         )}
         aria-hidden={!collapsed}
       >
-        {inSettings ? (
-          <>
-            <button
-              type="button"
-              title={session.user.name}
-              tabIndex={collapsedTabIndex}
-              onClick={() => navigate("/settings/account")}
-              className="grid size-8 shrink-0 place-items-center rounded-lg border border-hairline bg-surface-raise-2 font-technical text-[10px] font-semibold text-sidebar-accent-foreground transition-opacity hover:opacity-90"
-            >
-              {accountInitials(session.user.name)}
-            </button>
-            <div className="my-1 h-px w-6 shrink-0 bg-hairline" />
-            <CollapsedIconButton
-              title="Voltar ao chat"
-              icon={ArrowLeft}
-              tabIndex={collapsedTabIndex}
-              onClick={() => navigate("/chat")}
+        <button
+          type="button"
+          title={activeWorkspace?.name ?? "Workspace"}
+          tabIndex={collapsedTabIndex}
+          onClick={() => navigate(PANEL_HOME_ROUTE)}
+          className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-sidebar-primary text-[10px] font-semibold text-sidebar-primary-foreground transition-opacity hover:opacity-90"
+        >
+          {activeWorkspaceImageSrc ? (
+            <img
+              src={activeWorkspaceImageSrc}
+              alt=""
+              className="size-full object-cover"
             />
-            <div className="mt-0.5 flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {allSettingsItems.map((item) => (
-                <CollapsedSettingsNavItem
-                  key={item.label}
-                  item={item}
-                  tabIndex={collapsedTabIndex}
-                />
-              ))}
-            </div>
-            <div className="my-1 h-px w-6 shrink-0 bg-hairline" />
-            <CollapsedIconButton
-              title="Central de ajuda"
-              icon={LifeBuoy}
-              tabIndex={collapsedTabIndex}
-              disabled
-            />
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              title="Linvo"
-              tabIndex={collapsedTabIndex}
-              onClick={() => navigate("/chat")}
-              className="grid size-8 shrink-0 place-items-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground transition-opacity hover:opacity-90"
-            >
-              <LinvoLogo className="size-4 invert dark:invert-0" />
-            </button>
-            <div className="my-1 h-px w-6 shrink-0 bg-hairline" />
-            <CollapsedIconButton
-              title="Nova conversa"
-              icon={MessageSquarePlus}
-              tabIndex={collapsedTabIndex}
-              onClick={() => void createConversation()}
-            />
-            <div className="mt-0.5 flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {!isLoading &&
-                filteredConversations.slice(0, 8).map((conversation) => (
-                  <button
-                    key={conversation.id}
-                    type="button"
-                    title={conversation.title}
-                    tabIndex={collapsedTabIndex}
-                    onClick={() => selectConversation(conversation.id)}
-                    className={cn(
-                      "flex size-8 shrink-0 items-center justify-center rounded-lg font-technical text-[10px] font-semibold transition-colors duration-150",
-                      activeId === conversation.id
-                        ? "nav-pill-active"
-                        : "text-muted-foreground hover:bg-surface-hover hover:text-sidebar-foreground",
-                    )}
-                  >
-                    {conversation.title.trim().slice(0, 1).toUpperCase() ||
-                      "C"}
-                  </button>
-                ))}
-            </div>
-            <div className="my-1 h-px w-6 shrink-0 bg-hairline" />
-            {chatExploreItems.map((item) => (
-              <CollapsedIconButton
-                key={item.label}
-                title={item.label}
-                icon={item.icon}
+          ) : (
+            workspaceInitial
+          )}
+        </button>
+        <CollapsedDivider />
+        {topNav.map((item) => (
+          <CollapsedIconButton
+            key={item.label}
+            title={item.label}
+            icon={item.icon}
+            tabIndex={collapsedTabIndex}
+            active={item.active}
+            disabled={item.to == null}
+            onClick={item.to ? () => navigate(item.to!) : undefined}
+          />
+        ))}
+        <CollapsedDivider />
+        <div className="mt-0.5 flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {section === "history" &&
+            !isLoading &&
+            filteredConversations.slice(0, 8).map((conversation) => (
+              <button
+                key={conversation.id}
+                type="button"
+                title={conversation.title}
                 tabIndex={collapsedTabIndex}
-                active={item.to != null && location.pathname === item.to}
-                disabled={item.to == null}
-                onClick={item.to ? () => navigate(item.to!) : undefined}
+                onClick={() => selectConversation(conversation.id)}
+                className={cn(
+                  "flex size-8 shrink-0 items-center justify-center rounded-lg font-technical text-[10px] font-semibold transition-colors duration-150",
+                  activeId === conversation.id
+                    ? "nav-pill-active"
+                    : "text-muted-foreground hover:bg-surface-hover hover:text-sidebar-foreground",
+                )}
+              >
+                {conversation.title.trim().slice(0, 1).toUpperCase() || "C"}
+              </button>
+            ))}
+          {section === "settings" &&
+            allSettingsItems.map((item) => (
+              <CollapsedSettingsNavItem
+                key={item.label}
+                item={item}
+                tabIndex={collapsedTabIndex}
               />
             ))}
-          </>
-        )}
+        </div>
+        <CollapsedDivider />
+        {footerItems.map((item) => (
+          <CollapsedIconButton
+            key={item.label}
+            title={item.label}
+            icon={item.icon}
+            tabIndex={collapsedTabIndex}
+            disabled
+          />
+        ))}
       </div>
 
       <div
@@ -462,172 +538,85 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
         )}
         aria-hidden={collapsed}
       >
-        {inSettings ? (
-          <>
-            <div
-              className={cn(
-                "flex items-center justify-between gap-2",
-                sidebarSectionX,
-                sidebarHeaderY,
-              )}
+        <div
+          className={cn(
+            "flex items-center justify-between gap-2",
+            sidebarSectionX,
+            sidebarHeaderY,
+          )}
+        >
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  className={cn(
+                    "flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1 text-left transition-colors hover:bg-surface-hover",
+                    sidebarRowX,
+                  )}
+                  title="Trocar workspace"
+                />
+              }
             >
-              <div
-                className={cn(
-                  "flex min-w-0 items-center gap-2.5 py-1",
-                  sidebarRowX,
+              <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-lg bg-sidebar-primary text-[10px] font-semibold text-sidebar-primary-foreground">
+                {activeWorkspaceImageSrc ? (
+                  <img
+                    src={activeWorkspaceImageSrc}
+                    alt=""
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  workspaceInitial
                 )}
-              >
-                <span className="grid size-7 shrink-0 place-items-center rounded-lg border border-hairline bg-surface-raise-2 font-technical text-[10px] font-semibold text-sidebar-accent-foreground">
-                  {accountInitials(session.user.name)}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-[13px] font-medium leading-tight">
-                    {session.user.name}
-                  </p>
-                  <p className="truncate text-[11px] text-muted-foreground">
-                    {session.user.email}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className={cn(sidebarSectionX, sidebarBlockBottom)}>
-              <button
-                type="button"
-                onClick={() => navigate("/chat")}
-                className={cn(navRowBase, navRowIdle)}
-              >
-                <ArrowLeft className={navIcon} />
-                Voltar ao chat
-              </button>
-            </div>
-
-            <div className={cn(sidebarSectionX, sidebarBlockBottom)}>
-              <SidebarSearch
-                value={searchQuery}
-                onChange={setSearchQuery}
-                placeholder="Buscar configurações"
-              />
-            </div>
-
-            <nav
-              className={cn(
-                "scrollbar-elegant scrollbar-sidebar min-h-0 flex-1 space-y-4 overflow-y-auto pb-3",
-                sidebarSectionX,
-              )}
-              aria-label="Seções de configurações"
-            >
-              {filteredSettingsGroups.length === 0 ? (
-                <p className="px-2.5 py-1.5 text-[11px] text-muted-foreground">
-                  Nenhuma configuração encontrada
-                </p>
-              ) : (
-                filteredSettingsGroups.map((group) => (
-                  <div key={group.id} className="space-y-0.5">
-                    {group.label ? (
-                      <SectionLabel>{group.label}</SectionLabel>
-                    ) : null}
-                    {group.items.map((item) => (
-                      <SidebarNavRow
-                        key={item.label}
-                        item={item}
-                        onNavigate={resetSearch}
-                      />
-                    ))}
-                  </div>
-                ))
-              )}
-            </nav>
-
-            <div className={cn("py-3", sidebarSectionX)}>
-              <div
-                className={cn(
-                  navRowBase,
-                  "cursor-default justify-between text-sidebar-foreground/40",
-                )}
-              >
-                <span className="flex items-center gap-2.5">
-                  <LifeBuoy className={navIcon} />
-                  Central de ajuda
-                </span>
-                <SoonHint />
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            <div
-              className={cn(
-                "flex items-center justify-between gap-2",
-                sidebarSectionX,
-                sidebarHeaderY,
-              )}
-            >
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <button
-                      type="button"
-                      className={cn(
-                        "flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1 text-left transition-colors hover:bg-surface-hover",
-                        sidebarRowX,
-                      )}
-                      title="Trocar workspace"
-                    />
-                  }
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-tight">
+                {activeWorkspace?.name ?? "Linvo"}
+              </span>
+              <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-48">
+              {workspaces.map((workspace) => (
+                <DropdownMenuItem
+                  key={workspace.id}
+                  className="text-xs"
+                  onClick={() => {
+                    if (workspace.id !== activeWorkspace?.id) {
+                      void selectWorkspace(workspace.id);
+                    }
+                  }}
                 >
-                  <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-lg bg-sidebar-primary text-[10px] font-semibold text-sidebar-primary-foreground">
-                    {activeWorkspaceImageSrc ? (
-                      <img
-                        src={activeWorkspaceImageSrc}
-                        alt=""
-                        className="size-full object-cover"
-                      />
-                    ) : (
-                      (activeWorkspace?.name ?? "L").slice(0, 1).toUpperCase()
-                    )}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-tight">
-                    {activeWorkspace?.name ?? "Linvo"}
-                  </span>
-                  <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="min-w-48">
-                  {workspaces.map((workspace) => (
-                    <DropdownMenuItem
-                      key={workspace.id}
-                      className="text-xs"
-                      onClick={() => {
-                        if (workspace.id !== activeWorkspace?.id) {
-                          void selectWorkspace(workspace.id);
-                        }
-                      }}
-                    >
-                      {workspace.name}
-                      {workspace.id === activeWorkspace?.id ? " · ativo" : ""}
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuItem
-                    className="text-xs"
-                    onClick={() => navigate("/settings/workspace")}
-                  >
-                    Gerenciar workspaces
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
-            <div className={cn(sidebarSectionX, sidebarBlockBottom)}>
-              <button
-                type="button"
-                className={cn(navRowBase, navRowIdle)}
-                onClick={() => void createConversation()}
+                  {workspace.name}
+                  {workspace.id === activeWorkspace?.id ? " · ativo" : ""}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuItem
+                className="text-xs"
+                onClick={() => navigate("/settings/workspace")}
               >
-                <MessageSquarePlus className={navIcon} />
-                Nova conversa
-              </button>
-            </div>
+                Gerenciar workspaces
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
+        <nav
+          className={cn("space-y-0.5", sidebarSectionX, sidebarBlockBottom)}
+          aria-label="Seções do painel"
+        >
+          {topNav.map((item) => (
+            <TopNavRow
+              key={item.label}
+              label={item.label}
+              icon={item.icon}
+              to={item.to}
+              active={item.active}
+              onNavigate={resetSearch}
+            />
+          ))}
+        </nav>
+
+        {section === "history" ? (
+          <>
             <div className={cn(sidebarSectionX, sidebarBlockBottom)}>
               <SidebarSearch
                 value={searchQuery}
@@ -636,7 +625,9 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
               />
             </div>
 
-            <div className={cn("flex min-h-0 flex-1 flex-col", sidebarSectionX)}>
+            <div
+              className={cn("flex min-h-0 flex-1 flex-col", sidebarSectionX)}
+            >
               <SectionLabel>Conversas</SectionLabel>
               <nav
                 className="scrollbar-elegant scrollbar-sidebar -mr-3 min-h-0 flex-1 space-y-0.5 overflow-y-auto"
@@ -698,14 +689,55 @@ export function PanelSidebar({ session, collapsed }: PanelSidebarProps) {
                 )}
               </nav>
             </div>
-
-            <div className={cn("space-y-0.5 py-3", sidebarSectionX)}>
-              {chatExploreItems.map((item) => (
-                <SidebarNavRow key={item.label} item={item} />
-              ))}
-            </div>
           </>
+        ) : section === "settings" ? (
+          <>
+            <div className={cn(sidebarSectionX, sidebarBlockBottom)}>
+              <SidebarSearch
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Buscar configurações"
+              />
+            </div>
+
+            <nav
+              className={cn(
+                "scrollbar-elegant scrollbar-sidebar min-h-0 flex-1 space-y-4 overflow-y-auto pb-3",
+                sidebarSectionX,
+              )}
+              aria-label="Seções de configurações"
+            >
+              {filteredSettingsGroups.length === 0 ? (
+                <p className="px-2.5 py-1.5 text-[11px] text-muted-foreground">
+                  Nenhuma configuração encontrada
+                </p>
+              ) : (
+                filteredSettingsGroups.map((group) => (
+                  <div key={group.id} className="space-y-0.5">
+                    {group.label ? (
+                      <SectionLabel>{group.label}</SectionLabel>
+                    ) : null}
+                    {group.items.map((item) => (
+                      <SidebarNavRow
+                        key={item.label}
+                        item={item}
+                        onNavigate={resetSearch}
+                      />
+                    ))}
+                  </div>
+                ))
+              )}
+            </nav>
+          </>
+        ) : (
+          <div className="min-h-0 flex-1" />
         )}
+
+        <div className={cn("space-y-0.5 py-3", sidebarSectionX)}>
+          {footerItems.map((item) => (
+            <SidebarNavRow key={item.label} item={item} />
+          ))}
+        </div>
       </div>
     </aside>
   );

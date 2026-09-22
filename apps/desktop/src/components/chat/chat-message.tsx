@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 
 type ChatMessageBubbleProps = {
   message: ChatMessage;
-  onReply: (message: ChatMessage) => void;
+  onReply?: (message: ChatMessage) => void;
   canRegenerate?: boolean;
   onRegenerate?: (message: ChatMessage) => void;
   regenerateDisabled?: boolean;
@@ -50,7 +50,7 @@ export function ChatMessageBubble({
 }: ChatMessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const isUser = message.role === "user";
-  const canReply = canReplyToMessage(message);
+  const canReply = onReply != null && canReplyToMessage(message);
   const isStreaming =
     message.status === "streaming" || message.status === "awaiting_tool";
   const showApproval =
@@ -184,7 +184,7 @@ export function ChatMessageBubble({
             </div>
           )}
 
-          {canReply && (
+          {canReply && onReply && (
             <ChatMessageOptions
               onReply={() => onReply(message)}
               align={isUser ? "end" : "start"}
