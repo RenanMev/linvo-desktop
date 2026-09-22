@@ -61,7 +61,9 @@ import {
   type ChecklistWindowPayload,
 } from "@/lib/checklist-window";
 import {
+  acceptAssistContinue,
   listenAssistContinue,
+  rejectAssistContinue,
   type AssistContinueRequest,
 } from "@/lib/assist-handoff";
 import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
@@ -713,8 +715,10 @@ export function BarApp({
   useEffect(() => {
     let unlisten: (() => void) | undefined;
 
-    void listenAssistContinue(({ conversationId }) => {
+    void listenAssistContinue((payload) => {
+      const { conversationId } = payload;
       if (windowModeRef.current === "checklist") {
+        void rejectAssistContinue(payload, "checklist");
         return;
       }
       setContinueRequest((previous) => ({
@@ -722,6 +726,7 @@ export function BarApp({
         token: (previous?.token ?? 0) + 1,
       }));
       void (async () => {
+        await acceptAssistContinue(payload);
         await showMainBar();
         if (windowModeRef.current === "edge-collapsed") {
           await expandFromEdgeRef.current();
@@ -884,6 +889,7 @@ export function BarApp({
       applyGrowth(await expandFromEdge());
       if (modeIntentRef.current === "compact") {
         restoreChatFocusRef.current = true;
+        windowModeRef.current = "compact";
         setWindowMode("compact");
       }
     } finally {
@@ -1157,7 +1163,7 @@ export function BarApp({
     if (mode === "quick-menu") {
       return (
         <IslandPanel
-          userId={user.id}
+          user={user}
           apiHealthy={apiHealthy}
           sessionWarning={sessionWarning}
           ready={panelReady}

@@ -65,6 +65,28 @@ describe("authorizedFetch", () => {
     expect(onUnauthorized).toHaveBeenCalled();
   });
 
+  it("KAN-69 unauthorized does not clear stored appearance", async () => {
+    const appearance = await import("@/lib/appearance/appearance-store");
+    const spy = vi.spyOn(appearance, "clearStoredAppearance");
+    vi.spyOn(tokenStore, "getTokens").mockResolvedValue({
+      accessToken: "old-access",
+      refreshToken: "old-refresh",
+    });
+    vi.spyOn(authApi, "refresh").mockRejectedValue(
+      new AuthApiError("sessão inválida", 401),
+    );
+    vi.spyOn(tokenStore, "clearTokens").mockResolvedValue();
+
+    fetchMock.mockResolvedValueOnce({ status: 401 });
+
+    await expect(
+      authorizedFetch("http://localhost/api/test"),
+    ).rejects.toBeInstanceOf(AuthApiError);
+
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
   it("does not clear tokens on network errors", async () => {
     vi.spyOn(tokenStore, "getTokens").mockResolvedValue({
       accessToken: "access",

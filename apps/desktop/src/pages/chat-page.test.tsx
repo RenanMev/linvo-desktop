@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Outlet, Route, Routes } from "react-router";
@@ -8,14 +8,31 @@ import { ChatPage } from "@/pages/chat-page";
 const mocks = vi.hoisted(() => ({
   activeWorkspace: { id: "ws-1", name: "Loja" } as { id: string; name: string } | null,
   continueInAssist: vi.fn(() => Promise.resolve()),
+  continueResultHandler: null as
+    | ((result: {
+        conversationId: string;
+        accepted: boolean;
+        reason?: "checklist";
+      }) => void)
+    | null,
   openChecklist: vi.fn(() => Promise.resolve()),
   syncActiveId: vi.fn(),
   useChat: vi.fn(),
 }));
 
-vi.mock("@/lib/assist-handoff", () => ({
-  continueInAssist: mocks.continueInAssist,
-}));
+vi.mock("@/lib/assist-handoff", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/assist-handoff")>(
+    "@/lib/assist-handoff",
+  );
+  return {
+    assistContinueRejectMessage: actual.assistContinueRejectMessage,
+    continueInAssist: mocks.continueInAssist,
+    listenAssistContinueResult: vi.fn((handler) => {
+      mocks.continueResultHandler = handler;
+      return Promise.resolve(() => {});
+    }),
+  };
+});
 
 vi.mock("@/lib/checklist-window", () => ({
   openChecklist: mocks.openChecklist,
@@ -122,6 +139,7 @@ describe("ChatPage (Histórico)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    mocks.continueResultHandler = null;
     mocks.activeWorkspace = { id: "ws-1", name: "Loja" };
     mocks.useChat.mockReturnValue(
       chatState([
@@ -129,6 +147,48 @@ describe("ChatPage (Histórico)", () => {
         { id: "m2", role: "assistant", content: "olá", status: "done" },
       ]),
     );
+  });
+
+  it("KAN-71 ilha recusa (checklist) → painel explica; aceita → some", async () => {
+    renderAt("/chat/conv-1");
+    await waitFor(() => expect(mocks.continueResultHandler).not.toBeNull());
+
+    act(() => {
+      mocks.continueResultHandler?.({
+        conversationId: "conv-1",
+        accepted: false,
+        reason: "checklist",
+      });
+    });
+    expect(
+      screen.getByText(/Termine o procedimento aberto no Assist/),
+    ).toBeInTheDocument();
+
+    act(() => {
+      mocks.continueResultHandler?.({
+        conversationId: "conv-1",
+        accepted: true,
+      });
+    });
+    expect(
+      screen.queryByText(/Termine o procedimento aberto no Assist/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("KAN-71 resultado de outra conversa é ignorado", async () => {
+    renderAt("/chat/conv-1");
+    await waitFor(() => expect(mocks.continueResultHandler).not.toBeNull());
+
+    act(() => {
+      mocks.continueResultHandler?.({
+        conversationId: "conv-other",
+        accepted: false,
+        reason: "checklist",
+      });
+    });
+    expect(
+      screen.queryByText(/Termine o procedimento aberto no Assist/),
+    ).not.toBeInTheDocument();
   });
 
   it("/chat/:id é só leitura: mensagens sem composer, responder ou regenerar", () => {

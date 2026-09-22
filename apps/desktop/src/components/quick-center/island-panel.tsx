@@ -1,4 +1,4 @@
-import type { Procedure } from "@linvo/shared";
+import type { Procedure, UserPublic } from "@linvo/shared";
 import { GripVertical, Maximize2, Minus, X } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -9,25 +9,23 @@ import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useQuickCenterWorkspace } from "@/hooks/use-quick-center-workspace";
 import { loadActiveConversationId, saveActiveConversationId } from "@/lib/chat/active-conversation-store";
 import type { AssistContinueRequest } from "@/lib/assist-handoff";
+import { getTokens } from "@/lib/auth/token-store";
 import { PANEL_HOME_ROUTE } from "@/lib/panel-routes";
 import { openPanel } from "@/lib/panel-window";
 import { getStoredWorkspaceId } from "@/lib/workspace/workspace-store";
 
 type IslandPanelProps = {
-  userId: string;
+  user: UserPublic;
   apiHealthy: boolean;
   sessionWarning: string | null;
-  /** Verdadeiro só depois que o morph assenta. */
   ready?: boolean;
   closing?: boolean;
-  /** Pedido de recorte vindo do botão "Recorte" da pílula. */
   captureRequested?: boolean;
   onCaptureRequestConsumed?: () => void;
   onClose: () => void;
   onHide?: () => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
   continueRequest?: AssistContinueRequest | null;
-  /** Presente = sessão caiu; o corpo vira o reauth em vez do chat. */
   reauth?: {
     email: string;
     onSubmit: (password: string) => Promise<void>;
@@ -35,20 +33,8 @@ type IslandPanelProps = {
   } | null;
 };
 
-/**
- * A ilha expandida: cabeçalho próprio mais o chat completo.
- *
- * Substitui o `QuickCenterPanel` no modo quick-menu. A diferença não é de
- * layout, é de substância: o corpo agora é o mesmo `ChatPanel` da janela
- * grande, em vez da UI de pergunta-única que existia antes.
- *
- * Quase tudo que o painel antigo carregava saiu junto: textarea própria, chip
- * de contexto, menu de captura, botão de parar e área de resposta. Não foram
- * removidos — `ChatInput` já traz cada um deles, e melhor (o de captura
- * inclusive com picker e recorte magnético).
- */
 export function IslandPanel({
-  userId,
+  user,
   apiHealthy,
   sessionWarning,
   ready = false,
@@ -63,37 +49,21 @@ export function IslandPanel({
 }: IslandPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [chatEpoch, setChatEpoch] = useState(0);
-  // Com a sessão caída, listar workspaces só renderia outro 401 — e o
-  // `handleUnauthorized` que ele dispara apaga tokens que o reauth acabou
-  // de gravar.
   const workspace = useQuickCenterWorkspace(!reauth);
 
-  /*
-   * Ativo já na montagem, não só quando a ilha assenta: o painel monta quando
-   * o morph de abertura começa, e sem foco nesse intervalo o `Esc` cai no
-   * `body` — fechar logo depois de abrir não funcionaria.
-   */
   useFocusTrap(containerRef, { active: !closing });
 
-  /*
-   * Abre a janela grande já na conversa atual, lendo o id da mesma chave que
-   * `IslandChat` persiste — evita descer o id por props só para isto, e
-   * garante que as duas superfícies continuem a MESMA conversa em vez de a
-   * janela abrir uma nova.
-   *
-   * Fecha a ilha em seguida: ela é sempre-no-topo e cobriria a janela que
-   * acabou de abrir.
-   */
   function handleOpenInPanel() {
     const workspaceId = getStoredWorkspaceId();
     const conversationId = loadActiveConversationId(
-      workspaceId ? { userId, workspaceId } : null,
+      workspaceId ? { userId: user.id, workspaceId } : null,
     );
-    void openPanel(
-      conversationId ? `/chat/${conversationId}` : PANEL_HOME_ROUTE,
-    ).catch(
-      () => undefined,
-    );
+    const route = conversationId
+      ? `/chat/${conversationId}`
+      : PANEL_HOME_ROUTE;
+    void getTokens()
+      .then((tokens) => openPanel(route, user, tokens))
+      .catch(() => undefined);
     onClose();
   }
 
@@ -188,12 +158,10 @@ export function IslandPanel({
         />
       ) : (
         <IslandChat
-          userId={userId}
+          userId={user.id}
           resetToken={chatEpoch}
           continueRequest={continueRequest}
           disabled={!apiHealthy || Boolean(sessionWarning)}
-          // Só depois de assentar: armar durante o morph abriria o overlay de
-          // recorte por cima de uma janela ainda em movimento.
           autoStartCapture={ready && captureRequested}
           {...(onCaptureRequestConsumed
             ? { onAutoCaptureConsumed: onCaptureRequestConsumed }

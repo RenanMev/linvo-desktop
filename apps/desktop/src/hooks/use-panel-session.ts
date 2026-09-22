@@ -128,7 +128,6 @@ export function usePanelSession() {
             return false;
           }
           await clearTokens();
-          clearStoredAppearance();
           await emitAuthSync("unauthorized");
           pendingTokensRef.current = null;
           dispatch({ type: "BOOT_SESSION_INVALID" });
@@ -207,11 +206,11 @@ export function usePanelSession() {
     let unlisten: (() => void) | undefined;
 
     void listenAuthSync((payload) => {
-      clearStoredAppearance();
       pendingTokensRef.current = null;
       setSessionReady(false);
       setSessionError(null);
       if (payload.type === "logout") {
+        clearStoredAppearance();
         dispatch({ type: "LOGOUT" });
         void closePanel();
         return;

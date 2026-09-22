@@ -8,7 +8,11 @@ import { Button } from "@/components/ui/button";
 import { useConversations } from "@/context/chat-conversations-context";
 import { useWorkspace } from "@/context/workspace-context";
 import { useChat } from "@/hooks/use-chat";
-import { continueInAssist } from "@/lib/assist-handoff";
+import {
+  assistContinueRejectMessage,
+  continueInAssist,
+  listenAssistContinueResult,
+} from "@/lib/assist-handoff";
 import { getStoredWorkspaceId } from "@/lib/workspace/workspace-store";
 
 /*
@@ -39,6 +43,31 @@ export function ChatPage() {
    */
   const handoffWorkspaceId = workspaceId ?? getStoredWorkspaceId();
   const canContinue = Boolean(conversationId && handoffWorkspaceId);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
+    void listenAssistContinueResult((result) => {
+      if (result.conversationId !== conversationId) {
+        return;
+      }
+      setHandoffError(
+        result.accepted ? null : assistContinueRejectMessage(result.reason),
+      );
+    }).then((dispose) => {
+      if (cancelled) {
+        dispose();
+        return;
+      }
+      unlisten = dispose;
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [conversationId]);
   const activeConversation = conversations.find(
     (conversation) => conversation.id === conversationId,
   );

@@ -19,6 +19,10 @@ vi.mock("@/lib/panel-window", () => ({
   openPanel: vi.fn(() => Promise.resolve()),
 }));
 
+vi.mock("@/lib/auth/token-store", () => ({
+  getTokens: vi.fn(() => Promise.resolve(null)),
+}));
+
 vi.mock("@/lib/chat/chat-api", () => ({
   createConversation: vi.fn(),
   listMessages: vi.fn(() => Promise.resolve([])),
@@ -85,7 +89,12 @@ function renderPanel(
 ) {
   return render(
     <IslandPanel
-      userId="user-1"
+      user={{
+        id: "user-1",
+        name: "Renan",
+        email: "renan@test.com",
+        createdAt: "2026-01-01",
+      }}
       apiHealthy
       sessionWarning={null}
       ready
@@ -135,7 +144,13 @@ describe("IslandPanel", () => {
       screen.getByRole("button", { name: "Abrir na janela grande" }),
     );
 
-    expect(openPanel).toHaveBeenCalledWith("/chat/conv-42");
+    await waitFor(() => {
+      expect(openPanel).toHaveBeenCalledWith(
+        "/chat/conv-42",
+        expect.objectContaining({ id: "user-1" }),
+        null,
+      );
+    });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -148,7 +163,13 @@ describe("IslandPanel", () => {
       screen.getByRole("button", { name: "Abrir na janela grande" }),
     );
 
-    expect(openPanel).toHaveBeenCalledWith("/settings/workspace");
+    await waitFor(() => {
+      expect(openPanel).toHaveBeenCalledWith(
+        "/settings/workspace",
+        expect.objectContaining({ id: "user-1" }),
+        null,
+      );
+    });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

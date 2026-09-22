@@ -9,6 +9,15 @@ import {
   saveActiveConversationId,
 } from "@/lib/chat/active-conversation-store";
 import { buildConversationTitle } from "@/lib/chat/conversation-title";
+import {
+  buildDeskState,
+  type ChecklistByConversation,
+} from "@/lib/chat/desk-state";
+import {
+  listenChecklistClosed,
+  listenChecklistProgress,
+  openChecklist,
+} from "@/lib/checklist-window";
 import { getStoredWorkspaceId } from "@/lib/workspace/workspace-store";
 
 type IslandChatProps = {
@@ -18,29 +27,9 @@ type IslandChatProps = {
   onAutoCaptureConsumed?: () => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
   resetToken?: number;
-  /** Pedido do painel (Histórico) para retomar uma conversa aqui. */
   continueRequest?: AssistContinueRequest | null;
 };
 
-/**
- * O chat completo dentro da ilha flutuante.
- *
- * Monta o MESMO `useChat` e o MESMO `ChatPanel` da janela grande — não uma
- * versão reduzida. O que existia antes aqui (`useQuickPrompt`) não era um chat
- * menor: era outra coisa, sem histórico nenhum (guardava uma única string de
- * resposta, apagada a cada envio). Recursos como responder, regenerar,
- * aprovação de ferramenta, seletor de modelo, raciocínio e artefatos não
- * estavam "faltando" — não existiam.
- *
- * `useChat` é autônomo: não usa contexto nem router, só recebe
- * `conversationId` e `workspaceId`. É por isso que ele funciona aqui, numa
- * janela que não tem `WorkspaceProvider` nem `ChatConversationsProvider` (os
- * dois vivem no `PanelShell`).
- *
- * A conversa ativa é persistida. As mensagens já eram — `useChat` grava por
- * conversa em `chat-local-store` — então lembrar o id basta para a ilha
- * reabrir exatamente onde parou, em vez de começar do zero a cada abertura.
- */
 export function IslandChat({
   userId,
   disabled = false,
@@ -59,6 +48,8 @@ export function IslandChat({
     loadActiveConversationId(conversationScope),
   );
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [checklistByConversation, setChecklistByConversation] =
+    useState<ChecklistByConversation>({});
   const previousResetTokenRef = useRef(resetToken);
   const previousContinueTokenRef = useRef(continueRequest?.token ?? 0);
   const previousScopeRef = useRef(conversationScope);
@@ -67,6 +58,42 @@ export function IslandChat({
     setConversationId(id);
     saveActiveConversationId(id, conversationScope);
   }, [conversationScope]);
+
+  const handleOpenProcedureChecklist = useCallback(
+    (procedure: Procedure) => {
+      if (!conversationId) {
+        onOpenProcedureChecklist?.(procedure);
+        return;
+      }
+      const progress = checklistByConversation[conversationId]?.progress ?? {
+        completedStepIndexes: [],
+        currentStepIndex: 0,
+      };
+      setChecklistByConversation((current) => ({
+        ...current,
+        [conversationId]: {
+          procedure,
+          progress: current[conversationId]?.progress ?? progress,
+        },
+      }));
+      void openChecklist({
+        conversationId,
+        procedure,
+        progress,
+      });
+      onOpenProcedureChecklist?.(procedure);
+    },
+    [checklistByConversation, conversationId, onOpenProcedureChecklist],
+  );
+
+  const deskState = useMemo(
+    () =>
+      buildDeskState({
+        conversationId,
+        checklistByConversation,
+      }),
+    [checklistByConversation, conversationId],
+  );
 
   const {
     messages,
@@ -85,8 +112,9 @@ export function IslandChat({
     conversationId,
     workspaceId,
     model: selectedModel,
+    deskState,
     onConversationCreated: handleConversationCreated,
-    ...(onOpenProcedureChecklist ? { onOpenProcedureChecklist } : {}),
+    onOpenProcedureChecklist: handleOpenProcedureChecklist,
   });
 
   useEffect(() => {
@@ -97,13 +125,9 @@ export function IslandChat({
     stopResponding();
     saveActiveConversationId(null);
     setConversationId(null);
+    setChecklistByConversation({});
   }, [resetToken, stopResponding]);
 
-  /*
-   * Token e não só o id: retomar a mesma conversa duas vezes seguidas ainda
-   * é um pedido novo. Se a ilha acabou de montar, o estado inicial já leu o id
-   * que o painel gravou — o ref nasce igual ao token e nada roda.
-   */
   useEffect(() => {
     if (
       !continueRequest ||
@@ -130,17 +154,51 @@ export function IslandChat({
     }
     previousScopeRef.current = conversationScope;
     stopResponding();
+    setChecklistByConversation({});
     setConversationId(loadActiveConversationId(conversationScope));
   }, [conversationScope, stopResponding]);
 
-  /*
-   * Título derivado da primeira mensagem do usuário.
-   *
-   * A janela grande pega o título de `useConversations`, que a ilha não tem.
-   * Derivar aqui evita arrastar o provider inteiro para cá só por um texto —
-   * e é a mesma regra (`buildConversationTitle`) que o painel aplica ao
-   * renomear a conversa, então os dois mostram o mesmo nome.
-   */
+  useEffect(() => {
+    let unlistenProgress: (() => void) | undefined;
+    let unlistenClosed: (() => void) | undefined;
+
+    void listenChecklistProgress((event) => {
+      setChecklistByConversation((current) => {
+        const entry = current[event.conversationId];
+        if (!entry) {
+          return current;
+        }
+        return {
+          ...current,
+          [event.conversationId]: {
+            ...entry,
+            progress: event.progress,
+          },
+        };
+      });
+    }).then((dispose) => {
+      unlistenProgress = dispose;
+    });
+
+    void listenChecklistClosed((event) => {
+      setChecklistByConversation((current) => {
+        if (!current[event.conversationId]) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[event.conversationId];
+        return next;
+      });
+    }).then((dispose) => {
+      unlistenClosed = dispose;
+    });
+
+    return () => {
+      unlistenProgress?.();
+      unlistenClosed?.();
+    };
+  }, []);
+
   const conversationTitle = useMemo(() => {
     const firstUserMessage = messages.find(
       (message) => message.role === "user" && message.content.trim(),
@@ -188,9 +246,7 @@ export function IslandChat({
           {...(onAutoCaptureConsumed ? { onAutoCaptureConsumed } : {})}
           showToolbar={false}
           variant="assist"
-          {...(onOpenProcedureChecklist
-            ? { onOpenProcedureChecklist }
-            : {})}
+          onOpenProcedureChecklist={handleOpenProcedureChecklist}
         />
       )}
     </div>

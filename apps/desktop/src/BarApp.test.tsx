@@ -81,15 +81,35 @@ vi.mock("@/lib/floating-edge-mode", () => ({
 let payloadHandler:
   | ((payload: ChecklistWindowPayload) => void | Promise<void>)
   | null = null;
+type AssistContinueTestPayload = {
+  conversationId: string;
+  userId: string;
+  workspaceId: string;
+};
+const {
+  acceptAssistContinue,
+  rejectAssistContinue,
+  continuePayload,
+} = vi.hoisted(() => ({
+  acceptAssistContinue: vi.fn(() => Promise.resolve()),
+  rejectAssistContinue: vi.fn(() => Promise.resolve()),
+  continuePayload: {
+    conversationId: "conv-1",
+    userId: "user-1",
+    workspaceId: "ws-1",
+  },
+}));
 let assistContinueHandler:
-  | ((payload: { conversationId: string }) => void)
+  | ((payload: AssistContinueTestPayload) => void)
   | null = null;
 
 vi.mock("@/lib/assist-handoff", () => ({
-  listenAssistContinue: vi.fn((handler) => {
+  listenAssistContinue: vi.fn((handler: (payload: AssistContinueTestPayload) => void) => {
     assistContinueHandler = handler;
     return Promise.resolve(() => {});
   }),
+  acceptAssistContinue,
+  rejectAssistContinue,
 }));
 
 vi.mock("@/lib/checklist-window", () => ({
@@ -101,6 +121,9 @@ vi.mock("@/lib/checklist-window", () => ({
     return Promise.resolve(() => {});
   }),
   listenChecklistDismiss: vi.fn(() => Promise.resolve(() => {})),
+  listenChecklistProgress: vi.fn(() => Promise.resolve(() => {})),
+  listenChecklistClosed: vi.fn(() => Promise.resolve(() => {})),
+  openChecklist: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock("@/lib/panel-window", () => ({
@@ -199,6 +222,8 @@ describe("BarApp window modes", () => {
   beforeEach(() => {
     payloadHandler = null;
     assistContinueHandler = null;
+    acceptAssistContinue.mockClear();
+    rejectAssistContinue.mockClear();
     localStorage.clear();
     vi.clearAllMocks();
     windowMock.outerSize.mockResolvedValue({ width: 140, height: 40 });
@@ -268,7 +293,7 @@ describe("BarApp window modes", () => {
 
     await waitFor(() => expect(assistContinueHandler).not.toBeNull());
     await act(async () => {
-      assistContinueHandler!({ conversationId: "conv-1" });
+      assistContinueHandler!(continuePayload);
     });
 
     await waitFor(() =>
@@ -276,6 +301,33 @@ describe("BarApp window modes", () => {
     );
     expect(await screen.findByRole("dialog", { name: "Assist" })).toBeInTheDocument();
     expect(showMainBar).toHaveBeenCalled();
+    expect(acceptAssistContinue).toHaveBeenCalledWith(continuePayload);
+    expect(rejectAssistContinue).not.toHaveBeenCalled();
+  });
+
+  it("KAN-71 em modo checklist recusa o continue sem gravar nem expandir", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Chat" }));
+    await waitFor(() => screen.getByRole("dialog", { name: "Assist" }));
+    await act(async () => {
+      await payloadHandler!(makeChecklistPayload());
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Checklist do procedure")).toBeInTheDocument(),
+    );
+    await waitFor(() => expect(assistContinueHandler).not.toBeNull());
+    vi.mocked(expandFloatingToQuickMenu).mockClear();
+
+    await act(async () => {
+      assistContinueHandler!(continuePayload);
+    });
+
+    expect(rejectAssistContinue).toHaveBeenCalledWith(continuePayload, "checklist");
+    expect(acceptAssistContinue).not.toHaveBeenCalled();
+    expect(expandFloatingToQuickMenu).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Checklist do procedure")).toBeInTheDocument();
   });
 
   it("KAN-33 Continuar no Assist com a barra na borda expande antes de abrir a ilha", async () => {
@@ -289,7 +341,7 @@ describe("BarApp window modes", () => {
     await waitFor(() => expect(assistContinueHandler).not.toBeNull());
 
     await act(async () => {
-      assistContinueHandler!({ conversationId: "conv-1" });
+      assistContinueHandler!(continuePayload);
     });
 
     await waitFor(() => expect(expandFromEdge).toHaveBeenCalledTimes(1));
