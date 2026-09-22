@@ -5,7 +5,6 @@ import type { Procedure } from "@linvo/shared";
 import type { ChecklistProgress } from "@/lib/chat/desk-state";
 
 export const MAIN_LABEL = "main";
-export const CHECKLIST_LABEL = "checklist";
 export const CHECKLIST_PAYLOAD_EVENT = "checklist://payload";
 export const CHECKLIST_DISMISS_EVENT = "checklist://dismiss";
 export const CHECKLIST_PROGRESS_EVENT = "checklist://progress";

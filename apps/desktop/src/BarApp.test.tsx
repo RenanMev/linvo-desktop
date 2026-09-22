@@ -5,13 +5,19 @@ import type { Procedure, UserPublic } from "@linvo/shared";
 
 import { BarApp } from "@/BarApp";
 import { hideAllWindows, showMainBar } from "@/lib/app-windows";
-import { expandFloatingToChecklist } from "@/lib/floating-checklist-mode";
+import {
+  collapseChecklistToFloating,
+  expandFloatingToChecklist,
+} from "@/lib/floating-checklist-mode";
 import { collapseToEdge, expandFromEdge } from "@/lib/floating-edge-mode";
 import {
   collapseQuickMenuToFloating,
   expandFloatingToQuickMenu,
 } from "@/lib/floating-quick-menu-mode";
-import type { ChecklistWindowPayload } from "@/lib/checklist-window";
+import {
+  emitChecklistClosed,
+  type ChecklistWindowPayload,
+} from "@/lib/checklist-window";
 import { ISLAND_ENVELOPE_SIZE } from "@/lib/window-mode";
 import {
   invokeMock,
@@ -666,6 +672,78 @@ describe("BarApp window modes", () => {
       screen.getByLabelText("Checklist do procedure"),
     ).toBeInTheDocument();
     expect(expandFloatingToChecklist).toHaveBeenCalledTimes(1);
+  });
+
+  it("KAN-38 recolher o checklist mantém o progresso na pílula e o clique volta", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await act(async () => {
+      await payloadHandler!({
+        ...makeChecklistPayload(),
+        procedure: {
+          id: "proc-1",
+          slug: "cancelamento",
+          title: "Cancelamento",
+          steps: ["Passo 1", "Passo 2", "Passo 3"],
+        } as Procedure,
+      });
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Checklist do procedure")).toBeInTheDocument(),
+    );
+
+    // Marca um passo antes de recolher. `hidden`: em teste o morph não
+    // assenta, e o shell mantém as camadas inert/aria-hidden até lá.
+    await userEventInstance.click(
+      screen.getByRole("checkbox", { name: "Passo 1", hidden: true }),
+    );
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Recolher" }));
+
+    await waitFor(() => expect(collapseChecklistToFloating).toHaveBeenCalledTimes(1));
+    const badge = await screen.findByRole("button", {
+      name: "Voltar ao checklist, 1 de 3",
+    });
+    expect(screen.queryByLabelText("Checklist do procedure")).not.toBeInTheDocument();
+    // Recolher não é fechar: a conversa não é avisada.
+    expect(emitChecklistClosed).not.toHaveBeenCalled();
+
+    vi.mocked(expandFloatingToChecklist).mockClear();
+    await userEventInstance.click(badge);
+
+    await waitFor(() => expect(expandFloatingToChecklist).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Checklist do procedure")).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole("checkbox", { name: "Passo 1", hidden: true }),
+    ).toBeChecked();
+    expect(
+      screen.queryByRole("button", { name: /Voltar ao checklist/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("KAN-38 fechar o checklist (X) não deixa badge na pílula", async () => {
+    const userEventInstance = userEvent.setup();
+    render(<BarApp sessionWarning={null} user={user} />);
+
+    await act(async () => {
+      await payloadHandler!(makeChecklistPayload());
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Checklist do procedure")).toBeInTheDocument(),
+    );
+
+    await userEventInstance.click(screen.getByRole("button", { name: "Fechar" }));
+
+    await waitFor(() =>
+      expect(screen.queryByLabelText("Checklist do procedure")).not.toBeInTheDocument(),
+    );
+    expect(emitChecklistClosed).toHaveBeenCalledWith({ conversationId: "conv-1" });
+    expect(
+      screen.queryByRole("button", { name: /Voltar ao checklist/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("does not touch quick-menu collapse when compact on checklist payload", async () => {

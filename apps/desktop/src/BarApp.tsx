@@ -121,6 +121,19 @@ function visualSizeForMode(mode: WindowMode) {
   return COMPACT_SIZE;
 }
 
+function sameChecklistProgress(
+  left: ChecklistWindowPayload["progress"],
+  right: ChecklistWindowPayload["progress"],
+): boolean {
+  return (
+    left.currentStepIndex === right.currentStepIndex &&
+    left.completedStepIndexes.length === right.completedStepIndexes.length &&
+    left.completedStepIndexes.every(
+      (value, index) => value === right.completedStepIndexes[index],
+    )
+  );
+}
+
 function visualWidthForMode(mode: WindowMode): number {
   return visualSizeForMode(mode).width;
 }
@@ -149,6 +162,13 @@ export function BarApp({
 }: BarAppProps) {
   const { ready: floatingReady, growth } = useFloatingBootstrap();
   const apiHealthy = useApiHealth(true);
+  /*
+   * Checklist recolhido (KAN-38): a ilha volta à pílula mas o procedimento
+   * continua aberto — progresso no badge, deskState intacto na conversa, e
+   * um clique traz o checklist de volta. Só `handleChecklistClose` (o X)
+   * encerra de verdade.
+   */
+  const [checklistCollapsed, setChecklistCollapsed] = useState(false);
   const [checklist, setChecklist] = useState<ChecklistWindowPayload | null>(
     null,
   );
@@ -461,32 +481,8 @@ export function BarApp({
         }
         if (cancelled || modeIntentRef.current !== "checklist") return;
         setChecklist(payload);
-        const geometry = resolveEnvelopeMorphGeometry({
-          fromMode: "compact",
-          toMode: "checklist",
-          growth: growthRef.current,
-        });
-        await prepareIslandMorph(geometry, "compact", "checklist");
-        await expandFloatingToChecklist(growthRef.current);
-        if (!cancelled && modeIntentRef.current === "checklist") {
-          void startIslandMorph();
-        }
-        await waitForIslandMorph();
-        if (!cancelled && modeIntentRef.current === "checklist") {
-          await waitForIslandPaint();
-          settleIslandMorph("checklist");
-          /*
-           * Sem espera aqui: `settleIslandMorph` já comitou via `flushSync`, e
-           * o quadro assentado é visualmente idêntico ao último quadro do
-           * morph (mesma posição/tamanho, só a metadata muda). Esperar mais um
-           * paint antes de encolher a região não evita nada — só atrasa o
-           * encolhimento, e esse atraso pode ficar bem maior que o esperado
-           * quando a janela está sem foco (rAF/timeout são acelerados para
-           * baixo pelo navegador): era esse atraso que deixava uma tira maior
-           * que a pílula recortada, mostrando o branco padrão do documento.
-           */
-          await applySettledRegion("checklist");
-        }
+        setChecklistCollapsed(false);
+        await morphCompactToChecklist(() => cancelled);
       } finally {
         if (!cancelled) {
           finishTransition();
@@ -498,8 +494,14 @@ export function BarApp({
 
     void listenChecklistDismiss(() => {
       if (cancelled) return;
-      modeIntentRef.current = "compact";
       rememberChecklistConversation(null);
+      // Recolhido: a ilha já é pílula, não há morph a desfazer.
+      if (windowModeRef.current !== "checklist") {
+        setChecklist(null);
+        setChecklistCollapsed(false);
+        return;
+      }
+      modeIntentRef.current = "compact";
       startTransition();
       (async () => {
         try {
@@ -543,13 +545,48 @@ export function BarApp({
     };
   }, []);
 
-  async function handleChecklistClose() {
-    modeIntentRef.current = "compact";
-    const conversationId = checklist?.conversationId ?? null;
-    rememberChecklistConversation(null);
-    if (conversationId) {
-      await emitChecklistClosed({ conversationId });
+  /*
+   * Compacta → checklist. Compartilhado pelo payload novo e pelo "voltar ao
+   * checklist" do badge; quem chama já fez `startTransition` e é dono do
+   * `finishTransition`.
+   */
+  async function morphCompactToChecklist(
+    isCancelled: () => boolean = () => false,
+  ) {
+    const geometry = resolveEnvelopeMorphGeometry({
+      fromMode: "compact",
+      toMode: "checklist",
+      growth: growthRef.current,
+    });
+    await prepareIslandMorph(geometry, "compact", "checklist");
+    await expandFloatingToChecklist(growthRef.current);
+    if (!isCancelled() && modeIntentRef.current === "checklist") {
+      void startIslandMorph();
     }
+    await waitForIslandMorph();
+    if (!isCancelled() && modeIntentRef.current === "checklist") {
+      await waitForIslandPaint();
+      settleIslandMorph("checklist");
+      /*
+       * Sem espera aqui: `settleIslandMorph` já comitou via `flushSync`, e
+       * o quadro assentado é visualmente idêntico ao último quadro do
+       * morph (mesma posição/tamanho, só a metadata muda). Esperar mais um
+       * paint antes de encolher a região não evita nada — só atrasa o
+       * encolhimento, e esse atraso pode ficar bem maior que o esperado
+       * quando a janela está sem foco (rAF/timeout são acelerados para
+       * baixo pelo navegador): era esse atraso que deixava uma tira maior
+       * que a pílula recortada, mostrando o branco padrão do documento.
+       */
+      await applySettledRegion("checklist");
+    }
+  }
+
+  /*
+   * Checklist → compacta. `keepChecklist` distingue recolher (KAN-38: o
+   * procedimento continua aberto, só some da tela) de fechar.
+   */
+  async function morphChecklistToCompact(keepChecklist: boolean) {
+    modeIntentRef.current = "compact";
     startTransition();
     try {
       const geometry = resolveEnvelopeMorphGeometry({
@@ -566,15 +603,60 @@ export function BarApp({
       if (modeIntentRef.current === "compact") {
         await waitForIslandPaint();
         settleIslandMorph("compact");
-        // Sem espera extra aqui — ver o comentário em listenChecklistPayload.
+        // Sem espera extra aqui — ver o comentário em morphCompactToChecklist.
         await applySettledRegion("compact");
         restoreChatFocusRef.current = true;
-        setChecklist(null);
+        if (!keepChecklist) {
+          setChecklist(null);
+        }
       }
     } catch {
       if (modeIntentRef.current === "compact") {
         modeIntentRef.current = "checklist";
       }
+      setChecklistCollapsed(false);
+      clearIslandMorph();
+    } finally {
+      finishTransition();
+    }
+  }
+
+  async function handleChecklistClose() {
+    const conversationId = checklist?.conversationId ?? null;
+    rememberChecklistConversation(null);
+    setChecklistCollapsed(false);
+    if (conversationId) {
+      await emitChecklistClosed({ conversationId });
+    }
+    await morphChecklistToCompact(false);
+  }
+
+  async function handleChecklistCollapse() {
+    if (windowModeRef.current !== "checklist" || transitionCountRef.current > 0) {
+      return;
+    }
+    setChecklistCollapsed(true);
+    await morphChecklistToCompact(true);
+  }
+
+  async function handleResumeChecklist() {
+    if (
+      !checklist ||
+      windowModeRef.current !== "compact" ||
+      transitionCountRef.current > 0
+    ) {
+      return;
+    }
+    modeIntentRef.current = "checklist";
+    setChecklistCollapsed(false);
+    startTransition();
+    try {
+      await morphCompactToChecklist();
+    } catch {
+      if (modeIntentRef.current === "checklist") {
+        modeIntentRef.current = "compact";
+      }
+      setChecklistCollapsed(true);
       clearIslandMorph();
     } finally {
       finishTransition();
@@ -1150,12 +1232,27 @@ export function BarApp({
           steps={checklist.procedure.steps ?? []}
           initialCompleted={checklist.progress.completedStepIndexes}
           onProgressChange={(progress) => {
+            /*
+             * Guarda aqui também: é o que o badge "2/5" e o remount pós-
+             * recolher leem — o evento sozinho só chega às outras janelas.
+             * Só grava quando mudou de fato: o painel reemite a cada render
+             * (o callback é inline), e um objeto novo por render viraria um
+             * loop de renderização.
+             */
+            setChecklist((current) =>
+              current &&
+              current.conversationId === checklist.conversationId &&
+              !sameChecklistProgress(current.progress, progress)
+                ? { ...current, progress }
+                : current,
+            );
             void emitChecklistProgress({
               conversationId: checklist.conversationId,
               progress,
             });
           }}
           onClose={() => void handleChecklistClose()}
+          onCollapse={() => void handleChecklistCollapse()}
         />
       );
     }
@@ -1201,6 +1298,19 @@ export function BarApp({
         onCollapseToEdge={() => void handleCollapseToEdge()}
         onResetPosition={() => void handleResetPosition()}
         chatButtonRef={chatButtonRef}
+        checklist={
+          checklist && checklistCollapsed
+            ? {
+                title:
+                  checklist.procedure.title?.trim() ||
+                  checklist.procedure.slug ||
+                  "Procedure",
+                completed: checklist.progress.completedStepIndexes.length,
+                total: checklist.procedure.steps?.length ?? 0,
+              }
+            : null
+        }
+        onResumeChecklist={() => void handleResumeChecklist()}
       />
     );
   }

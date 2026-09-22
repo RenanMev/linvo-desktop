@@ -47,8 +47,8 @@ type UseWindowPositionOptions = {
    * `ISLAND_PILL_POSITION_STORAGE_KEY`.
    *
    * Omitido, o hook trata a posição bruta da janela como a própria posição
-   * salva — comportamento de antes do envelope, ainda usado pelo
-   * `ChecklistApp` (janela própria, sem envelope).
+   * salva — comportamento de antes do envelope, mantido para janelas sem
+   * envelope.
    */
   pillGrowth?: () => IslandGrowthDirection;
 };

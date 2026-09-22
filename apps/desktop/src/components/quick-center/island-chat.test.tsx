@@ -10,8 +10,11 @@ import {
   saveActiveConversationId,
 } from "@/lib/chat/active-conversation-store";
 import * as chatApi from "@/lib/chat/chat-api";
+import { CHECKLIST_PAYLOAD_EVENT } from "@/lib/checklist-window";
 import { writeClipboardText } from "@/lib/clipboard";
 import { openPanel } from "@/lib/panel-window";
+import * as procedureApi from "@/lib/procedure/procedure-api";
+import { emitToMock } from "@/test/mocks/tauri";
 
 vi.mock("@/lib/chat/chat-api", () => ({
   createConversation: vi.fn(),
@@ -233,6 +236,82 @@ describe("IslandChat", () => {
       expect(chatApi.listMessages).toHaveBeenCalledWith("conv-a");
     });
     expect(chatApi.listMessages).toHaveBeenCalledTimes(1);
+  });
+
+  it("KAN-37 open_procedure na ilha abre o checklist da própria ilha, sem painel nem janela extra", async () => {
+    const user = userEvent.setup();
+    saveActiveConversationId("conv-proc", scope);
+    const procedure = {
+      id: "proc-1",
+      slug: "cancelamento",
+      title: "Cancelamento",
+      steps: ["Validar pagamento", "Reativar linha"],
+    };
+    vi.mocked(procedureApi.getProcedureBySlug).mockResolvedValue(
+      procedure as never,
+    );
+    vi.mocked(chatApi.streamChatResponse).mockImplementationOnce((options) =>
+      (async function* () {
+        options.onToolRequest?.({
+          requestId: "request-1",
+          name: "open_procedure",
+          label: "Abrir procedimento",
+          args: { slug: "cancelamento" },
+          requiresApproval: false,
+        });
+      })(),
+    );
+    vi.mocked(chatApi.submitToolResult).mockImplementation(() =>
+      (async function* () {
+        yield "Checklist aberto";
+      })(),
+    );
+    emitToMock.mockClear();
+
+    render(<IslandChat userId={scope.userId} />);
+    await user.type(
+      await screen.findByPlaceholderText("Pergunte qualquer coisa..."),
+      "abre o cancelamento{Enter}",
+    );
+
+    // O payload vai para a janela main (a própria ilha morfa), não para uma
+    // janela "checklist" nem para o painel.
+    await waitFor(() => {
+      expect(emitToMock).toHaveBeenCalledWith(
+        "main",
+        CHECKLIST_PAYLOAD_EVENT,
+        expect.objectContaining({
+          conversationId: "conv-proc",
+          procedure: expect.objectContaining({ slug: "cancelamento" }),
+        }),
+      );
+    });
+    expect(emitToMock).not.toHaveBeenCalledWith(
+      "checklist",
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(openPanel).not.toHaveBeenCalled();
+
+    // O procedimento aberto passa a viajar no deskState da próxima pergunta.
+    vi.mocked(chatApi.streamChatResponse).mockImplementationOnce(() =>
+      (async function* () {
+        yield "próximo passo";
+      })(),
+    );
+    await user.type(
+      screen.getByPlaceholderText("Pergunte qualquer coisa..."),
+      "qual o próximo passo?{Enter}",
+    );
+    await waitFor(() => {
+      expect(chatApi.streamChatResponse).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          deskState: expect.objectContaining({
+            openProcedure: expect.objectContaining({ slug: "cancelamento" }),
+          }),
+        }),
+      );
+    });
   });
 
   it("T2.4 disabled não envia", async () => {

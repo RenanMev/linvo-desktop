@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   ANCHOR_STORAGE_KEY,
-  CHECKLIST_POSITION_STORAGE_KEY,
   hydrateWindowStorage,
   ISLAND_PILL_POSITION_STORAGE_KEY,
   loadIslandPillPosition,
@@ -50,15 +49,6 @@ describe("window-storage", () => {
     expect(loadSavedPosition()).toEqual({ x: 120, y: 480 });
   });
 
-  it("stores checklist position under a separate key", () => {
-    saveSavedPosition({ x: 10, y: 20 }, CHECKLIST_POSITION_STORAGE_KEY);
-    expect(loadSavedPosition()).toBeNull();
-    expect(loadSavedPosition(CHECKLIST_POSITION_STORAGE_KEY)).toEqual({
-      x: 10,
-      y: 20,
-    });
-  });
-
   it("returns null when no anchor is stored", () => {
     expect(loadSavedAnchor()).toBeNull();
   });
@@ -71,12 +61,8 @@ describe("window-storage", () => {
     });
   });
 
-  it("migrates localStorage position, anchor and checklist once", async () => {
+  it("migrates localStorage position and anchor once", async () => {
     localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify({ x: 80, y: 40 }));
-    localStorage.setItem(
-      CHECKLIST_POSITION_STORAGE_KEY,
-      JSON.stringify({ x: 12, y: 18 }),
-    );
     localStorage.setItem(
       ANCHOR_STORAGE_KEY,
       JSON.stringify({ horizontal: "left", vertical: null }),
@@ -85,22 +71,12 @@ describe("window-storage", () => {
     await hydrateWindowStorage();
 
     expect(loadSavedPosition()).toEqual({ x: 80, y: 40 });
-    expect(loadSavedPosition(CHECKLIST_POSITION_STORAGE_KEY)).toEqual({
-      x: 12,
-      y: 18,
-    });
     expect(loadSavedAnchor()).toEqual({ horizontal: "left", vertical: null });
     expect(localStorage.getItem(POSITION_STORAGE_KEY)).toBeNull();
-    expect(localStorage.getItem(CHECKLIST_POSITION_STORAGE_KEY)).toBeNull();
     expect(localStorage.getItem(ANCHOR_STORAGE_KEY)).toBeNull();
     expect(pluginStoreData.get("placement")).toEqual({
       x: 80,
       y: 40,
-      monitorId: "DISPLAY1",
-    });
-    expect(pluginStoreData.get("checklistPlacement")).toEqual({
-      x: 12,
-      y: 18,
       monitorId: "DISPLAY1",
     });
     expect(pluginStoreData.get("anchor")).toEqual({

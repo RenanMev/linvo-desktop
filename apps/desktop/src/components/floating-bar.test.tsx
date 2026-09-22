@@ -31,6 +31,37 @@ describe("FloatingBar", () => {
     expect(screen.queryByRole("button", { name: "Minimizar" })).not.toBeInTheDocument();
   });
 
+  it("KAN-38 com checklist recolhido mostra 2/5 e o clique volta ao checklist", async () => {
+    const user = userEvent.setup();
+    const props = renderBar({
+      status: "online",
+      checklist: { title: "Cancelamento", completed: 2, total: 5 },
+      onResumeChecklist: vi.fn(),
+    });
+
+    const badge = screen.getByRole("button", {
+      name: "Voltar ao checklist, 2 de 5",
+    });
+    expect(badge).toHaveTextContent("2/5");
+    // O status continua exposto, agora dentro do badge.
+    expect(screen.getByRole("status")).toHaveAccessibleName("Online");
+
+    await user.click(badge);
+    expect(props.onResumeChecklist).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Recorte" })).toBeInTheDocument();
+  });
+
+  it("KAN-40 a pílula não promete gravar procedimento", () => {
+    renderBar();
+
+    const labels = screen
+      .getAllByRole("button")
+      .map((button) => button.getAttribute("aria-label"));
+    expect(labels).toEqual(["Chat", "Recorte", "Encolher"]);
+    expect(screen.queryByText(/gravar/i)).not.toBeInTheDocument();
+  });
+
   it("does not render a standalone 'Mais' button", () => {
     renderBar();
 

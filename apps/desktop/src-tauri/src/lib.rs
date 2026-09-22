@@ -2,7 +2,6 @@ mod app;
 mod auth;
 mod capture;
 mod chat_store;
-mod checklist;
 mod documents;
 mod overlay_chrome;
 mod panel;
@@ -440,9 +439,6 @@ pub fn run() {
             panel::panel_close,
             panel::panel_is_open,
             panel::panel_set_blur,
-            checklist::checklist_open,
-            checklist::checklist_close,
-            checklist::checklist_is_open,
             documents::documents_save_file,
             capture::capture_list_sources,
             capture::capture_source,

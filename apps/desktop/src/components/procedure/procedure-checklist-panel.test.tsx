@@ -27,6 +27,35 @@ function EphemeralHarness() {
 }
 
 describe("ProcedureChecklistPanel", () => {
+  it("KAN-38 Recolher só aparece com onCollapse e não fecha", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const onCollapse = vi.fn();
+    const { rerender } = render(
+      <ProcedureChecklistPanel
+        title="Número cancelado"
+        slug="numero_cancelado"
+        steps={["Validar pagamento"]}
+        onClose={onClose}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Recolher" })).toBeNull();
+
+    rerender(
+      <ProcedureChecklistPanel
+        title="Número cancelado"
+        slug="numero_cancelado"
+        steps={["Validar pagamento"]}
+        onClose={onClose}
+        onCollapse={onCollapse}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Recolher" }));
+
+    expect(onCollapse).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("opens with checkboxes derived from steps", () => {
     render(
       <ProcedureChecklistPanel

@@ -110,7 +110,6 @@ function createWindowMock(label: string) {
 
 export const windowMock = createWindowMock("main");
 export const panelWindowMock = createWindowMock("panel");
-export const checklistWindowMock = createWindowMock("checklist");
 
 class Window {
   static getByLabel(label: string) {
@@ -119,9 +118,6 @@ class Window {
     }
     if (label === "panel") {
       return Promise.resolve(panelWindowMock);
-    }
-    if (label === "checklist") {
-      return Promise.resolve(checklistWindowMock);
     }
     return Promise.resolve(null);
   }

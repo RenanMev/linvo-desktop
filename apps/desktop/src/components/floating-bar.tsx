@@ -12,6 +12,12 @@ import type { IslandStatus } from "@/lib/island-status";
 import { islandStatusLabel, islandStatusLive } from "@/lib/island-status";
 import { cn } from "@/lib/utils";
 
+export type FloatingBarChecklist = {
+  title: string;
+  completed: number;
+  total: number;
+};
+
 type FloatingBarProps = {
   status: IslandStatus;
   onOpenQuickMenu: () => void;
@@ -19,6 +25,13 @@ type FloatingBarProps = {
   onCollapseToEdge: () => void;
   onResetPosition: () => void;
   chatButtonRef?: Ref<HTMLButtonElement>;
+  /**
+   * Checklist recolhido: a pílula mostra "2/5" e o clique volta a ele. O
+   * dot de status vai para dentro do badge — a pílula tem 200px e não
+   * cabe os dois lado a lado.
+   */
+  checklist?: FloatingBarChecklist | null;
+  onResumeChecklist?: () => void;
 };
 
 function BarDivider() {
@@ -135,7 +148,17 @@ export function FloatingBar({
   onCollapseToEdge,
   onResetPosition,
   chatButtonRef,
+  checklist = null,
+  onResumeChecklist,
 }: FloatingBarProps) {
+  const statusDot = (
+    <span
+      className={cn(
+        "size-1.5 shrink-0 rounded-full transition-colors duration-300",
+        islandStatusLive(status) ? "status-dot-live" : "bg-muted-foreground/25",
+      )}
+    />
+  );
   return (
     <div className="flex h-full w-full items-center gap-1.5 px-2">
       <span
@@ -167,22 +190,36 @@ export function FloatingBar({
         />
       </span>
 
-      <span
-        data-overlay-hit
-        className="grid size-3 shrink-0 place-items-center"
-        title={islandStatusLabel(status)}
-        aria-label={islandStatusLabel(status)}
-        role="status"
-      >
-        <span
+      {checklist ? (
+        <button
+          type="button"
+          data-overlay-hit
+          title={`Voltar ao checklist · ${checklist.title} · ${islandStatusLabel(status)}`}
+          aria-label={`Voltar ao checklist, ${checklist.completed} de ${checklist.total}`}
+          onClick={onResumeChecklist}
           className={cn(
-            "size-1.5 rounded-full transition-colors duration-300",
-            islandStatusLive(status)
-              ? "status-dot-live"
-              : "bg-muted-foreground/25",
+            "flex h-6 shrink-0 items-center gap-1 rounded-full px-1.5 outline-none",
+            "font-technical text-[10px] font-medium tabular-nums text-foreground",
+            "transition-colors duration-150 hover:bg-surface-hover",
+            "focus-visible:bg-surface-hover focus-visible:inset-ring-1 focus-visible:inset-ring-hairline-strong",
           )}
-        />
-      </span>
+        >
+          <span role="status" aria-label={islandStatusLabel(status)}>
+            {statusDot}
+          </span>
+          {checklist.completed}/{checklist.total}
+        </button>
+      ) : (
+        <span
+          data-overlay-hit
+          className="grid size-3 shrink-0 place-items-center"
+          title={islandStatusLabel(status)}
+          aria-label={islandStatusLabel(status)}
+          role="status"
+        >
+          {statusDot}
+        </span>
+      )}
 
       <BarDivider />
 
