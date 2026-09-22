@@ -145,6 +145,32 @@ describe("map-message", () => {
     ]);
   });
 
+  it("maps audio attachments without narrowing the shared contract", () => {
+    const mapped = mapApiMessageToChat({
+      id: "msg-audio",
+      role: "user",
+      content: "",
+      status: "done",
+      createdAt: "2026-01-01T12:00:00.000Z",
+      attachments: [
+        {
+          id: "att_audio_1",
+          kind: "audio",
+          mimeType: "audio/webm",
+          filename: "voice-note.webm",
+          sizeBytes: 2400,
+          transcript: "Olá, preciso de ajuda.",
+        },
+      ],
+    });
+
+    expect(mapped.attachments?.[0]).toMatchObject({
+      id: "att_audio_1",
+      kind: "audio",
+      transcript: "Olá, preciso de ajuda.",
+    });
+  });
+
   it("T7.11 keeps citations: [] instead of collapsing to undefined", () => {
     const mapped = mapApiMessageToChat({
       id: "msg-5",
