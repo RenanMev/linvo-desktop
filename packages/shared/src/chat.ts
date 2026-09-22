@@ -52,6 +52,26 @@ export const messageCitationSchema = z.object({
   href: z.string().min(1).optional(),
 });
 
+const messageNextActionLabelSchema = z.string().trim().min(1).max(80);
+
+/**
+ * AÃ§Ã£o curta e opcional recomendada pela API para uma resposta do assistente.
+ * Ela Ã© deliberadamente limitada a operaÃ§Ãµes locais e explÃ­citas: copiar texto
+ * ou abrir um procedimento publicado.
+ */
+export const messageNextActionSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("copy"),
+    label: messageNextActionLabelSchema,
+    text: z.string().trim().min(1).max(32 * 1024),
+  }),
+  z.object({
+    type: z.literal("open_procedure"),
+    label: messageNextActionLabelSchema,
+    slug: z.string().trim().min(1).max(120),
+  }),
+]);
+
 export const messageAttachmentKindSchema = z.enum(["image", "audio"]);
 
 export const imageAttachmentMimeTypeSchema = z.enum([
@@ -239,6 +259,7 @@ export const messageSchema = z.object({
   attachments: z.array(messageAttachmentSchema).optional(),
   citations: z.array(messageCitationSchema).optional(),
   captureSummary: z.array(z.string().min(1)).max(3).optional(),
+  nextAction: messageNextActionSchema.optional(),
   reasoning: z.string().optional(),
   model: z.string().optional(),
 });
@@ -280,6 +301,7 @@ export type MessageArtifactKind = z.infer<typeof messageArtifactKindSchema>;
 export type MessageArtifact = z.infer<typeof messageArtifactSchema>;
 export type MessageCitationKind = z.infer<typeof messageCitationKindSchema>;
 export type MessageCitation = z.infer<typeof messageCitationSchema>;
+export type MessageNextAction = z.infer<typeof messageNextActionSchema>;
 export type MessageAttachmentKind = z.infer<typeof messageAttachmentKindSchema>;
 export type MessageAttachmentMimeType = z.infer<
   typeof messageAttachmentMimeTypeSchema

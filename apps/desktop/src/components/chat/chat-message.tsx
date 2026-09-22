@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bot, Check, Copy, RefreshCw, User } from "lucide-react";
+import { Bot, Check, ClipboardList, Copy, RefreshCw, User } from "lucide-react";
 
 import { CaptureSummary } from "@/components/chat/capture-summary";
 import { ChatArtifactCard } from "@/components/chat/chat-artifact-card";
@@ -32,6 +32,7 @@ type ChatMessageBubbleProps = {
   workspaceId?: string | null;
   variant?: "assist";
   showAssistCopy?: boolean;
+  onOpenProcedureAction?: (slug: string) => Promise<void> | void;
 };
 
 export function ChatMessageBubble({
@@ -48,8 +49,11 @@ export function ChatMessageBubble({
   workspaceId = null,
   variant,
   showAssistCopy = false,
+  onOpenProcedureAction,
 }: ChatMessageBubbleProps) {
   const [copied, setCopied] = useState(false);
+  const [isExecutingAction, setIsExecutingAction] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const isUser = message.role === "user";
   const canReply = onReply != null && canReplyToMessage(message);
   const isStreaming =
@@ -77,6 +81,11 @@ export function ChatMessageBubble({
     !isUser &&
     message.status === "done" &&
     message.content.trim().length > 0;
+  const nextAction =
+    !isUser && message.status === "done" ? message.nextAction : undefined;
+  const canShowNextAction =
+    nextAction?.type === "copy" ||
+    (nextAction?.type === "open_procedure" && onOpenProcedureAction != null);
   const idleStreamingOnly =
     !isUser &&
     isStreaming &&
@@ -173,6 +182,48 @@ export function ChatMessageBubble({
                 <CaptureSummary bullets={message.captureSummary} />
               ) : null}
 
+              {canShowNextAction && nextAction ? (
+                <div className="mb-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8 gap-1.5 px-2.5 text-xs"
+                    disabled={isExecutingAction}
+                    onClick={() => {
+                      setActionError(null);
+                      if (nextAction.type === "copy") {
+                        void writeClipboardText(nextAction.text).then((ok) => {
+                          if (ok) {
+                            setCopied(true);
+                          } else {
+                            setActionError("NÃ£o foi possÃ­vel copiar o texto.");
+                          }
+                        });
+                        return;
+                      }
+
+                      setIsExecutingAction(true);
+                      Promise.resolve(onOpenProcedureAction?.(nextAction.slug))
+                        .catch(() => {
+                          setActionError("NÃ£o foi possÃ­vel abrir o procedimento.");
+                        })
+                        .finally(() => {
+                          setIsExecutingAction(false);
+                        });
+                    }}
+                  >
+                    {nextAction.type === "copy" ? (
+                      copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />
+                    ) : (
+                      <ClipboardList className="size-3.5" />
+                    )}
+                    {nextAction.type === "copy" && copied
+                      ? "Copiado"
+                      : nextAction.label}
+                  </Button>
+                </div>
+              ) : null}
+
               {message.content ? (
                 isUser ? (
                   message.content
@@ -192,6 +243,12 @@ export function ChatMessageBubble({
                   citations={message.citations}
                   workspaceId={workspaceId}
                 />
+              ) : null}
+
+              {actionError ? (
+                <p className="mt-2 text-xs text-destructive" role="alert">
+                  {actionError}
+                </p>
               ) : null}
             </div>
           )}

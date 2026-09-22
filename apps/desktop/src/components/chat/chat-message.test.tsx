@@ -178,6 +178,63 @@ describe("ChatMessageBubble", () => {
     expect(screen.getByText("pedido de cancelamento")).toBeInTheDocument();
   });
 
+  it("renders the suggested copy action above the response and copies its text", async () => {
+    const user = userEvent.setup();
+    render(
+      <ChatMessageBubble
+        message={{
+          ...baseMessage,
+          content: "Resposta da IA",
+          nextAction: {
+            type: "copy",
+            label: "Copiar mensagem ao cliente",
+            text: "OlÃ¡, como posso ajudar?",
+          },
+        }}
+      />,
+    );
+
+    const action = screen.getByRole("button", {
+      name: "Copiar mensagem ao cliente",
+    });
+    const answer = screen.getByText("Resposta da IA");
+    expect(
+      action.compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await user.click(action);
+    expect(writeClipboardText).toHaveBeenCalledWith("OlÃ¡, como posso ajudar?");
+  });
+
+  it("opens a suggested procedure when its action is clicked", async () => {
+    const user = userEvent.setup();
+    const onOpenProcedureAction = vi.fn(() => Promise.resolve());
+    render(
+      <ChatMessageBubble
+        message={{
+          ...baseMessage,
+          nextAction: {
+            type: "open_procedure",
+            label: "Abrir procedimento de troca",
+            slug: "troca-de-plano",
+          },
+        }}
+        onOpenProcedureAction={onOpenProcedureAction}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Abrir procedimento de troca" }),
+    );
+    expect(onOpenProcedureAction).toHaveBeenCalledWith("troca-de-plano");
+  });
+
+  it("hides an action when the API omits it", () => {
+    render(<ChatMessageBubble message={baseMessage} />);
+
+    expect(screen.queryByRole("button", { name: /procedimento|mensagem/i })).not.toBeInTheDocument();
+  });
+
   it("does not render capture summary on the user bubble", () => {
     render(
       <ChatMessageBubble
