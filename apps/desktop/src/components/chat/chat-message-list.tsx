@@ -18,6 +18,7 @@ type ChatMessageListProps = {
   conversationId?: string | null;
   workspaceId?: string | null;
   variant?: "assist";
+  onOpenProcedureAction?: (slug: string) => Promise<void> | void;
 };
 
 const SCROLL_STICK_THRESHOLD_PX = 80;
@@ -36,6 +37,7 @@ export function ChatMessageList({
   conversationId = null,
   workspaceId = null,
   variant,
+  onOpenProcedureAction,
 }: ChatMessageListProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
@@ -128,6 +130,7 @@ export function ChatMessageList({
             workspaceId={workspaceId}
             variant={variant}
             showAssistCopy={message.id === lastAssistCopyId}
+            onOpenProcedureAction={onOpenProcedureAction}
           />
         ))}
       </div>

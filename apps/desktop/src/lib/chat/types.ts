@@ -1,4 +1,4 @@
-import type { MessageAttachment } from "@linvo/shared";
+import type { MessageAttachment, MessageNextAction } from "@linvo/shared";
 
 export type ChatRole = "user" | "assistant";
 
@@ -74,6 +74,7 @@ export type ChatMessage = {
   attachments?: ChatAttachment[];
   citations?: ChatCitation[];
   captureSummary?: string[];
+  nextAction?: MessageNextAction;
   reasoning?: string;
   model?: string;
 };

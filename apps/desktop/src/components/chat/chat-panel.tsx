@@ -27,6 +27,7 @@ type ChatPanelProps = {
   selectedModel?: string | null;
   onModelChange?: (modelId: string | null) => void;
   onOpenProcedureChecklist?: (procedure: Procedure) => void;
+  onOpenProcedureAction?: (slug: string) => Promise<void> | void;
   /** Janela que hospeda o chat — ver `captureWindowLabel` em `ChatInput`. */
   captureWindowLabel?: string;
   /** Ver `autoStartCapture` em `ChatInput`. */
@@ -68,6 +69,7 @@ export function ChatPanel({
   selectedModel = null,
   onModelChange,
   onOpenProcedureChecklist,
+  onOpenProcedureAction,
   captureWindowLabel,
   autoStartCapture,
   onAutoCaptureConsumed,
@@ -109,6 +111,7 @@ export function ChatPanel({
           conversationId={conversationKey}
           workspaceId={workspaceId}
           variant={variant}
+          onOpenProcedureAction={onOpenProcedureAction}
         />
       </div>
       {readOnly ? (

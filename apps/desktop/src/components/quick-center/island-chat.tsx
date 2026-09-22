@@ -19,6 +19,7 @@ import {
   openChecklist,
 } from "@/lib/checklist-window";
 import { getStoredWorkspaceId } from "@/lib/workspace/workspace-store";
+import * as procedureApi from "@/lib/procedure/procedure-api";
 
 type IslandChatProps = {
   userId: string;
@@ -84,6 +85,17 @@ export function IslandChat({
       onOpenProcedureChecklist?.(procedure);
     },
     [checklistByConversation, conversationId, onOpenProcedureChecklist],
+  );
+
+  const handleOpenProcedureAction = useCallback(
+    async (slug: string) => {
+      if (!workspaceId) {
+        throw new Error("workspace indisponÃ­vel");
+      }
+      const procedure = await procedureApi.getProcedureBySlug(workspaceId, slug);
+      handleOpenProcedureChecklist(procedure);
+    },
+    [handleOpenProcedureChecklist, workspaceId],
   );
 
   const deskState = useMemo(
@@ -247,6 +259,7 @@ export function IslandChat({
           showToolbar={false}
           variant="assist"
           onOpenProcedureChecklist={handleOpenProcedureChecklist}
+          onOpenProcedureAction={handleOpenProcedureAction}
         />
       )}
     </div>

@@ -16,6 +16,7 @@ export function mapApiMessageToChat(message: Message): ChatMessage {
     attachments: message.attachments,
     citations: message.citations,
     captureSummary: message.captureSummary,
+    nextAction: message.nextAction,
     reasoning: message.reasoning,
     model: message.model,
   };
