@@ -201,6 +201,20 @@ describe("messageAttachmentSchema", () => {
     expect(parsed.kind).toBe("image");
   });
 
+  it("validates audio attachment metadata and transcript", () => {
+    const parsed = messageAttachmentSchema.parse({
+      id: "att_audio_1",
+      kind: "audio",
+      mimeType: "audio/webm",
+      filename: "voice-note.webm",
+      sizeBytes: 2400,
+      transcript: "Olá, preciso de ajuda.",
+    });
+
+    expect(parsed.kind).toBe("audio");
+    expect(parsed.transcript).toBe("Olá, preciso de ajuda.");
+  });
+
   it("rejects unsupported image mime types", () => {
     expect(() =>
       messageAttachmentSchema.parse({
