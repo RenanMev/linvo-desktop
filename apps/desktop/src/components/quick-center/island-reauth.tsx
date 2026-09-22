@@ -103,7 +103,7 @@ export function IslandReauth({ email, onSubmit, onSignOut }: IslandReauthProps) 
         </p>
       ) : null}
 
-      <Button type="submit" className="w-full" disabled={submitting || !password}>
+      <Button type="submit" className="w-full" disabled={submitting}>
         {submitting ? "Entrando..." : "Entrar"}
       </Button>
 

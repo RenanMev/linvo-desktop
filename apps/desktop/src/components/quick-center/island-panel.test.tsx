@@ -194,6 +194,7 @@ describe("IslandPanel", () => {
     expect(
       screen.queryByPlaceholderText("Pergunte qualquer coisa..."),
     ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Entrar" })).toBeEnabled();
 
     await user.type(screen.getByLabelText("Senha"), "segredo");
     await user.click(screen.getByRole("button", { name: "Entrar" }));
