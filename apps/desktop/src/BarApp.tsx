@@ -16,6 +16,12 @@ import { useApiHealth } from "@/hooks/use-api-health";
 import { useCompactClickThrough } from "@/hooks/use-compact-click-through";
 import { useFloatingBootstrap } from "@/hooks/use-floating-bootstrap";
 import { CAPTURE_AND_ASK_SHORTCUTS, useGlobalShortcut } from "@/hooks/use-global-shortcut";
+import { usePushToTalkShortcut } from "@/hooks/use-push-to-talk-shortcut";
+import {
+  startPushToTalk,
+  stopPushToTalk,
+  usePushToTalkState,
+} from "@/lib/voice/push-to-talk";
 import { useOverlayChrome } from "@/hooks/use-overlay-chrome";
 import { useWindowPosition } from "@/hooks/use-window-position";
 import { hideAllWindows, showMainBar } from "@/lib/app-windows";
@@ -237,12 +243,15 @@ export function BarApp({
     applyGrowth(growth);
   }, [growth]);
 
+  const voice = usePushToTalkState();
   const islandStatus = deriveIslandStatus({
     floatingReady,
     apiHealthy,
     sessionWarning,
+    isListening: voice.phase === "recording",
   });
   const captureAndAskRef = useRef<() => void>(() => undefined);
+  const pushToTalkPressRef = useRef<() => void>(() => undefined);
   const passthroughSuspended =
     transitioning || Boolean(islandMorph && !islandMorph.settled);
 
@@ -255,6 +264,21 @@ export function BarApp({
     shortcuts: CAPTURE_AND_ASK_SHORTCUTS,
     onTrigger: () => {
       captureAndAskRef.current();
+    },
+  });
+  /*
+   * Segurar-para-falar (KAN-41): pressionar abre a ilha (se estava oculta ou
+   * compacta) e começa a gravar; soltar para e transcreve. Sem o atalho, a
+   * ilha oculta nunca grava — só o botão do microfone, que exige a ilha
+   * aberta. Sessão caída ou checklist aberto: ignora, sem gravar.
+   */
+  usePushToTalkShortcut({
+    enabled: floatingReady && !sessionWarning,
+    onPress: () => {
+      pushToTalkPressRef.current();
+    },
+    onRelease: () => {
+      void stopPushToTalk();
     },
   });
 
@@ -787,6 +811,22 @@ export function BarApp({
 
   captureAndAskRef.current = () => {
     void handleCaptureContext();
+  };
+
+  pushToTalkPressRef.current = () => {
+    if (windowModeRef.current === "checklist") {
+      return;
+    }
+    void (async () => {
+      await showMainBar();
+      if (windowModeRef.current === "edge-collapsed") {
+        await expandFromEdgeRef.current();
+      }
+      if (windowModeRef.current === "compact") {
+        await openQuickMenuRef.current();
+      }
+      await startPushToTalk();
+    })();
   };
 
   /*

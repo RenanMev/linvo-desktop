@@ -52,12 +52,30 @@ export const messageCitationSchema = z.object({
   href: z.string().min(1).optional(),
 });
 
-export const messageAttachmentKindSchema = z.literal("image");
+export const messageAttachmentKindSchema = z.enum(["image", "audio"]);
 
-export const messageAttachmentMimeTypeSchema = z.enum([
+export const imageAttachmentMimeTypeSchema = z.enum([
   "image/png",
   "image/jpeg",
   "image/webp",
+]);
+
+/*
+ * Áudio: o que chega do WhatsApp (ogg/opus, m4a, mp3) e o que a ilha grava no
+ * push-to-talk (webm/opus). wav entra por ser trivial de detectar e comum em
+ * gravadores de desktop.
+ */
+export const audioAttachmentMimeTypeSchema = z.enum([
+  "audio/ogg",
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/webm",
+  "audio/wav",
+]);
+
+export const messageAttachmentMimeTypeSchema = z.enum([
+  ...imageAttachmentMimeTypeSchema.options,
+  ...audioAttachmentMimeTypeSchema.options,
 ]);
 
 export const messageAttachmentSchema = z.object({
@@ -69,10 +87,17 @@ export const messageAttachmentSchema = z.object({
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
   url: z.string().url().optional(),
+  /** Só em `kind: "audio"`: texto transcrito no upload. */
+  transcript: z.string().optional(),
 });
 
 export const chatAttachmentUploadResponseSchema = z.object({
   attachment: messageAttachmentSchema,
+});
+
+/** Push-to-talk: áudio da ilha vira texto para o composer, sem conversa. */
+export const chatTranscriptionResponseSchema = z.object({
+  text: z.string(),
 });
 
 export const reasoningChunkSchema = z.object({
@@ -258,6 +283,12 @@ export type MessageCitation = z.infer<typeof messageCitationSchema>;
 export type MessageAttachmentKind = z.infer<typeof messageAttachmentKindSchema>;
 export type MessageAttachmentMimeType = z.infer<
   typeof messageAttachmentMimeTypeSchema
+>;
+export type AudioAttachmentMimeType = z.infer<
+  typeof audioAttachmentMimeTypeSchema
+>;
+export type ChatTranscriptionResponse = z.infer<
+  typeof chatTranscriptionResponseSchema
 >;
 export type MessageAttachment = z.infer<typeof messageAttachmentSchema>;
 export type ChatAttachmentUploadResponse = z.infer<

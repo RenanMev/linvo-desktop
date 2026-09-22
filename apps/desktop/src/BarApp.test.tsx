@@ -4,7 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Procedure, UserPublic } from "@linvo/shared";
 
 import { BarApp } from "@/BarApp";
+import { register as registerGlobalShortcut } from "@tauri-apps/plugin-global-shortcut";
+
 import { hideAllWindows, showMainBar } from "@/lib/app-windows";
+import {
+  getPushToTalkState,
+  resetPushToTalkForTests,
+} from "@/lib/voice/push-to-talk";
 import {
   collapseChecklistToFloating,
   expandFloatingToChecklist,
@@ -108,6 +114,46 @@ const {
 let assistContinueHandler:
   | ((payload: AssistContinueTestPayload) => void)
   | null = null;
+
+const voiceMocks = vi.hoisted(() => ({
+  start: vi.fn(() => Promise.resolve()),
+  stop: vi.fn(() =>
+    Promise.resolve({
+      blob: new Blob([new Uint8Array(2000)], { type: "audio/webm" }),
+      mimeType: "audio/webm",
+      durationMs: 1500,
+    }),
+  ),
+  discard: vi.fn(),
+  transcribeAudio: vi.fn(() => Promise.resolve("texto falado")),
+}));
+
+vi.mock("@/lib/voice/audio-recorder", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/voice/audio-recorder")>(
+    "@/lib/voice/audio-recorder",
+  );
+  return {
+    ...actual,
+    AudioRecorder: class {
+      start = voiceMocks.start;
+      stop = voiceMocks.stop;
+      discard = voiceMocks.discard;
+    },
+  };
+});
+
+vi.mock("@/lib/voice/transcription-api", () => ({
+  transcribeAudio: voiceMocks.transcribeAudio,
+}));
+
+type ShortcutHandler = (event: { state: "Pressed" | "Released" }) => void;
+function pushToTalkHandler(): ShortcutHandler | null {
+  const calls = vi.mocked(registerGlobalShortcut).mock.calls;
+  const call = [...calls]
+    .reverse()
+    .find(([shortcut]) => String(shortcut).includes("Space"));
+  return (call?.[1] as ShortcutHandler | undefined) ?? null;
+}
 
 vi.mock("@/lib/assist-handoff", () => ({
   listenAssistContinue: vi.fn((handler: (payload: AssistContinueTestPayload) => void) => {
@@ -230,6 +276,9 @@ describe("BarApp window modes", () => {
     assistContinueHandler = null;
     acceptAssistContinue.mockClear();
     rejectAssistContinue.mockClear();
+    resetPushToTalkForTests();
+    voiceMocks.start.mockClear();
+    voiceMocks.stop.mockClear();
     localStorage.clear();
     vi.clearAllMocks();
     windowMock.outerSize.mockResolvedValue({ width: 140, height: 40 });
@@ -355,6 +404,43 @@ describe("BarApp window modes", () => {
       expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
     );
     expect(await screen.findByRole("dialog", { name: "Assist" })).toBeInTheDocument();
+  });
+
+  it("KAN-41 segurar o atalho com a ilha compacta abre o Assist e grava; soltar transcreve", async () => {
+    render(<BarApp sessionWarning={null} user={user} />);
+    await waitFor(() => expect(pushToTalkHandler()).not.toBeNull());
+    expect(vi.mocked(registerGlobalShortcut)).toHaveBeenCalledWith(
+      "CommandOrControl+Space",
+      expect.any(Function),
+    );
+
+    await act(async () => {
+      pushToTalkHandler()!({ state: "Pressed" });
+    });
+
+    await waitFor(() =>
+      expect(expandFloatingToQuickMenu).toHaveBeenCalledTimes(1),
+    );
+    expect(await screen.findByRole("dialog", { name: "Assist" })).toBeInTheDocument();
+    await waitFor(() => expect(voiceMocks.start).toHaveBeenCalledTimes(1));
+    expect(getPushToTalkState().phase).toBe("recording");
+
+    await act(async () => {
+      pushToTalkHandler()!({ state: "Released" });
+    });
+
+    await waitFor(() => expect(voiceMocks.transcribeAudio).toHaveBeenCalledTimes(1));
+    expect(getPushToTalkState().phase).toBe("idle");
+  });
+
+  it("KAN-41 com a sessão caída o atalho de voz nem é registrado", async () => {
+    vi.mocked(registerGlobalShortcut).mockClear();
+    render(<BarApp sessionWarning="Sua sessão expirou" user={user} />);
+
+    await waitFor(() =>
+      expect(vi.mocked(registerGlobalShortcut)).toHaveBeenCalled(),
+    );
+    expect(pushToTalkHandler()).toBeNull();
   });
 
   it("shows session expiry on the compact pill instead of a live green", () => {

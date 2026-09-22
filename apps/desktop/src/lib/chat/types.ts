@@ -1,3 +1,5 @@
+import type { MessageAttachment } from "@linvo/shared";
+
 export type ChatRole = "user" | "assistant";
 
 export type ChatMessageStatus = "streaming" | "done" | "error" | "awaiting_tool";
@@ -43,16 +45,8 @@ export type ChatCitation = {
   href?: string;
 };
 
-export type ChatAttachment = {
-  id: string;
-  kind: "image";
-  mimeType: "image/png" | "image/jpeg" | "image/webp";
-  filename: string;
-  sizeBytes: number;
-  width?: number;
-  height?: number;
-  url?: string;
-};
+/** Contrato canônico vive em @linvo/shared; aqui é só o apelido local. */
+export type ChatAttachment = MessageAttachment;
 
 export type ChatSendAttachment = {
   file: File;
@@ -60,6 +54,11 @@ export type ChatSendAttachment = {
   height: number;
   previewUrl: string;
   sourceLabel?: string;
+};
+
+/** Áudio anexado pelo composer (KAN-43): a API transcreve no upload. */
+export type ChatSendAudioAttachment = {
+  file: File;
 };
 
 export type ChatMessage = {
