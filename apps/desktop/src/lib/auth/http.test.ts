@@ -19,7 +19,7 @@ describe("authorizedFetch", () => {
     vi.spyOn(tokenStore, "setTokens").mockReset();
     vi.spyOn(tokenStore, "clearTokens").mockReset();
     vi.spyOn(authApi, "refresh").mockReset();
-    vi.spyOn(authSync, "emitAuthSync").mockResolvedValue();
+    vi.spyOn(authSync, "emitAuthSync").mockReset().mockResolvedValue();
   });
 
   it("retries once after refreshing on 401", async () => {
@@ -200,13 +200,17 @@ describe("authorizedFetch", () => {
 
   it("recovers from another window refresh when local refresh fails", async () => {
     vi.spyOn(tokenStore, "getTokens")
+      .mockResolvedValue({
+        accessToken: "synced-access",
+        refreshToken: "synced-refresh",
+      })
       .mockResolvedValueOnce({
         accessToken: "old-access",
         refreshToken: "old-refresh",
       })
       .mockResolvedValueOnce({
-        accessToken: "synced-access",
-        refreshToken: "synced-refresh",
+        accessToken: "old-access",
+        refreshToken: "old-refresh",
       });
     vi.spyOn(authApi, "refresh").mockRejectedValue(
       new AuthApiError("sessão inválida", 401),
