@@ -22,9 +22,6 @@ export default defineConfig({
     maxWorkers: 4,
     minWorkers: 1,
     pool: "forks",
-    poolOptions: {
-      forks: { maxForks: 4, minForks: 1 },
-    },
     projects: [
       {
         extends: true,

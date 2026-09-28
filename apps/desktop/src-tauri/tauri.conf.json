@@ -73,7 +73,28 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "connect-src": "'self' ipc: http://ipc.localhost https:",
+        "img-src": "'self' asset: http://asset.localhost data: blob: https:",
+        "media-src": "'self' blob: data:",
+        "font-src": "'self' https://fonts.gstatic.com",
+        "style-src": "'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "object-src": "'none'",
+        "base-uri": "'none'"
+      },
+      "devCsp": {
+        "default-src": "'self'",
+        "script-src": "'self' 'unsafe-eval'",
+        "connect-src": "'self' ipc: http://ipc.localhost http://localhost:3001 ws://localhost:1420",
+        "img-src": "'self' asset: http://asset.localhost data: blob: https:",
+        "media-src": "'self' blob: data:",
+        "font-src": "'self' https://fonts.gstatic.com",
+        "style-src": "'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "object-src": "'none'",
+        "base-uri": "'none'"
+      }
     }
   },
   "bundle": {
